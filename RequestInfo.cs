@@ -1,6 +1,6 @@
 ﻿#region Related components
 using System;
-using System.Collections.Specialized;
+using System.Collections.Generic;
 using System.Dynamic;
 
 using Newtonsoft.Json.Linq;
@@ -22,9 +22,10 @@ namespace net.vieapps.Services
 			this.ServiceName = "";
 			this.ObjectName = "";
 			this.Verb = "GET";
-			this.Query = new NameValueCollection();
-			this.Header = new NameValueCollection();
+			this.Query = new Dictionary<string, string>();
+			this.Header = new Dictionary<string, string>();
 			this.Body = "";
+			this.Extra = new Dictionary<string, string>();
 		}
 
 		#region Properties
@@ -51,17 +52,22 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets or sets the query
 		/// </summary>
-		public NameValueCollection Query { get; set; }
+		public Dictionary<string, string> Query { get; set; }
 
 		/// <summary>
 		/// Gets or sets the header
 		/// </summary>
-		public NameValueCollection Header { get; set; }
+		public Dictionary<string, string> Header { get; set; }
 
 		/// <summary>
 		/// Gets or sets the JSON body of the request (only available when verb is POST or PUT)
 		/// </summary>
 		public string Body { get; set; }
+
+		/// <summary>
+		/// Gets or sets the extra information
+		/// </summary>
+		public Dictionary<string, string> Extra { get; set; }
 		#endregion
 
 		#region Helper methods
@@ -69,7 +75,7 @@ namespace net.vieapps.Services
 		/// Gets the request body in JSON
 		/// </summary>
 		/// <returns></returns>
-		public JObject GetJsonBody()
+		public JObject GetBodyJson()
 		{
 			return string.IsNullOrWhiteSpace(this.Body)
 				? null
@@ -80,7 +86,7 @@ namespace net.vieapps.Services
 		/// Gets the request body in dynamic object (Expando)
 		/// </summary>
 		/// <returns></returns>
-		public ExpandoObject GetExpandoBody()
+		public ExpandoObject GetBodyExpando()
 		{
 			return string.IsNullOrWhiteSpace(this.Body)
 				? null
@@ -88,22 +94,22 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Gets the meta info with two steps: first from header, second from query
+		/// Gets the parameter with two steps: first from header, then second step is from query if header has no value
 		/// </summary>
 		/// <param name="name">The string that presents name of parameter want to get</param>
 		/// <returns></returns>
-		public string GetMeta(string name)
+		public string GetParameter(string name)
 		{
-			var info = this.Header != null
+			var value = this.Header != null && this.Header.ContainsKey(name)
 				? this.Header[name]
 				: null;
 
-			if (string.IsNullOrWhiteSpace(info))
-				info = this.Query != null
+			if (string.IsNullOrWhiteSpace(value))
+				value = this.Query != null && this.Query.ContainsKey(name)
 					? this.Query[name]
 					: null;
 
-			return info;
+			return value;
 		}
 
 		/// <summary>
@@ -114,7 +120,7 @@ namespace net.vieapps.Services
 		{
 			return this.Session != null && !string.IsNullOrWhiteSpace(this.Session.DeviceID)
 				? this.Session.DeviceID
-				: this.GetMeta("x-device-id");
+				: this.GetParameter("x-device-id");
 		}
 
 		/// <summary>
@@ -125,7 +131,7 @@ namespace net.vieapps.Services
 		{
 			return this.Session != null && !string.IsNullOrWhiteSpace(this.Session.AppName)
 				? this.Session.AppName
-				: this.GetMeta("x-app-name");
+				: this.GetParameter("x-app-name");
 		}
 
 		/// <summary>
@@ -136,7 +142,7 @@ namespace net.vieapps.Services
 		{
 			return this.Session != null && !string.IsNullOrWhiteSpace(this.Session.AppPlatform)
 				? this.Session.AppPlatform
-				: this.GetMeta("x-app-platform");
+				: this.GetParameter("x-app-platform");
 		}
 		#endregion
 

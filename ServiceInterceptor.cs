@@ -9,13 +9,33 @@ using WampSharp.V2.Core.Contracts;
 namespace net.vieapps.Services
 {
 	/// <summary>
-	/// Presents a proxy interceptor for calling a service
+	/// Presents a registration interceptor of a service
 	/// </summary>
-	public class ServiceInterceptor : CalleeProxyInterceptor
+	public class RegistrationInterceptor : CalleeRegistrationInterceptor
 	{
 		string _name;
 
-		public ServiceInterceptor(string name) : base(new CallOptions())
+		public RegistrationInterceptor(string name, RegisterOptions options = null) : base(options != null ? options : new RegisterOptions() { Invoke = WampInvokePolicy.Roundrobin })
+		{
+			this._name = name;
+		}
+
+		public override string GetProcedureUri(MethodInfo method)
+		{
+			return string.Format(base.GetProcedureUri(method), this._name);
+		}
+	}
+
+	//  --------------------------------------------------------------------------------------------
+
+	/// <summary>
+	/// Presents a proxy interceptor for calling a service
+	/// </summary>
+	public class ProxyInterceptor : CalleeProxyInterceptor
+	{
+		string _name;
+
+		public ProxyInterceptor(string name, CallOptions options = null) : base(options != null ? options : new CallOptions())
 		{
 			this._name = name;
 		}

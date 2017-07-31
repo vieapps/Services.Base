@@ -1,10 +1,8 @@
 ﻿#region Related components
 using System;
-using System.Collections.Specialized;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Configuration;
-using System.Reflection;
 
 using WampSharp.V2;
 using WampSharp.V2.Rpc;
@@ -22,21 +20,44 @@ using net.vieapps.Components.Security;
 namespace net.vieapps.Services
 {
 	/// <summary>
-	/// Presents a abstract micro service that provides some kind of business
+	/// Presents a abstract service
 	/// </summary>
-	public abstract class BaseService : IDisposable
+	public abstract class BaseService : IService, IDisposable
 	{
 
-		#region Attributes
+		#region Properties
 		IWampChannel _incommingChannel = null, _outgoingChannel = null;
-		System.Action _onCloseIncomingChannel = null, _onCloseOutgoingChannel = null;
-		System.Action<BaseMessage> _onReceiveInterCommuniateMessage = null;
+		long _incommingSessionID = 0, _outgoingSessionID = 0;
+		System.Action _onIncomingChannelClosing = null, _onOutgoingChannelClosing = null;
+		System.Action<BaseMessage> _onInterCommuniateMessageReceived = null;
 		IDisposable _subscriber = null;
 		IRTUService _rtuService = null;
 		IManagementService _managementService = null;
 		Dictionary<string, IService> _services = new Dictionary<string, IService>();
-		Dictionary<string, ServiceInterceptor> _interceptors = new Dictionary<string, ServiceInterceptor>();
+
+		/// <summary>
+		/// Gets the full URI of this service
+		/// </summary>
+		public string ServiceURI
+		{
+			get
+			{
+				return "net.vieapps.services." + this.ServiceName.ToLower().Trim();
+			}
+		}
 		#endregion
+
+		/// <summary>
+		/// Gets the name of this service (for working with related URIs)
+		/// </summary>
+		public abstract string ServiceName { get; }
+
+		/// <summary>
+		/// Process the request of this service
+		/// </summary>
+		/// <param name="requestInfo">Requesting Information</param>
+		/// <returns></returns>
+		public abstract Task<JObject> ProcessRequestAsync(RequestInfo requestInfo);
 
 		#region Open/Close channels, register service/messages, ...
 		/// <summary>
@@ -45,16 +66,16 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected virtual Tuple<string, string, bool> GetLocationInfo()
 		{
-			var address = ConfigurationManager.AppSettings["Address"];
-			if (string.IsNullOrEmpty(address))
+			var address = ConfigurationManager.AppSettings["RouterAddress"];
+			if (string.IsNullOrWhiteSpace(address))
 				address = "ws://127.0.0.1:26429/";
 
-			var realm = ConfigurationManager.AppSettings["Realm"];
-			if (string.IsNullOrEmpty(realm))
+			var realm = ConfigurationManager.AppSettings["RouterRealm"];
+			if (string.IsNullOrWhiteSpace(realm))
 				realm = "VIEAppsRealm";
 
-			var mode = ConfigurationManager.AppSettings["Mode"];
-			if (string.IsNullOrEmpty(mode))
+			var mode = ConfigurationManager.AppSettings["RouterChannelsMode"];
+			if (string.IsNullOrWhiteSpace(mode))
 				mode = "MsgPack";
 
 			return new Tuple<string, string, bool>(address, realm, mode.IsEquals("json"));
@@ -82,6 +103,11 @@ namespace net.vieapps.Services
 				? (new DefaultWampChannelFactory()).CreateJsonChannel(address, realm)
 				: (new DefaultWampChannelFactory()).CreateMsgpackChannel(address, realm);
 
+			this._incommingChannel.RealmProxy.Monitor.ConnectionEstablished += (sender, arguments) =>
+			{
+				this._incommingSessionID = arguments.SessionId;
+			};
+
 			if (onConnectionEstablished != null)
 				this._incommingChannel.RealmProxy.Monitor.ConnectionEstablished += new EventHandler<WampSessionCreatedEventArgs>(onConnectionEstablished);
 
@@ -93,7 +119,7 @@ namespace net.vieapps.Services
 
 			await this._incommingChannel.Open();
 
-			this._onCloseIncomingChannel = onClosingConnection;
+			this._onIncomingChannelClosing = onClosingConnection;
 		}
 
 		/// <summary>
@@ -103,9 +129,9 @@ namespace net.vieapps.Services
 		{
 			if (this._incommingChannel != null)
 			{
-				if (this._onCloseIncomingChannel != null)
-					this._onCloseIncomingChannel();
-				this._incommingChannel.Close();
+				if (this._onIncomingChannelClosing != null)
+					this._onIncomingChannelClosing();
+				this._incommingChannel.Close("The incoming channel is closed when stop the service [" + this.ServiceURI + "]", new GoodbyeDetails());
 				this._incommingChannel = null;
 			}
 		}
@@ -127,13 +153,11 @@ namespace net.vieapps.Services
 					try
 					{
 						await this._incommingChannel.Open();
-						if (onSuccess != null)
-							onSuccess();
+						onSuccess?.Invoke();
 					}
 					catch (Exception ex)
 					{
-						if (onError != null)
-							onError(ex);
+						onError?.Invoke(ex);
 					}
 				})).Start();
 		}
@@ -160,6 +184,11 @@ namespace net.vieapps.Services
 				? (new DefaultWampChannelFactory()).CreateJsonChannel(address, realm)
 				: (new DefaultWampChannelFactory()).CreateMsgpackChannel(address, realm);
 
+			this._outgoingChannel.RealmProxy.Monitor.ConnectionEstablished += (sender, arguments) =>
+			{
+				this._outgoingSessionID = arguments.SessionId;
+			};
+
 			if (onConnectionEstablished != null)
 				this._outgoingChannel.RealmProxy.Monitor.ConnectionEstablished += new EventHandler<WampSessionCreatedEventArgs>(onConnectionEstablished);
 
@@ -171,7 +200,7 @@ namespace net.vieapps.Services
 
 			await this._outgoingChannel.Open();
 
-			this._onCloseOutgoingChannel = onClosingConnection;
+			this._onOutgoingChannelClosing = onClosingConnection;
 		}
 
 		/// <summary>
@@ -181,9 +210,9 @@ namespace net.vieapps.Services
 		{
 			if (this._outgoingChannel != null)
 			{
-				if (this._onCloseOutgoingChannel != null)
-					this._onCloseOutgoingChannel();
-				this._outgoingChannel.Close();
+				if (this._onOutgoingChannelClosing != null)
+					this._onOutgoingChannelClosing();
+				this._outgoingChannel.Close("The outgoing channel is closed when stop the service [" + this.ServiceURI + "]", new GoodbyeDetails());
 				this._outgoingChannel = null;
 			}
 		}
@@ -205,13 +234,11 @@ namespace net.vieapps.Services
 					try
 					{
 						await this._outgoingChannel.Open();
-						if (onSuccess != null)
-							onSuccess();
+						onSuccess?.Invoke();
 					}
 					catch (Exception ex)
 					{
-						if (onError != null)
-							onError(ex);
+						onError?.Invoke(ex);
 					}
 				})).Start();
 		}
@@ -227,36 +254,37 @@ namespace net.vieapps.Services
 			await this.OpenIncomingChannelAsync();
 			try
 			{
-				var interceptor = new CalleeRegistrationInterceptor(new RegisterOptions() { Invoke = WampInvokePolicy.Roundrobin });
-				await this._incommingChannel.RealmProxy.Services.RegisterCallee(this, interceptor);
-				if (onSuccess != null)
-					onSuccess();
+				await this._incommingChannel.RealmProxy.Services.RegisterCallee(typeof(IService), () => this, new RegistrationInterceptor(this.ServiceName.ToLower().Trim()));
+				onSuccess?.Invoke();
 			}
 			catch (Exception ex)
 			{
-				if (onError != null)
-					onError(ex);
+				onError?.Invoke(ex);
 			}
 		}
 
 		/// <summary>
 		/// Registers the handler to process inter-communicate message
 		/// </summary>
-		/// <param name="onMessageReceived"></param>
+		/// <param name="onInterCommunicateMessageReceived"></param>
 		/// <returns></returns>
-		protected async Task RegisterInterCommunicateMessageHandlerAsync(Action<BaseMessage> onMessageReceived)
+		protected async Task RegisterInterCommunicateMessageHandlerAsync(Action<BaseMessage> onInterCommunicateMessageReceived)
 		{
 			await this.OpenIncomingChannelAsync();
-			if (onMessageReceived != null)
+			if (onInterCommunicateMessageReceived != null)
 			{
-				this._onReceiveInterCommuniateMessage = onMessageReceived;
+				this._onInterCommuniateMessageReceived = onInterCommunicateMessageReceived;
 				if (this._subscriber != null)
 					this._subscriber.Dispose();
 
-				var subject = this._incommingChannel.RealmProxy.Services.GetSubject<BaseMessage>("net.vieapps.rtu.service.messages." + (this as IService).ServiceName.ToLower());
+				var subject = this._incommingChannel.RealmProxy.Services.GetSubject<BaseMessage>("net.vieapps.rtu.communicate.messages." + this.ServiceName.ToLower());
 				this._subscriber = subject.Subscribe<BaseMessage>(message =>
 				{
-					this._onReceiveInterCommuniateMessage(message);
+					try
+					{
+						this._onInterCommuniateMessageReceived(message);
+					}
+					catch { }
 				});
 			}
 		}
@@ -277,7 +305,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="message">The message</param>
 		/// <returns></returns>
-		public async Task SendUpdateMessageAsync(UpdateMessage message)
+		protected async Task SendUpdateMessageAsync(UpdateMessage message)
 		{
 			await this.InitializeRTUServiceAsync();
 			await this._rtuService.SendUpdateMessageAsync(message);
@@ -290,7 +318,7 @@ namespace net.vieapps.Services
 		/// <param name="deviceID">The string that presents a client's device identity for receiving the messages</param>
 		/// <param name="excludedDeviceID">The string that presents identity of a device to be excluded</param>
 		/// <returns></returns>
-		public async Task SendUpdateMessagesAsync(List<BaseMessage> messages, string deviceID, string excludedDeviceID = null)
+		protected async Task SendUpdateMessagesAsync(List<BaseMessage> messages, string deviceID, string excludedDeviceID = null)
 		{
 			await this.InitializeRTUServiceAsync();
 			await this._rtuService.SendUpdateMessagesAsync(messages, deviceID, excludedDeviceID);
@@ -302,10 +330,10 @@ namespace net.vieapps.Services
 		/// <param name="serviceName">The name of a service</param>
 		/// <param name="message">The message</param>
 		/// <returns></returns>
-		public async Task SendInterCommuniateMessageAsync(string serviceName, BaseMessage message)
+		protected async Task SendInterCommunicateMessageAsync(string serviceName, BaseMessage message)
 		{
 			await this.InitializeRTUServiceAsync();
-			await this._rtuService.SendInterCommuniateMessageAsync(serviceName, message);
+			await this._rtuService.SendInterCommunicateMessageAsync(serviceName, message);
 		}
 
 		/// <summary>
@@ -314,10 +342,10 @@ namespace net.vieapps.Services
 		/// <param name="serviceName">The name of a service</param>
 		/// <param name="messages">The collection of messages</param>
 		/// <returns></returns>
-		public async Task SendInterCommuniateMessagesAsync(string serviceName, List<BaseMessage> messages)
+		protected async Task SendInterCommunicateMessagesAsync(string serviceName, List<BaseMessage> messages)
 		{
 			await this.InitializeRTUServiceAsync();
-			await this._rtuService.SendInterCommuniateMessagesAsync(serviceName, messages);
+			await this._rtuService.SendInterCommunicateMessagesAsync(serviceName, messages);
 		}
 		#endregion
 
@@ -340,7 +368,7 @@ namespace net.vieapps.Services
 		/// <param name="log">The log message</param>
 		/// <param name="stack">The stack trace (usually is Exception.StackTrace)</param>
 		/// <returns></returns>
-		public async Task WriteLogAsync(string correlationID, string serviceName, string objectName, string log, string stack = null)
+		protected async Task WriteLogAsync(string correlationID, string serviceName, string objectName, string log, string stack = null)
 		{
 			await this.InitializeManagementServiceAsync();
 			await this._managementService.WriteLogAsync(correlationID, serviceName, objectName, log, stack);
@@ -355,7 +383,7 @@ namespace net.vieapps.Services
 		/// <param name="log">The log message</param>
 		/// <param name="exception">The exception</param>
 		/// <returns></returns>
-		public Task WriteLogAsync(string correlationID, string serviceName, string objectName, string log, Exception exception = null)
+		protected Task WriteLogAsync(string correlationID, string serviceName, string objectName, string log, Exception exception = null)
 		{
 			log = string.IsNullOrWhiteSpace(log) && exception != null
 				? exception.Message
@@ -387,7 +415,7 @@ namespace net.vieapps.Services
 		/// <param name="logs">The collection of log messages</param>
 		/// <param name="exception">The exception</param>
 		/// <returns></returns>
-		public Task WriteLogAsync(RequestInfo requestInfo, string log, Exception exception = null)
+		protected Task WriteLogAsync(RequestInfo requestInfo, string log, Exception exception = null)
 		{
 			return this.WriteLogAsync(requestInfo.Session.CorrelationID, requestInfo.ServiceName, requestInfo.ObjectName, log, exception);
 		}
@@ -400,7 +428,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of serivice's object</param>
 		/// <param name="log">The log message</param>
 		/// <param name="exception">The exception</param>
-		public void WriteLog(string correlationID, string serviceName, string objectName, string log, Exception exception = null)
+		protected void WriteLog(string correlationID, string serviceName, string objectName, string log, Exception exception = null)
 		{
 			Task.Run(async () =>
 			{
@@ -414,7 +442,7 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo">The request information</param>
 		/// <param name="logs">The collection of log messages</param>
 		/// <param name="exception">The exception</param>
-		public void WriteLog(RequestInfo requestInfo, string log, Exception exception = null)
+		protected void WriteLog(RequestInfo requestInfo, string log, Exception exception = null)
 		{
 			this.WriteLog(requestInfo.Session.CorrelationID, requestInfo.ServiceName, requestInfo.ObjectName, log, exception);
 		}
@@ -428,7 +456,7 @@ namespace net.vieapps.Services
 		/// <param name="logs">The collection of log messages</param>
 		/// <param name="stack">The stack trace (usually is Exception.StackTrace)</param>
 		/// <returns></returns>
-		public async Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, string stack = null)
+		protected async Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, string stack = null)
 		{
 			await this.InitializeManagementServiceAsync();
 			await this._managementService.WriteLogsAsync(correlationID, serviceName, objectName, logs, stack);
@@ -443,7 +471,7 @@ namespace net.vieapps.Services
 		/// <param name="logs">The collection of log messages</param>
 		/// <param name="exception">The exception</param>
 		/// <returns></returns>
-		public Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, Exception exception = null)
+		protected Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, Exception exception = null)
 		{
 			var stack = "";
 			if (exception != null)
@@ -471,7 +499,7 @@ namespace net.vieapps.Services
 		/// <param name="logs">The collection of log messages</param>
 		/// <param name="exception">The exception</param>
 		/// <returns></returns>
-		public Task WriteLogsAsync(RequestInfo requestInfo, List<string> logs, Exception exception = null)
+		protected Task WriteLogsAsync(RequestInfo requestInfo, List<string> logs, Exception exception = null)
 		{
 			return this.WriteLogsAsync(requestInfo.Session.CorrelationID, requestInfo.ServiceName, requestInfo.ObjectName, logs, exception);
 		}
@@ -484,7 +512,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of serivice's object</param>
 		/// <param name="logs">The collection of log messages</param>
 		/// <param name="exception">The exception</param>
-		public void WriteLogs(string correlationID, string serviceName, string objectName, List<string> logs, Exception exception = null)
+		protected void WriteLogs(string correlationID, string serviceName, string objectName, List<string> logs, Exception exception = null)
 		{
 			Task.Run(async () =>
 			{
@@ -498,13 +526,31 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo">The request information</param>
 		/// <param name="logs">The collection of log messages</param>
 		/// <param name="exception">The exception</param>
-		public void WriteLogs(RequestInfo requestInfo, List<string> logs, Exception exception = null)
+		protected void WriteLogs(RequestInfo requestInfo, List<string> logs, Exception exception = null)
 		{
 			this.WriteLogs(requestInfo.Session.CorrelationID, requestInfo.ServiceName, requestInfo.ObjectName, logs, exception);
 		}
 		#endregion
 
 		#region Call other services
+		/// <summary>
+		/// Calls other service
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <returns></returns>
+		protected async Task<JObject> CallAsync(RequestInfo requestInfo)
+		{
+			var key = requestInfo.ServiceName.Trim().ToLower();
+			if (!this._services.TryGetValue(key, out IService service))
+			{
+				await this.OpenOutgoingChannelAsync();
+				service = this._outgoingChannel.RealmProxy.Services.GetCalleeProxy<IService>(new CachedCalleeProxyInterceptor(new ProxyInterceptor(key)));
+				this._services.Add(key, service);
+			}
+
+			return await service.ProcessRequestAsync(requestInfo);
+		}
+
 		/// <summary>
 		/// Calls other service
 		/// </summary>
@@ -517,9 +563,9 @@ namespace net.vieapps.Services
 		/// <param name="body"></param>
 		/// <param name="extra"></param>
 		/// <returns></returns>
-		protected async Task<JObject> Call(Session session, string serviceName, string objectName, string verb = "GET", NameValueCollection query = null, NameValueCollection header = null, string body = null, NameValueCollection extra = null)
+		protected async Task<JObject> CallAsync(Session session, string serviceName, string objectName, string verb = "GET", Dictionary<string, string> query = null, Dictionary<string, string> header = null, string body = null, Dictionary<string, string> extra = null)
 		{
-			var requestInfo = new RequestInfo()
+			return await this.CallAsync(new RequestInfo()
 			{
 				Session = session,
 				ServiceName = serviceName,
@@ -527,26 +573,9 @@ namespace net.vieapps.Services
 				Verb = string.IsNullOrWhiteSpace(verb) ? "GET" : verb,
 				Query = query,
 				Header = header,
-				Body = body
-			};
-
-			var key = requestInfo.ServiceName.Trim().ToLower();
-			IService service;
-			if (!this._services.TryGetValue(key, out service))
-			{
-				ServiceInterceptor interceptor;
-				if (!this._interceptors.TryGetValue(key, out interceptor))
-				{
-					interceptor = new ServiceInterceptor(key);
-					this._interceptors.Add(key, interceptor);
-				}
-
-				await this.OpenOutgoingChannelAsync();
-				service = this._outgoingChannel.RealmProxy.Services.GetCalleeProxy<IService>(interceptor);
-				this._services.Add(key, service);
-			}
-
-			return await service.ProcessRequestAsync(requestInfo, extra);
+				Body = body,
+				Extra = extra
+			});
 		}
 		#endregion
 
@@ -555,7 +584,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="onRegisterSuccess"></param>
 		/// <param name="onRegisterError"></param>
-		/// <param name="onReceiveInterCommunicateMessage"></param>
+		/// <param name="onInterCommunicateMessageReceived"></param>
 		/// <param name="onIncomingConnectionEstablished"></param>
 		/// <param name="onOutgoingConnectionEstablished"></param>
 		/// <param name="onIncomingConnectionBroken"></param>
@@ -563,11 +592,11 @@ namespace net.vieapps.Services
 		/// <param name="onIncomingConnectionError"></param>
 		/// <param name="onOutgoingConnectionError"></param>
 		/// <returns></returns>
-		protected async Task StartAsync(System.Action onRegisterSuccess = null, Action<Exception> onRegisterError = null, Action<BaseMessage> onReceiveInterCommunicateMessage = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
+		protected async Task StartAsync(System.Action onRegisterSuccess = null, Action<Exception> onRegisterError = null, Action<BaseMessage> onInterCommunicateMessageReceived = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
 		{
 			await this.OpenIncomingChannelAsync(onIncomingConnectionEstablished, onIncomingConnectionBroken, onIncomingConnectionError);
 			await this.RegisterServiceAsync(onRegisterSuccess, onRegisterError);
-			await this.RegisterInterCommunicateMessageHandlerAsync(onReceiveInterCommunicateMessage);
+			await this.RegisterInterCommunicateMessageHandlerAsync(onInterCommunicateMessageReceived);
 			await this.OpenOutgoingChannelAsync(onOutgoingConnectionEstablished, onOutgoingConnectionBroken, onOutgoingConnectionError);
 		}
 
@@ -605,7 +634,7 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Disposes this service
 		/// </summary>
-		public virtual void Dispose()
+		public void Dispose()
 		{
 			this.Stop();
 		}

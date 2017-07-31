@@ -1,6 +1,5 @@
 ﻿#region Related components
 using System;
-using System.Collections.Specialized;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -23,13 +22,17 @@ namespace net.vieapps.Services
 		string ServiceName { get; }
 
 		/// <summary>
-		/// Process the request
+		/// Gets the full URI of this service
 		/// </summary>
-		/// <param name="requestInfo">Details information of the request</param>
-		/// <param name="extra">Extra information of the request</param>
+		string ServiceURI { get; }
+
+		/// <summary>
+		/// Process the request of this service
+		/// </summary>
+		/// <param name="requestInfo">Requesting Information</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.{0}")]
-		Task<JObject> ProcessRequestAsync(RequestInfo requestInfo, NameValueCollection extra = null);
+		Task<JObject> ProcessRequestAsync(RequestInfo requestInfo);
 	}
 
 	//  --------------------------------------------------------------------------------------------
@@ -64,7 +67,7 @@ namespace net.vieapps.Services
 		/// <param name="message">The message</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.rtu.service.message")]
-		Task SendInterCommuniateMessageAsync(string serviceName, BaseMessage message);
+		Task SendInterCommunicateMessageAsync(string serviceName, BaseMessage message);
 
 		/// <summary>
 		/// Send a message for updating data of other service
@@ -73,7 +76,7 @@ namespace net.vieapps.Services
 		/// <param name="messages">The collection of messages</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.rtu.service.messages")]
-		Task SendInterCommuniateMessagesAsync(string serviceName, List<BaseMessage> messages);
+		Task SendInterCommunicateMessagesAsync(string serviceName, List<BaseMessage> messages);
 	}
 
 	//  --------------------------------------------------------------------------------------------
