@@ -100,13 +100,16 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public string GetParameter(string name)
 		{
-			var value = this.Header != null && this.Header.ContainsKey(name)
-				? this.Header[name]
+			if (string.IsNullOrWhiteSpace(name))
+				return null;
+
+			var value = this.Header != null && this.Header.ContainsKey(name.ToLower())
+				? this.Header[name.ToLower()]
 				: null;
 
 			if (string.IsNullOrWhiteSpace(value))
-				value = this.Query != null && this.Query.ContainsKey(name)
-					? this.Query[name]
+				value = this.Query != null && this.Query.ContainsKey(name.ToLower())
+					? this.Query[name.ToLower()]
 					: null;
 
 			return value;
@@ -147,5 +150,4 @@ namespace net.vieapps.Services
 		#endregion
 
 	}
-
 }

@@ -20,16 +20,27 @@ using net.vieapps.Components.Security;
 namespace net.vieapps.Services
 {
 	/// <summary>
-	/// Presents a abstract service
+	/// Presents an abstract service
 	/// </summary>
 	public abstract class BaseService : IService, IDisposable
 	{
+		/// <summary>
+		/// Gets the name of this service (for working with related URIs)
+		/// </summary>
+		public abstract string ServiceName { get; }
+
+		/// <summary>
+		/// Process the request of this service
+		/// </summary>
+		/// <param name="requestInfo">Requesting Information</param>
+		/// <returns></returns>
+		public abstract Task<JObject> ProcessRequestAsync(RequestInfo requestInfo);
 
 		#region Properties
 		IWampChannel _incommingChannel = null, _outgoingChannel = null;
 		long _incommingSessionID = 0, _outgoingSessionID = 0;
 		System.Action _onIncomingChannelClosing = null, _onOutgoingChannelClosing = null;
-		System.Action<BaseMessage> _onInterCommuniateMessageReceived = null;
+		System.Action<BaseMessage> _onInterCommunicateMessageReceived = null;
 		IDisposable _subscriber = null;
 		IRTUService _rtuService = null;
 		IManagementService _managementService = null;
@@ -47,19 +58,7 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
-		/// <summary>
-		/// Gets the name of this service (for working with related URIs)
-		/// </summary>
-		public abstract string ServiceName { get; }
-
-		/// <summary>
-		/// Process the request of this service
-		/// </summary>
-		/// <param name="requestInfo">Requesting Information</param>
-		/// <returns></returns>
-		public abstract Task<JObject> ProcessRequestAsync(RequestInfo requestInfo);
-
-		#region Open/Close channels, register service/messages, ...
+		#region Open/Close channels
 		/// <summary>
 		/// Gets the location information from configuration
 		/// </summary>
@@ -242,7 +241,9 @@ namespace net.vieapps.Services
 					}
 				})).Start();
 		}
+		#endregion
 
+		#region Register service & handler of inter-communicate messages
 		/// <summary>
 		/// Registers the service
 		/// </summary>
@@ -254,7 +255,7 @@ namespace net.vieapps.Services
 			await this.OpenIncomingChannelAsync();
 			try
 			{
-				await this._incommingChannel.RealmProxy.Services.RegisterCallee(typeof(IService), () => this, new RegistrationInterceptor(this.ServiceName.ToLower().Trim()));
+				await this._incommingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, new RegistrationInterceptor(this.ServiceName.ToLower().Trim()));
 				onSuccess?.Invoke();
 			}
 			catch (Exception ex)
@@ -273,7 +274,7 @@ namespace net.vieapps.Services
 			await this.OpenIncomingChannelAsync();
 			if (onInterCommunicateMessageReceived != null)
 			{
-				this._onInterCommuniateMessageReceived = onInterCommunicateMessageReceived;
+				this._onInterCommunicateMessageReceived = onInterCommunicateMessageReceived;
 				if (this._subscriber != null)
 					this._subscriber.Dispose();
 
@@ -282,7 +283,7 @@ namespace net.vieapps.Services
 				{
 					try
 					{
-						this._onInterCommuniateMessageReceived(message);
+						this._onInterCommunicateMessageReceived(message);
 					}
 					catch { }
 				});
@@ -370,8 +371,12 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected async Task WriteLogAsync(string correlationID, string serviceName, string objectName, string log, string stack = null)
 		{
-			await this.InitializeManagementServiceAsync();
-			await this._managementService.WriteLogAsync(correlationID, serviceName, objectName, log, stack);
+			try
+			{
+				await this.InitializeManagementServiceAsync();
+				await this._managementService.WriteLogAsync(correlationID, serviceName, objectName, log, stack);
+			}
+			catch { }
 		}
 
 		/// <summary>
@@ -458,8 +463,12 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected async Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, string stack = null)
 		{
-			await this.InitializeManagementServiceAsync();
-			await this._managementService.WriteLogsAsync(correlationID, serviceName, objectName, logs, stack);
+			try
+			{
+				await this.InitializeManagementServiceAsync();
+				await this._managementService.WriteLogsAsync(correlationID, serviceName, objectName, logs, stack);
+			}
+			catch { }
 		}
 
 		/// <summary>
@@ -544,8 +553,14 @@ namespace net.vieapps.Services
 			if (!this._services.TryGetValue(key, out IService service))
 			{
 				await this.OpenOutgoingChannelAsync();
-				service = this._outgoingChannel.RealmProxy.Services.GetCalleeProxy<IService>(new CachedCalleeProxyInterceptor(new ProxyInterceptor(key)));
-				this._services.Add(key, service);
+				lock (this._services)
+				{
+					if (!this._services.TryGetValue(key, out service))
+					{
+						service = this._outgoingChannel.RealmProxy.Services.GetCalleeProxy<IService>(new CachedCalleeProxyInterceptor(new ProxyInterceptor(key)));
+						this._services.Add(key, service);
+					}
+				}
 			}
 
 			return await service.ProcessRequestAsync(requestInfo);
@@ -622,7 +637,7 @@ namespace net.vieapps.Services
 		public WampRpcRuntimeException GetException(RequestInfo requestInfo, string message, Exception exception, bool writeLogs = true)
 		{
 			message = string.IsNullOrWhiteSpace(message)
-				? "Error occurred while processing"
+				? "Error occurred while processing with the service [net.vieapps.services." + requestInfo.ServiceName.ToLower().Trim() + "]"
 				: message;
 
 			if (writeLogs)

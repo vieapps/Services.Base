@@ -9,7 +9,7 @@ using WampSharp.V2.Core.Contracts;
 namespace net.vieapps.Services
 {
 	/// <summary>
-	/// Presents a registration interceptor of a service
+	/// Presents a registration interceptor for registering a service
 	/// </summary>
 	public class RegistrationInterceptor : CalleeRegistrationInterceptor
 	{
