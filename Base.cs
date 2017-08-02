@@ -665,7 +665,7 @@ namespace net.vieapps.Services
 					inner = inner.InnerException;
 				}
 
-				return new WampRpcRuntimeException(details, null, null, message, exception);
+				return new WampRpcRuntimeException(details, new Dictionary<string, object>(), new Dictionary<string, object>() { { "RequestInfo", requestInfo.ToJson() } }, message, exception);
 			}
 		}
 
