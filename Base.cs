@@ -38,9 +38,9 @@ namespace net.vieapps.Services
 
 		#region Properties
 		IWampChannel _incommingChannel = null, _outgoingChannel = null;
-		long _incommingSessionID = 0, _outgoingSessionID = 0;
+		long _incommingChannelSessionID = 0, _outgoingChannelSessionID = 0;
 		System.Action _onIncomingChannelClosing = null, _onOutgoingChannelClosing = null;
-		System.Action<BaseMessage> _onInterCommunicateMessageReceived = null;
+		Action<BaseMessage> _onInterCommunicateMessageReceived = null;
 		IDisposable _subscriber = null;
 		IRTUService _rtuService = null;
 		IManagementService _managementService = null;
@@ -104,7 +104,7 @@ namespace net.vieapps.Services
 
 			this._incommingChannel.RealmProxy.Monitor.ConnectionEstablished += (sender, arguments) =>
 			{
-				this._incommingSessionID = arguments.SessionId;
+				this._incommingChannelSessionID = arguments.SessionId;
 			};
 
 			if (onConnectionEstablished != null)
@@ -185,7 +185,7 @@ namespace net.vieapps.Services
 
 			this._outgoingChannel.RealmProxy.Monitor.ConnectionEstablished += (sender, arguments) =>
 			{
-				this._outgoingSessionID = arguments.SessionId;
+				this._outgoingChannelSessionID = arguments.SessionId;
 			};
 
 			if (onConnectionEstablished != null)
@@ -634,16 +634,51 @@ namespace net.vieapps.Services
 		/// <param name="exception">The exception</param>
 		/// <param name="writeLogs">true to write into centralized logs</param>
 		/// <returns></returns>
-		public WampRpcRuntimeException GetException(RequestInfo requestInfo, string message, Exception exception, bool writeLogs = true)
+		public WampException GetException(RequestInfo requestInfo, string message, Exception exception, bool writeLogs = true)
 		{
 			message = string.IsNullOrWhiteSpace(message)
-				? "Error occurred while processing with the service [net.vieapps.services." + requestInfo.ServiceName.ToLower().Trim() + "]"
+				? exception != null
+					? exception.Message
+					: "Error occurred while processing with the service [net.vieapps.services." + requestInfo.ServiceName.ToLower().Trim() + "]"
 				: message;
 
 			if (writeLogs)
 				this.WriteLog(requestInfo, message, exception);
 
-			return new WampRpcRuntimeException(null, null, null, message, exception);
+			if (exception is WampException)
+				return exception as WampException;
+
+			else
+			{
+				var details = exception != null
+					? new Dictionary<string, object>() { { "0", exception.StackTrace } }
+					: null;
+
+				var inner = exception != null
+					? exception.InnerException
+					: null;
+				var counter = 0;
+				while (inner != null)
+				{
+					counter++;
+					details.Add(counter.ToString(), inner.StackTrace);
+					inner = inner.InnerException;
+				}
+
+				return new WampRpcRuntimeException(details, null, null, message, exception);
+			}
+		}
+
+		/// <summary>
+		/// Gets the exception to throw to caller
+		/// </summary>
+		/// <param name="requestInfo">The request information</param>
+		/// <param name="exception">The exception</param>
+		/// <param name="writeLogs">true to write into centralized logs</param>
+		/// <returns></returns>
+		public WampException GetException(RequestInfo requestInfo, Exception exception, bool writeLogs = true)
+		{
+			return this.GetException(requestInfo, null, exception, writeLogs);
 		}
 
 		/// <summary>
