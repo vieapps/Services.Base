@@ -6,6 +6,7 @@ using System.Dynamic;
 using Newtonsoft.Json.Linq;
 
 using net.vieapps.Components.Utility;
+using net.vieapps.Components.Security;
 #endregion
 
 namespace net.vieapps.Services
@@ -16,9 +17,11 @@ namespace net.vieapps.Services
 	[Serializable]
 	public class RequestInfo
 	{
-		public RequestInfo()
+		public RequestInfo(Session session = null, User user = null)
 		{
-			this.Session = new Session();
+			this.Session = session ?? new Session();
+			if (session != null && user != null)
+				this.Session.User = user;
 			this.ServiceName = "";
 			this.ObjectName = "";
 			this.Verb = "GET";
@@ -26,6 +29,7 @@ namespace net.vieapps.Services
 			this.Header = new Dictionary<string, string>();
 			this.Body = "";
 			this.Extra = new Dictionary<string, string>();
+			this.CorrelationID = UtilityService.GetUUID();
 		}
 
 		#region Properties
@@ -68,6 +72,11 @@ namespace net.vieapps.Services
 		/// Gets or sets the extra information
 		/// </summary>
 		public Dictionary<string, string> Extra { get; set; }
+
+		/// <summary>
+		/// Gets or sets the identity of the correlation
+		/// </summary>
+		public string CorrelationID { get; set; }
 		#endregion
 
 		#region Helper methods

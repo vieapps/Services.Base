@@ -422,7 +422,7 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected Task WriteLogAsync(RequestInfo requestInfo, string log, Exception exception = null)
 		{
-			return this.WriteLogAsync(requestInfo.Session.CorrelationID, requestInfo.ServiceName, requestInfo.ObjectName, log, exception);
+			return this.WriteLogAsync(requestInfo.CorrelationID, requestInfo.ServiceName, requestInfo.ObjectName, log, exception);
 		}
 
 		/// <summary>
@@ -449,7 +449,7 @@ namespace net.vieapps.Services
 		/// <param name="exception">The exception</param>
 		protected void WriteLog(RequestInfo requestInfo, string log, Exception exception = null)
 		{
-			this.WriteLog(requestInfo.Session.CorrelationID, requestInfo.ServiceName, requestInfo.ObjectName, log, exception);
+			this.WriteLog(requestInfo.CorrelationID, requestInfo.ServiceName, requestInfo.ObjectName, log, exception);
 		}
 
 		/// <summary>
@@ -510,7 +510,7 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected Task WriteLogsAsync(RequestInfo requestInfo, List<string> logs, Exception exception = null)
 		{
-			return this.WriteLogsAsync(requestInfo.Session.CorrelationID, requestInfo.ServiceName, requestInfo.ObjectName, logs, exception);
+			return this.WriteLogsAsync(requestInfo.CorrelationID, requestInfo.ServiceName, requestInfo.ObjectName, logs, exception);
 		}
 
 		/// <summary>
@@ -537,7 +537,7 @@ namespace net.vieapps.Services
 		/// <param name="exception">The exception</param>
 		protected void WriteLogs(RequestInfo requestInfo, List<string> logs, Exception exception = null)
 		{
-			this.WriteLogs(requestInfo.Session.CorrelationID, requestInfo.ServiceName, requestInfo.ObjectName, logs, exception);
+			this.WriteLogs(requestInfo.CorrelationID, requestInfo.ServiceName, requestInfo.ObjectName, logs, exception);
 		}
 		#endregion
 
@@ -627,14 +627,14 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Gets the exception to throw to caller
+		/// Gets the runtime exception to throw to caller
 		/// </summary>
 		/// <param name="requestInfo">The request information</param>
 		/// <param name="message">The message</param>
 		/// <param name="exception">The exception</param>
 		/// <param name="writeLogs">true to write into centralized logs</param>
 		/// <returns></returns>
-		public WampException GetException(RequestInfo requestInfo, string message, Exception exception, bool writeLogs = true)
+		public WampException GetRuntimeException(RequestInfo requestInfo, string message, Exception exception, bool writeLogs = true)
 		{
 			message = string.IsNullOrWhiteSpace(message)
 				? exception != null
@@ -670,15 +670,15 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Gets the exception to throw to caller
+		/// Gets the runtime exception to throw to caller
 		/// </summary>
 		/// <param name="requestInfo">The request information</param>
 		/// <param name="exception">The exception</param>
 		/// <param name="writeLogs">true to write into centralized logs</param>
 		/// <returns></returns>
-		public WampException GetException(RequestInfo requestInfo, Exception exception, bool writeLogs = true)
+		public WampException GetRuntimeException(RequestInfo requestInfo, Exception exception, bool writeLogs = true)
 		{
-			return this.GetException(requestInfo, null, exception, writeLogs);
+			return this.GetRuntimeException(requestInfo, null, exception, writeLogs);
 		}
 
 		/// <summary>

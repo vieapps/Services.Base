@@ -21,14 +21,13 @@ namespace net.vieapps.Services
 		public Session()
 		{
 			this.SessionID = "";
-			this.CorrelationID = "";
 			this.DeviceID = "";
 			this.IP = "";
 			this.AppName = "";
 			this.AppPlatform = "";
 			this.AppAgent = "";
 			this.AppOrigin = "";
-			this.User = new User();
+			this.User = null;
 		}
 
 		#region Properties
@@ -36,11 +35,6 @@ namespace net.vieapps.Services
 		/// Gets or sets the identity of session
 		/// </summary>
 		public string SessionID { get; set; }
-
-		/// <summary>
-		/// Gets or sets the identity of correlation session
-		/// </summary>
-		public string CorrelationID { get; set; }
 
 		/// <summary>
 		/// Gets or sets the device's identity (Device UUID) that associates with this session
