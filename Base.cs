@@ -681,12 +681,35 @@ namespace net.vieapps.Services
 			return this.GetRuntimeException(requestInfo, null, exception, writeLogs);
 		}
 
-		/// <summary>
-		/// Disposes this service
-		/// </summary>
+		#region Dispose/Destructor
+		bool disposed = false;
+
 		public void Dispose()
 		{
-			this.Stop();
+			this.Dispose(true);
+			GC.SuppressFinalize(this);
 		}
+
+		protected virtual void Dispose(bool disposing)
+		{
+			if (!disposed)
+			{
+				// free other state (managed objects)
+				if (disposing)
+				{
+				}
+
+				// free your own state (unmanaged objects).
+				this.Stop();
+				disposed = true;
+			}
+		}
+
+		~BaseService()
+		{
+			this.Dispose(false);
+		}
+		#endregion
+
 	}
 }
