@@ -79,7 +79,7 @@ namespace net.vieapps.Services
 		public string CorrelationID { get; set; }
 		#endregion
 
-		#region Helper methods
+		#region Methods: get body & request
 		/// <summary>
 		/// Gets the request body in JSON
 		/// </summary>
@@ -87,7 +87,7 @@ namespace net.vieapps.Services
 		public JObject GetBodyJson()
 		{
 			return string.IsNullOrWhiteSpace(this.Body)
-				? null
+				? new JObject()
 				: JObject.Parse(this.Body);
 		}
 
@@ -98,10 +98,34 @@ namespace net.vieapps.Services
 		public ExpandoObject GetBodyExpando()
 		{
 			return string.IsNullOrWhiteSpace(this.Body)
-				? null
+				? new ExpandoObject()
 				: this.Body.ToExpandoObject();
 		}
 
+		/// <summary>
+		/// Gets the value of the 'request' parameter of the query (in Base64Url) and converts to JSON
+		/// </summary>
+		/// <returns></returns>
+		public JObject GetRequestJson()
+		{
+			return this.Query.ContainsKey("request")
+				? JObject.Parse(this.Query["request"].Url64Decode())
+				: new JObject();
+		}
+
+		/// <summary>
+		/// Gets the value of the 'request' parameter of the query (in Base64Url) and converts to Expando
+		/// </summary>
+		/// <returns></returns>
+		public ExpandoObject GetRequestExpando()
+		{
+			return this.Query.ContainsKey("request")
+				? this.Query["request"].Url64Decode().ToExpandoObject()
+				: new ExpandoObject();
+		}
+		#endregion
+
+		#region Methods: get parameters
 		/// <summary>
 		/// Gets the parameter with two steps: first from header, then second step is from query if header has no value
 		/// </summary>
