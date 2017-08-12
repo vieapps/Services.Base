@@ -1,6 +1,7 @@
 ﻿#region Related components
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Configuration;
 using System.Linq;
@@ -34,8 +35,9 @@ namespace net.vieapps.Services
 		/// Process the request of this service
 		/// </summary>
 		/// <param name="requestInfo">The requesting information</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public abstract Task<JObject> ProcessRequestAsync(RequestInfo requestInfo);
+		public abstract Task<JObject> ProcessRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken));
 
 		#region Properties
 		IWampChannel _incommingChannel = null, _outgoingChannel = null;
@@ -306,11 +308,12 @@ namespace net.vieapps.Services
 		/// Send a message for updating data of client
 		/// </summary>
 		/// <param name="message">The message</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected async Task SendUpdateMessageAsync(UpdateMessage message)
+		protected async Task SendUpdateMessageAsync(UpdateMessage message, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			await this.InitializeRTUServiceAsync();
-			await this._rtuService.SendUpdateMessageAsync(message);
+			await this._rtuService.SendUpdateMessageAsync(message, cancellationToken);
 		}
 
 		/// <summary>
@@ -319,11 +322,12 @@ namespace net.vieapps.Services
 		/// <param name="messages">The collection of messages</param>
 		/// <param name="deviceID">The string that presents a client's device identity for receiving the messages</param>
 		/// <param name="excludedDeviceID">The string that presents identity of a device to be excluded</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected async Task SendUpdateMessagesAsync(List<BaseMessage> messages, string deviceID, string excludedDeviceID = null)
+		protected async Task SendUpdateMessagesAsync(List<BaseMessage> messages, string deviceID, string excludedDeviceID = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			await this.InitializeRTUServiceAsync();
-			await this._rtuService.SendUpdateMessagesAsync(messages, deviceID, excludedDeviceID);
+			await this._rtuService.SendUpdateMessagesAsync(messages, deviceID, excludedDeviceID, cancellationToken);
 		}
 
 		/// <summary>
@@ -331,11 +335,12 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="serviceName">The name of a service</param>
 		/// <param name="message">The message</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected async Task SendInterCommunicateMessageAsync(string serviceName, BaseMessage message)
+		protected async Task SendInterCommunicateMessageAsync(string serviceName, BaseMessage message, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			await this.InitializeRTUServiceAsync();
-			await this._rtuService.SendInterCommunicateMessageAsync(serviceName, message);
+			await this._rtuService.SendInterCommunicateMessageAsync(serviceName, message, cancellationToken);
 		}
 
 		/// <summary>
@@ -343,11 +348,12 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="serviceName">The name of a service</param>
 		/// <param name="messages">The collection of messages</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected async Task SendInterCommunicateMessagesAsync(string serviceName, List<BaseMessage> messages)
+		protected async Task SendInterCommunicateMessagesAsync(string serviceName, List<BaseMessage> messages, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			await this.InitializeRTUServiceAsync();
-			await this._rtuService.SendInterCommunicateMessagesAsync(serviceName, messages);
+			await this._rtuService.SendInterCommunicateMessagesAsync(serviceName, messages, cancellationToken);
 		}
 		#endregion
 
@@ -369,13 +375,14 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of serivice's object</param>
 		/// <param name="log">The log message</param>
 		/// <param name="stack">The stack trace (usually is Exception.StackTrace)</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected async Task WriteLogAsync(string correlationID, string serviceName, string objectName, string log, string stack = null)
+		protected async Task WriteLogAsync(string correlationID, string serviceName, string objectName, string log, string stack = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			try
 			{
 				await this.InitializeManagementServiceAsync();
-				await this._managementService.WriteLogAsync(correlationID, serviceName, objectName, log, stack);
+				await this._managementService.WriteLogAsync(correlationID, serviceName, objectName, log, stack, cancellationToken);
 			}
 			catch { }
 		}
@@ -388,8 +395,9 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of serivice's object</param>
 		/// <param name="log">The log message</param>
 		/// <param name="exception">The exception</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task WriteLogAsync(string correlationID, string serviceName, string objectName, string log, Exception exception = null)
+		protected Task WriteLogAsync(string correlationID, string serviceName, string objectName, string log, Exception exception = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			log = string.IsNullOrWhiteSpace(log) && exception != null
 				? exception.Message
@@ -411,7 +419,7 @@ namespace net.vieapps.Services
 				}
 			}
 
-			return this.WriteLogAsync(correlationID, serviceName, objectName, log, stack);
+			return this.WriteLogAsync(correlationID, serviceName, objectName, log, stack, cancellationToken);
 		}
 
 		/// <summary>
@@ -420,10 +428,11 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo">The request information</param>
 		/// <param name="logs">The collection of log messages</param>
 		/// <param name="exception">The exception</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task WriteLogAsync(RequestInfo requestInfo, string log, Exception exception = null)
+		protected Task WriteLogAsync(RequestInfo requestInfo, string log, Exception exception = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
-			return this.WriteLogAsync(requestInfo.CorrelationID, requestInfo.ServiceName, requestInfo.ObjectName, log, exception);
+			return this.WriteLogAsync(requestInfo.CorrelationID, requestInfo.ServiceName, requestInfo.ObjectName, log, exception, cancellationToken);
 		}
 
 		/// <summary>
@@ -461,13 +470,14 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of serivice's object</param>
 		/// <param name="logs">The collection of log messages</param>
 		/// <param name="stack">The stack trace (usually is Exception.StackTrace)</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected async Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, string stack = null)
+		protected async Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, string stack = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			try
 			{
 				await this.InitializeManagementServiceAsync();
-				await this._managementService.WriteLogsAsync(correlationID, serviceName, objectName, logs, stack);
+				await this._managementService.WriteLogsAsync(correlationID, serviceName, objectName, logs, stack, cancellationToken);
 			}
 			catch { }
 		}
@@ -480,8 +490,9 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of serivice's object</param>
 		/// <param name="logs">The collection of log messages</param>
 		/// <param name="exception">The exception</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, Exception exception = null)
+		protected Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, Exception exception = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			var stack = "";
 			if (exception != null)
@@ -499,7 +510,7 @@ namespace net.vieapps.Services
 				}
 			}
 
-			return this.WriteLogsAsync(correlationID, serviceName, objectName, logs, stack);
+			return this.WriteLogsAsync(correlationID, serviceName, objectName, logs, stack, cancellationToken);
 		}
 
 		/// <summary>
@@ -508,10 +519,11 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo">The request information</param>
 		/// <param name="logs">The collection of log messages</param>
 		/// <param name="exception">The exception</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task WriteLogsAsync(RequestInfo requestInfo, List<string> logs, Exception exception = null)
+		protected Task WriteLogsAsync(RequestInfo requestInfo, List<string> logs, Exception exception = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
-			return this.WriteLogsAsync(requestInfo.CorrelationID, requestInfo.ServiceName, requestInfo.ObjectName, logs, exception);
+			return this.WriteLogsAsync(requestInfo.CorrelationID, requestInfo.ServiceName, requestInfo.ObjectName, logs, exception, cancellationToken);
 		}
 
 		/// <summary>
@@ -546,9 +558,10 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Calls other service
 		/// </summary>
-		/// <param name="requestInfo"></param>
+		/// <param name="requestInfo">The requesting information</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected async Task<JObject> CallAsync(RequestInfo requestInfo)
+		protected async Task<JObject> CallAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			var key = requestInfo.ServiceName.Trim().ToLower();
 			if (!this._services.TryGetValue(key, out IService service))
@@ -564,7 +577,7 @@ namespace net.vieapps.Services
 				}
 			}
 
-			return await service.ProcessRequestAsync(requestInfo);
+			return await service.ProcessRequestAsync(requestInfo, cancellationToken);
 		}
 
 		/// <summary>
@@ -579,7 +592,7 @@ namespace net.vieapps.Services
 		/// <param name="body"></param>
 		/// <param name="extra"></param>
 		/// <returns></returns>
-		protected async Task<JObject> CallAsync(Session session, string serviceName, string objectName, string verb = "GET", Dictionary<string, string> query = null, Dictionary<string, string> header = null, string body = null, Dictionary<string, string> extra = null)
+		protected async Task<JObject> CallAsync(Session session, string serviceName, string objectName, string verb = "GET", Dictionary<string, string> query = null, Dictionary<string, string> header = null, string body = null, Dictionary<string, string> extra = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			return await this.CallAsync(new RequestInfo()
 			{
@@ -591,7 +604,7 @@ namespace net.vieapps.Services
 				Header = header,
 				Body = body,
 				Extra = extra
-			});
+			}, cancellationToken);
 		}
 		#endregion
 

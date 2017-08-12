@@ -1,6 +1,7 @@
 ﻿#region Related components
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 using WampSharp.V2.Rpc;
@@ -32,7 +33,7 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo">Requesting Information</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.{0}")]
-		Task<JObject> ProcessRequestAsync(RequestInfo requestInfo);
+		Task<JObject> ProcessRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken));
 	}
 
 	//  --------------------------------------------------------------------------------------------
@@ -48,7 +49,7 @@ namespace net.vieapps.Services
 		/// <param name="message">The message</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.rtu.client.message")]
-		Task SendUpdateMessageAsync(UpdateMessage message);
+		Task SendUpdateMessageAsync(UpdateMessage message, CancellationToken cancellationToken = default(CancellationToken));
 
 		/// <summary>
 		/// Send a message for updating data of client
@@ -58,7 +59,7 @@ namespace net.vieapps.Services
 		/// <param name="excludedDeviceID">The string that presents identity of a device to be excluded</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.rtu.client.messages")]
-		Task SendUpdateMessagesAsync(List<BaseMessage> messages, string deviceID, string excludedDeviceID);
+		Task SendUpdateMessagesAsync(List<BaseMessage> messages, string deviceID, string excludedDeviceID, CancellationToken cancellationToken = default(CancellationToken));
 
 		/// <summary>
 		/// Send a message for updating data of other service
@@ -67,7 +68,7 @@ namespace net.vieapps.Services
 		/// <param name="message">The message</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.rtu.service.message")]
-		Task SendInterCommunicateMessageAsync(string serviceName, BaseMessage message);
+		Task SendInterCommunicateMessageAsync(string serviceName, BaseMessage message, CancellationToken cancellationToken = default(CancellationToken));
 
 		/// <summary>
 		/// Send a message for updating data of other service
@@ -76,7 +77,7 @@ namespace net.vieapps.Services
 		/// <param name="messages">The collection of messages</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.rtu.service.messages")]
-		Task SendInterCommunicateMessagesAsync(string serviceName, List<BaseMessage> messages);
+		Task SendInterCommunicateMessagesAsync(string serviceName, List<BaseMessage> messages, CancellationToken cancellationToken = default(CancellationToken));
 	}
 
 	//  --------------------------------------------------------------------------------------------
@@ -96,7 +97,7 @@ namespace net.vieapps.Services
 		/// <param name="stack">The stack trace (usually is Exception.StackTrace)</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.management.writelog")]
-		Task WriteLogAsync(string correlationID, string serviceName, string objectName, string log, string stack);
+		Task WriteLogAsync(string correlationID, string serviceName, string objectName, string log, string stack, CancellationToken cancellationToken = default(CancellationToken));
 
 		/// <summary>
 		/// Writes the log into centralized log storage of all services
@@ -108,6 +109,6 @@ namespace net.vieapps.Services
 		/// <param name="stack">The stack trace (usually is Exception.StackTrace)</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.management.writelogs")]
-		Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, string stack);
+		Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, string stack, CancellationToken cancellationToken = default(CancellationToken));
 	}
 }
