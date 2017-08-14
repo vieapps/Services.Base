@@ -27,7 +27,7 @@ namespace net.vieapps.Services
 			this.AppPlatform = "";
 			this.AppAgent = "";
 			this.AppOrigin = "";
-			this.User = null;
+			this.User = new User();
 		}
 
 		#region Properties

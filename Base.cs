@@ -374,15 +374,16 @@ namespace net.vieapps.Services
 		/// <param name="serviceName">The name of service</param>
 		/// <param name="objectName">The name of serivice's object</param>
 		/// <param name="log">The log message</param>
-		/// <param name="stack">The stack trace (usually is Exception.StackTrace)</param>
+		/// <param name="simpleStack">The simple stack (usually is Exception.StackTrace)</param>
+		/// <param name="fullStack">The full stack (usually stack of the exception and all inners)</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected async Task WriteLogAsync(string correlationID, string serviceName, string objectName, string log, string stack = null, CancellationToken cancellationToken = default(CancellationToken))
+		protected async Task WriteLogAsync(string correlationID, string serviceName, string objectName, string log, string simpleStack = null, string fullStack = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			try
 			{
 				await this.InitializeManagementServiceAsync();
-				await this._managementService.WriteLogAsync(correlationID, serviceName, objectName, log, stack, cancellationToken);
+				await this._managementService.WriteLogAsync(correlationID, serviceName, objectName, log, simpleStack, fullStack, cancellationToken);
 			}
 			catch { }
 		}
@@ -403,23 +404,27 @@ namespace net.vieapps.Services
 				? exception.Message
 				: log;
 
-			var stack = "";
+			var simpleStack = exception != null
+				? exception.StackTrace
+				: "";
+
+			var fullStack = "";
 			if (exception != null)
 			{
-				stack = exception.StackTrace;
-				var ex = exception.InnerException;
+				fullStack = exception.StackTrace;
+				var inner = exception.InnerException;
 				var counter = 0;
-				while (ex != null)
+				while (inner != null)
 				{
 					counter++;
-					stack += "\r\n"
+					fullStack += "\r\n"
 						+ "-- Inner (" + counter.ToString() + ") ----------------- " + "\r\n"
-						+ ex.StackTrace;
-					ex = ex.InnerException;
+						+ inner.StackTrace;
+					inner = inner.InnerException;
 				}
 			}
 
-			return this.WriteLogAsync(correlationID, serviceName, objectName, log, stack, cancellationToken);
+			return this.WriteLogAsync(correlationID, serviceName, objectName, log, simpleStack, fullStack, cancellationToken);
 		}
 
 		/// <summary>
@@ -469,15 +474,16 @@ namespace net.vieapps.Services
 		/// <param name="serviceName">The name of service</param>
 		/// <param name="objectName">The name of serivice's object</param>
 		/// <param name="logs">The collection of log messages</param>
-		/// <param name="stack">The stack trace (usually is Exception.StackTrace)</param>
+		/// <param name="simpleStack">The simple stack (usually is Exception.StackTrace)</param>
+		/// <param name="fullStack">The full stack (usually stack of the exception and all inners)</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected async Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, string stack = null, CancellationToken cancellationToken = default(CancellationToken))
+		protected async Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, string simpleStack = null, string fullStack = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			try
 			{
 				await this.InitializeManagementServiceAsync();
-				await this._managementService.WriteLogsAsync(correlationID, serviceName, objectName, logs, stack, cancellationToken);
+				await this._managementService.WriteLogsAsync(correlationID, serviceName, objectName, logs, simpleStack, fullStack, cancellationToken);
 			}
 			catch { }
 		}
@@ -494,23 +500,27 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, Exception exception = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
-			var stack = "";
+			var simpleStack = exception != null
+				? exception.StackTrace
+				: "";
+
+			var fullStack = "";
 			if (exception != null)
 			{
-				stack = exception.StackTrace;
-				var ex = exception.InnerException;
+				fullStack = exception.StackTrace;
+				var inner = exception.InnerException;
 				var counter = 0;
-				while (ex != null)
+				while (inner != null)
 				{
 					counter++;
-					stack += "\r\n"
+					fullStack += "\r\n"
 						+ "-- Inner (" + counter.ToString() + ") ----------------- " + "\r\n"
-						+ ex.StackTrace;
-					ex = ex.InnerException;
+						+ inner.StackTrace;
+					inner = inner.InnerException;
 				}
 			}
 
-			return this.WriteLogsAsync(correlationID, serviceName, objectName, logs, stack, cancellationToken);
+			return this.WriteLogsAsync(correlationID, serviceName, objectName, logs, simpleStack, fullStack, cancellationToken);
 		}
 
 		/// <summary>

@@ -99,11 +99,12 @@ namespace net.vieapps.Services
 		/// <param name="serviceName">The name of service</param>
 		/// <param name="objectName">The name of serivice's object</param>
 		/// <param name="log">The log message</param>
-		/// <param name="stack">The stack trace (usually is Exception.StackTrace)</param>
+		/// <param name="simpleStack">The simple stack (usually is Exception.StackTrace)</param>
+		/// <param name="fullStack">The full stack (usually stack of the exception and all inners)</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.management.writelog")]
-		Task WriteLogAsync(string correlationID, string serviceName, string objectName, string log, string stack, CancellationToken cancellationToken = default(CancellationToken));
+		Task WriteLogAsync(string correlationID, string serviceName, string objectName, string log, string simpleStack = null, string fullStack = null, CancellationToken cancellationToken = default(CancellationToken));
 
 		/// <summary>
 		/// Writes the log into centralized log storage of all services
@@ -112,10 +113,11 @@ namespace net.vieapps.Services
 		/// <param name="serviceName">The name of service</param>
 		/// <param name="objectName">The name of serivice's object</param>
 		/// <param name="logs">The collection of log messages</param>
-		/// <param name="stack">The stack trace (usually is Exception.StackTrace)</param>
+		/// <param name="simpleStack">The simple stack (usually is Exception.StackTrace)</param>
+		/// <param name="fullStack">The full stack (usually stack of the exception and all inners)</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.management.writelogs")]
-		Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, string stack, CancellationToken cancellationToken = default(CancellationToken));
+		Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, string simpleStack = null, string fullStack = null, CancellationToken cancellationToken = default(CancellationToken));
 	}
 }
