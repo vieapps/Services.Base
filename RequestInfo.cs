@@ -29,7 +29,7 @@ namespace net.vieapps.Services
 			this.Header = new Dictionary<string, string>();
 			this.Body = "";
 			this.Extra = new Dictionary<string, string>();
-			this.CorrelationID = UtilityService.GetUUID();
+			this.CorrelationID = "";
 		}
 
 		#region Properties
