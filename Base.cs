@@ -43,7 +43,7 @@ namespace net.vieapps.Services
 		IWampChannel _incommingChannel = null, _outgoingChannel = null;
 		long _incommingChannelSessionID = 0, _outgoingChannelSessionID = 0;
 		System.Action _onIncomingChannelClosing = null, _onOutgoingChannelClosing = null;
-		Action<BaseMessage> _onInterCommunicateMessageReceived = null;
+		List<Action<CommunicateMessage>> _interCommunicateMessageHandlers = new List<Action<CommunicateMessage>>();
 		IDisposable _subscriber = null;
 		IRTUService _rtuService = null;
 		IManagementService _managementService = null;
@@ -268,27 +268,31 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Registers the handler to process inter-communicate message
+		/// Registers the handler to process inter-communicate messages
 		/// </summary>
 		/// <param name="onInterCommunicateMessageReceived"></param>
 		/// <returns></returns>
-		protected async Task RegisterInterCommunicateMessageHandlerAsync(Action<BaseMessage> onInterCommunicateMessageReceived)
+		protected async Task RegisterInterCommunicateMessageHandlerAsync(Action<CommunicateMessage> onInterCommunicateMessageReceived)
 		{
 			await this.OpenIncomingChannelAsync();
 			if (onInterCommunicateMessageReceived != null)
 			{
-				this._onInterCommunicateMessageReceived = onInterCommunicateMessageReceived;
+				this._interCommunicateMessageHandlers.Add(onInterCommunicateMessageReceived);
 				if (this._subscriber != null)
 					this._subscriber.Dispose();
 
-				var subject = this._incommingChannel.RealmProxy.Services.GetSubject<BaseMessage>("net.vieapps.rtu.communicate.messages." + this.ServiceName.ToLower());
-				this._subscriber = subject.Subscribe<BaseMessage>(message =>
+				var subject = this._incommingChannel.RealmProxy.Services.GetSubject<CommunicateMessage>("net.vieapps.rtu.communicate.messages");
+				this._subscriber = subject.Subscribe<CommunicateMessage>(message =>
 				{
-					try
-					{
-						this._onInterCommunicateMessageReceived(message);
-					}
-					catch { }
+					if (message.ServiceName.IsEquals(this.ServiceName))
+						this._interCommunicateMessageHandlers.ForEach(action =>
+						{
+							try
+							{
+								action(message);
+							}
+							catch { }
+						});
 				});
 			}
 		}
@@ -640,35 +644,53 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected bool IsAuthorized(RequestInfo requestInfo, Components.Security.Action action, Privileges privileges = null, Func<User, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 		{
+			return requestInfo == null || requestInfo.Session == null || requestInfo.Session.User == null
+				? false
+				: this.IsAuthorized(requestInfo.Session.User, requestInfo.ServiceName, requestInfo.ObjectName, action, privileges, getPrivileges, getActions);
+		}
+
+		/// <summary>
+		/// Gets the state that determines the user can perform the action or not
+		/// </summary>
+		/// <param name="user">The information of user who performs the action</param>
+		/// <param name="serviceName">The name of the service</param>
+		/// <param name="objectName">The name of the service's object</param>
+		/// <param name="action">The action to perform on the object of this service</param>
+		/// <param name="privileges">The working privileges of the object (entity)</param>
+		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
+		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <returns></returns>
+		protected bool IsAuthorized(User user, string serviceName, string objectName, Components.Security.Action action, Privileges privileges = null, Func<User, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		{
 			// check
-			if (requestInfo == null || requestInfo.Session == null || requestInfo.Session.User == null)
+			if (user == null)
 				return false;
 
-			else if (requestInfo.Session.User.Role.Equals(SystemRole.SystemAdministrator))
+			else if (user.Role.Equals(SystemRole.SystemAdministrator))
 				return true;
 
 			// prepare privileges
-			var workingPrivileges = requestInfo.Session.User.Privileges != null && requestInfo.Session.User.Privileges.Count > 0
-				? requestInfo.Session.User.Privileges
+			var workingPrivileges = user.Privileges != null && user.Privileges.Count > 0
+				? user.Privileges
 				: null;
 
 			if (workingPrivileges == null)
 			{
 				if (getPrivileges != null)
-					workingPrivileges = getPrivileges.Invoke(requestInfo.Session.User, privileges);
+					workingPrivileges = getPrivileges.Invoke(user, privileges);
 				else
 				{
 					workingPrivileges = new List<Privilege>();
-					if (requestInfo.Session.User.CanManage(privileges))
-						workingPrivileges.Add(new Privilege(requestInfo.ServiceName, requestInfo.ObjectName, PrivilegeRole.Administrator.ToString()));
-					else if (requestInfo.Session.User.CanModerate(privileges))
-						workingPrivileges.Add(new Privilege(requestInfo.ServiceName, requestInfo.ObjectName, PrivilegeRole.Moderator.ToString()));
-					else if (requestInfo.Session.User.CanEdit(privileges))
-						workingPrivileges.Add(new Privilege(requestInfo.ServiceName, requestInfo.ObjectName, PrivilegeRole.Editor.ToString()));
-					else if (requestInfo.Session.User.CanContribute(privileges))
-						workingPrivileges.Add(new Privilege(requestInfo.ServiceName, requestInfo.ObjectName, PrivilegeRole.Contributor.ToString()));
-					else if (requestInfo.Session.User.CanView(privileges))
-						workingPrivileges.Add(new Privilege(requestInfo.ServiceName, requestInfo.ObjectName, PrivilegeRole.Viewer.ToString()));
+					if (user.CanManage(privileges))
+						workingPrivileges.Add(new Privilege(serviceName, objectName, PrivilegeRole.Administrator.ToString()));
+					else if (user.CanModerate(privileges))
+						workingPrivileges.Add(new Privilege(serviceName, objectName, PrivilegeRole.Moderator.ToString()));
+					else if (user.CanEdit(privileges))
+						workingPrivileges.Add(new Privilege(serviceName, objectName, PrivilegeRole.Editor.ToString()));
+					else if (user.CanContribute(privileges))
+						workingPrivileges.Add(new Privilege(serviceName, objectName, PrivilegeRole.Contributor.ToString()));
+					else if (user.CanView(privileges))
+						workingPrivileges.Add(new Privilege(serviceName, objectName, PrivilegeRole.Viewer.ToString()));
 				}
 			}
 
@@ -739,10 +761,64 @@ namespace net.vieapps.Services
 			});
 
 			// check permission
-			var workingPrivilege = workingPrivileges.FirstOrDefault(p => requestInfo.ServiceName.Equals(p.ServiceName) && requestInfo.ObjectName.Equals(p.ObjectName));
+			var workingPrivilege = workingPrivileges.FirstOrDefault(p => serviceName.Equals(p.ServiceName) && objectName.Equals(p.ObjectName));
 			return workingPrivilege != null
 				? workingPrivilege.Actions.FirstOrDefault(a => a.Equals(Components.Security.Action.Full.ToString()) || a.Equals(action.ToString())) != null
 				: false;
+		}
+		#endregion
+
+		#region Authorization of files
+		/// <summary>
+		/// Gets the state that determines the user is able to upload the attachment files or not
+		/// </summary>
+		/// <param name="user">The user who performs the download action</param>
+		/// <param name="systemID">The identity of the business system that the attachment file is belong to</param>
+		/// <param name="entityID">The identity of the entity definition that the attachment file is belong to</param>
+		/// <param name="objectID">The identity of the business object that the attachment file is belong to</param>
+		/// <returns></returns>
+		public virtual Task<bool> IsAbleToUploadAsync(User user, string systemID, string entityID, string objectID)
+		{
+			return Task.FromResult(true);
+		}
+
+		/// <summary>
+		/// Gets the state that determines the user is able to download the attachment files or not
+		/// </summary>
+		/// <param name="user">The user who performs the download action</param>
+		/// <param name="systemID">The identity of the business system that the attachment file is belong to</param>
+		/// <param name="entityID">The identity of the entity definition that the attachment file is belong to</param>
+		/// <param name="objectID">The identity of the business object that the attachment file is belong to</param>
+		/// <returns></returns>
+		public virtual Task<bool> IsAbleToDownloadAsync(User user, string systemID, string entityID, string objectID)
+		{
+			return Task.FromResult(true);
+		}
+
+		/// <summary>
+		/// Gets the state that determines the user is able to delete the attachment files or not
+		/// </summary>
+		/// <param name="user">The user who performs the download action</param>
+		/// <param name="systemID">The identity of the business system that the attachment file is belong to</param>
+		/// <param name="entityID">The identity of the entity definition that the attachment file is belong to</param>
+		/// <param name="objectID">The identity of the business object that the attachment file is belong to</param>
+		/// <returns></returns>
+		public virtual Task<bool> IsAbleToDeleteAsync(User user, string systemID, string entityID, string objectID)
+		{
+			return Task.FromResult(true);
+		}
+
+		/// <summary>
+		/// Gets the state that determines the user is able to restore the attachment files or not
+		/// </summary>
+		/// <param name="user">The user who performs the download action</param>
+		/// <param name="systemID">The identity of the business system that the attachment file is belong to</param>
+		/// <param name="entityID">The identity of the entity definition that the attachment file is belong to</param>
+		/// <param name="objectID">The identity of the business object that the attachment file is belong to</param>
+		/// <returns></returns>
+		public virtual Task<bool> IsAbleToRestoreAsync(User user, string systemID, string entityID, string objectID)
+		{
+			return Task.FromResult(true);
 		}
 		#endregion
 
@@ -759,7 +835,7 @@ namespace net.vieapps.Services
 		/// <param name="onIncomingConnectionError"></param>
 		/// <param name="onOutgoingConnectionError"></param>
 		/// <returns></returns>
-		protected async Task StartAsync(System.Action onRegisterSuccess = null, Action<Exception> onRegisterError = null, Action<BaseMessage> onInterCommunicateMessageReceived = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
+		protected async Task StartAsync(System.Action onRegisterSuccess = null, Action<Exception> onRegisterError = null, Action<CommunicateMessage> onInterCommunicateMessageReceived = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
 		{
 			await this.OpenIncomingChannelAsync(onIncomingConnectionEstablished, onIncomingConnectionBroken, onIncomingConnectionError);
 			await this.RegisterServiceAsync(onRegisterSuccess, onRegisterError);
@@ -778,6 +854,7 @@ namespace net.vieapps.Services
 			this.CloseOutgoingChannel();
 		}
 
+		#region Get runtime exception
 		/// <summary>
 		/// Gets the runtime exception to throw to caller
 		/// </summary>
@@ -832,6 +909,7 @@ namespace net.vieapps.Services
 		{
 			return this.GetRuntimeException(requestInfo, null, exception, writeLogs);
 		}
+		#endregion
 
 		#region Dispose/Destructor
 		bool disposed = false;

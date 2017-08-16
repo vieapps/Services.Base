@@ -7,7 +7,7 @@ using Newtonsoft.Json.Linq;
 namespace net.vieapps.Services
 {
 	/// <summary>
-	/// Presents a base-message for updating via RTU (Real-Time Update)
+	/// Presents a message for updating information
 	/// </summary>
 	[Serializable]
 	public class BaseMessage
@@ -18,7 +18,6 @@ namespace net.vieapps.Services
 			this.Data = new JObject();
 		}
 
-		#region Properties
 		/// <summary>
 		/// Gets or sets type of update message
 		/// </summary>
@@ -28,8 +27,6 @@ namespace net.vieapps.Services
 		/// Gets or sets data of update message
 		/// </summary>
 		public JToken Data { get; set; }
-		#endregion
-
 	}
 
 	//  --------------------------------------------------------------------------------------------
@@ -40,13 +37,17 @@ namespace net.vieapps.Services
 	[Serializable]
 	public class UpdateMessage : BaseMessage
 	{
-		public UpdateMessage() : base()
+		public UpdateMessage(BaseMessage underlyingMessage = null) : base()
 		{
 			this.DeviceID = "";
 			this.ExcludedDeviceID = "";
+			if (underlyingMessage != null)
+			{
+				this.Type = underlyingMessage.Type;
+				this.Data = underlyingMessage.Data;
+			}
 		}
 
-		#region Properties
 		/// <summary>
 		/// Gets or sets identity of device that received the message
 		/// </summary>
@@ -56,8 +57,29 @@ namespace net.vieapps.Services
 		/// Gets or sets the identity of excluded devices
 		/// </summary>
 		public string ExcludedDeviceID { get; set; }
-		#endregion
-
 	}
 
+	//  --------------------------------------------------------------------------------------------
+
+	/// <summary>
+	/// Presents a message for communicating between services
+	/// </summary>
+	[Serializable]
+	public class CommunicateMessage : BaseMessage
+	{
+		public CommunicateMessage(string serviceName = null, BaseMessage underlyingMessage = null) : base()
+		{
+			this.ServiceName = serviceName ?? "";
+			if (underlyingMessage != null)
+			{
+				this.Type = underlyingMessage.Type;
+				this.Data = underlyingMessage.Data;
+			}
+		}
+
+		/// <summary>
+		/// Gets or sets name of the service that received and processed the message
+		/// </summary>
+		public string ServiceName { get; set; }
+	}
 }
