@@ -630,7 +630,7 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected bool IsAuthenticated(RequestInfo requestInfo)
 		{
-			return requestInfo != null && requestInfo.Session != null && requestInfo.Session.User != null && !string.IsNullOrWhiteSpace(requestInfo.Session.User.ID);
+			return requestInfo != null && requestInfo.Session != null && requestInfo.Session.User != null && requestInfo.Session.User.IsAuthenticated;
 		}
 
 		/// <summary>
@@ -646,125 +646,7 @@ namespace net.vieapps.Services
 		{
 			return requestInfo == null || requestInfo.Session == null || requestInfo.Session.User == null
 				? false
-				: this.IsAuthorized(requestInfo.Session.User, requestInfo.ServiceName, requestInfo.ObjectName, action, privileges, getPrivileges, getActions);
-		}
-
-		/// <summary>
-		/// Gets the state that determines the user can perform the action or not
-		/// </summary>
-		/// <param name="user">The information of user who performs the action</param>
-		/// <param name="serviceName">The name of the service</param>
-		/// <param name="objectName">The name of the service's object</param>
-		/// <param name="action">The action to perform on the object of this service</param>
-		/// <param name="privileges">The working privileges of the object (entity)</param>
-		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
-		/// <param name="getActions">The function to prepare the actions of each privilege</param>
-		/// <returns></returns>
-		protected bool IsAuthorized(User user, string serviceName, string objectName, Components.Security.Action action, Privileges privileges = null, Func<User, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
-		{
-			// check
-			if (user == null)
-				return false;
-
-			else if (user.Role.Equals(SystemRole.SystemAdministrator))
-				return true;
-
-			// prepare privileges
-			var workingPrivileges = user.Privileges != null && user.Privileges.Count > 0
-				? user.Privileges
-				: null;
-
-			if (workingPrivileges == null)
-			{
-				if (getPrivileges != null)
-					workingPrivileges = getPrivileges.Invoke(user, privileges);
-				else
-				{
-					workingPrivileges = new List<Privilege>();
-					if (user.CanManage(privileges))
-						workingPrivileges.Add(new Privilege(serviceName, objectName, PrivilegeRole.Administrator.ToString()));
-					else if (user.CanModerate(privileges))
-						workingPrivileges.Add(new Privilege(serviceName, objectName, PrivilegeRole.Moderator.ToString()));
-					else if (user.CanEdit(privileges))
-						workingPrivileges.Add(new Privilege(serviceName, objectName, PrivilegeRole.Editor.ToString()));
-					else if (user.CanContribute(privileges))
-						workingPrivileges.Add(new Privilege(serviceName, objectName, PrivilegeRole.Contributor.ToString()));
-					else if (user.CanView(privileges))
-						workingPrivileges.Add(new Privilege(serviceName, objectName, PrivilegeRole.Viewer.ToString()));
-				}
-			}
-
-			// prepare actions
-			workingPrivileges.ForEach(privilege =>
-			{
-				if (privilege.Actions == null || privilege.Actions.Count < 1)
-				{
-					if (getActions != null)
-						privilege.Actions = getActions.Invoke(privilege.Role.ToEnum<PrivilegeRole>());
-				}
-				else
-				{
-					var actions = new List<Components.Security.Action>();
-					if (privilege.Role.Equals(PrivilegeRole.Administrator.ToString()))
-						actions.Add(Components.Security.Action.Full);
-					else if (privilege.Role.Equals(PrivilegeRole.Moderator.ToString()))
-						actions = new List<Components.Security.Action>()
-						{
-							Components.Security.Action.CheckIn,
-							Components.Security.Action.CheckOut,
-							Components.Security.Action.Comment,
-							Components.Security.Action.Vote,
-							Components.Security.Action.Approve,
-							Components.Security.Action.Restore,
-							Components.Security.Action.Rollback,
-							Components.Security.Action.Delete,
-							Components.Security.Action.Update,
-							Components.Security.Action.Create,
-							Components.Security.Action.View,
-							Components.Security.Action.Download,
-						};
-					else if (privilege.Role.Equals(PrivilegeRole.Editor.ToString()))
-						actions = new List<Components.Security.Action>()
-						{
-							Components.Security.Action.CheckIn,
-							Components.Security.Action.CheckOut,
-							Components.Security.Action.Comment,
-							Components.Security.Action.Vote,
-							Components.Security.Action.Restore,
-							Components.Security.Action.Rollback,
-							Components.Security.Action.Delete,
-							Components.Security.Action.Update,
-							Components.Security.Action.Create,
-							Components.Security.Action.View,
-							Components.Security.Action.Download,
-						};
-					else if (privilege.Role.Equals(PrivilegeRole.Contributor.ToString()))
-						actions = new List<Components.Security.Action>()
-						{
-							Components.Security.Action.CheckIn,
-							Components.Security.Action.CheckOut,
-							Components.Security.Action.Comment,
-							Components.Security.Action.Vote,
-							Components.Security.Action.Create,
-							Components.Security.Action.View,
-							Components.Security.Action.Download,
-						};
-					else
-						actions = new List<Components.Security.Action>()
-						{
-							Components.Security.Action.View,
-							Components.Security.Action.Download,
-						};
-
-					privilege.Actions = actions.Select(a => a.ToString()).ToList();
-				}
-			});
-
-			// check permission
-			var workingPrivilege = workingPrivileges.FirstOrDefault(p => serviceName.Equals(p.ServiceName) && objectName.Equals(p.ObjectName));
-			return workingPrivilege != null
-				? workingPrivilege.Actions.FirstOrDefault(a => a.Equals(Components.Security.Action.Full.ToString()) || a.Equals(action.ToString())) != null
-				: false;
+				: requestInfo.Session.User.IsAuthorized(requestInfo.ServiceName, requestInfo.ObjectName, action, privileges, getPrivileges, getActions);
 		}
 		#endregion
 
