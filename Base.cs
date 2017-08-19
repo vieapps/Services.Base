@@ -68,18 +68,9 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected virtual Tuple<string, string, bool> GetLocationInfo()
 		{
-			var address = ConfigurationManager.AppSettings["RouterAddress"];
-			if (string.IsNullOrWhiteSpace(address))
-				address = "ws://127.0.0.1:26429/";
-
-			var realm = ConfigurationManager.AppSettings["RouterRealm"];
-			if (string.IsNullOrWhiteSpace(realm))
-				realm = "VIEAppsRealm";
-
-			var mode = ConfigurationManager.AppSettings["RouterChannelsMode"];
-			if (string.IsNullOrWhiteSpace(mode))
-				mode = "MsgPack";
-
+			var address = UtilityService.GetAppSetting("RouterAddress", "ws://127.0.0.1:26429/");
+			var realm = UtilityService.GetAppSetting("RouterRealm", "VIEAppsRealm");
+			var mode = UtilityService.GetAppSetting("RouterChannelsMode", "MsgPack");
 			return new Tuple<string, string, bool>(address, realm, mode.IsEquals("json"));
 		}
 
@@ -131,8 +122,7 @@ namespace net.vieapps.Services
 		{
 			if (this._incommingChannel != null)
 			{
-				if (this._onIncomingChannelClosing != null)
-					this._onIncomingChannelClosing();
+				this._onIncomingChannelClosing?.Invoke();
 				this._incommingChannel.Close("The incoming channel is closed when stop the service [" + this.ServiceURI + "]", new GoodbyeDetails());
 				this._incommingChannel = null;
 			}
@@ -149,9 +139,7 @@ namespace net.vieapps.Services
 			if (this._incommingChannel != null)
 				(new WampChannelReconnector(this._incommingChannel, async () =>
 				{
-					if (delay > 0)
-						await Task.Delay(delay);
-
+					await Task.Delay(delay > 0 ? delay : 0);
 					try
 					{
 						await this._incommingChannel.Open();
@@ -212,8 +200,7 @@ namespace net.vieapps.Services
 		{
 			if (this._outgoingChannel != null)
 			{
-				if (this._onOutgoingChannelClosing != null)
-					this._onOutgoingChannelClosing();
+				this._onOutgoingChannelClosing?.Invoke();
 				this._outgoingChannel.Close("The outgoing channel is closed when stop the service [" + this.ServiceURI + "]", new GoodbyeDetails());
 				this._outgoingChannel = null;
 			}
@@ -230,9 +217,7 @@ namespace net.vieapps.Services
 			if (this._outgoingChannel != null)
 				(new WampChannelReconnector(this._outgoingChannel, async () =>
 				{
-					if (delay > 0)
-						await Task.Delay(delay);
-
+					await Task.Delay(delay > 0 ? delay : 0);
 					try
 					{
 						await this._outgoingChannel.Open();
@@ -278,8 +263,7 @@ namespace net.vieapps.Services
 			if (onInterCommunicateMessageReceived != null)
 			{
 				this._interCommunicateMessageHandlers.Add(onInterCommunicateMessageReceived);
-				if (this._subscriber != null)
-					this._subscriber.Dispose();
+				this._subscriber?.Dispose();
 
 				var subject = this._incommingChannel.RealmProxy.Services.GetSubject<CommunicateMessage>("net.vieapps.rtu.communicate.messages");
 				this._subscriber = subject.Subscribe<CommunicateMessage>(message =>
@@ -730,8 +714,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		protected void Stop()
 		{
-			if (this._subscriber != null)
-				this._subscriber.Dispose();
+			this._subscriber?.Dispose();
 			this.CloseIncomingChannel();
 			this.CloseOutgoingChannel();
 		}
