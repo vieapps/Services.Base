@@ -150,7 +150,7 @@ namespace net.vieapps.Services
 	//  --------------------------------------------------------------------------------------------
 
 	/// <summary>
-	/// Presents a management service
+	/// Presents a service for managing the system
 	/// </summary>
 	public interface IManagementService
 	{

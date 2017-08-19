@@ -12,7 +12,7 @@ using net.vieapps.Components.Security;
 namespace net.vieapps.Services
 {
 	/// <summary>
-	/// Presents the information of a request to a service
+	/// Presents the requesting information of a service
 	/// </summary>
 	[Serializable]
 	public class RequestInfo

@@ -22,7 +22,7 @@ using net.vieapps.Components.Security;
 namespace net.vieapps.Services
 {
 	/// <summary>
-	/// Presents an abstract service
+	/// Presents an abstract service (base of all services)
 	/// </summary>
 	public abstract class BaseService : IService, IDisposable
 	{
@@ -39,12 +39,12 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public abstract Task<JObject> ProcessRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken));
 
-		#region Properties
+		#region Attributes
 		IWampChannel _incommingChannel = null, _outgoingChannel = null;
 		long _incommingChannelSessionID = 0, _outgoingChannelSessionID = 0;
 		System.Action _onIncomingChannelClosing = null, _onOutgoingChannelClosing = null;
 		List<Action<CommunicateMessage>> _interCommunicateMessageHandlers = new List<Action<CommunicateMessage>>();
-		IDisposable _subscriber = null;
+		IDisposable _communicator = null;
 		IRTUService _rtuService = null;
 		IManagementService _managementService = null;
 		Dictionary<string, IService> _services = new Dictionary<string, IService>();
@@ -263,10 +263,10 @@ namespace net.vieapps.Services
 			if (onInterCommunicateMessageReceived != null)
 			{
 				this._interCommunicateMessageHandlers.Add(onInterCommunicateMessageReceived);
-				this._subscriber?.Dispose();
+				this._communicator?.Dispose();
 
 				var subject = this._incommingChannel.RealmProxy.Services.GetSubject<CommunicateMessage>("net.vieapps.rtu.communicate.messages");
-				this._subscriber = subject.Subscribe<CommunicateMessage>(message =>
+				this._communicator = subject.Subscribe<CommunicateMessage>(message =>
 				{
 					if (message.ServiceName.IsEquals(this.ServiceName))
 						this._interCommunicateMessageHandlers.ForEach(action =>
@@ -559,18 +559,21 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo">The requesting information</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected async Task<JObject> CallAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken))
+		protected async Task<JObject> CallServiceAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken))
 		{
-			var key = requestInfo.ServiceName.Trim().ToLower();
-			if (!this._services.TryGetValue(key, out IService service))
+			var name = requestInfo != null && !string.IsNullOrWhiteSpace(requestInfo.ServiceName)
+				? requestInfo.ServiceName.Trim().ToLower()
+				: "unknown";
+
+			if (!this._services.TryGetValue(name, out IService service))
 			{
 				await this.OpenOutgoingChannelAsync();
 				lock (this._services)
 				{
-					if (!this._services.TryGetValue(key, out service))
+					if (!this._services.TryGetValue(name, out service))
 					{
-						service = this._outgoingChannel.RealmProxy.Services.GetCalleeProxy<IService>(new CachedCalleeProxyInterceptor(new ProxyInterceptor(key)));
-						this._services.Add(key, service);
+						service = this._outgoingChannel.RealmProxy.Services.GetCalleeProxy<IService>(new CachedCalleeProxyInterceptor(new ProxyInterceptor(name)));
+						this._services.Add(name, service);
 					}
 				}
 			}
@@ -589,19 +592,22 @@ namespace net.vieapps.Services
 		/// <param name="header"></param>
 		/// <param name="body"></param>
 		/// <param name="extra"></param>
+		/// <param name="correlationID"></param>
+		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		protected async Task<JObject> CallAsync(Session session, string serviceName, string objectName, string verb = "GET", Dictionary<string, string> query = null, Dictionary<string, string> header = null, string body = null, Dictionary<string, string> extra = null, CancellationToken cancellationToken = default(CancellationToken))
+		protected async Task<JObject> CallServiceAsync(Session session, string serviceName, string objectName, string verb = "GET", Dictionary<string, string> query = null, Dictionary<string, string> header = null, string body = null, Dictionary<string, string> extra = null, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
-			return await this.CallAsync(new RequestInfo()
+			return await this.CallServiceAsync(new RequestInfo()
 			{
-				Session = session,
-				ServiceName = serviceName,
-				ObjectName = objectName,
+				Session = session ?? new Session(),
+				ServiceName = serviceName ?? "unknown",
+				ObjectName = objectName ?? "unknown",
 				Verb = string.IsNullOrWhiteSpace(verb) ? "GET" : verb,
-				Query = query,
-				Header = header,
+				Query = query ?? new Dictionary<string, string>(),
+				Header = header ?? new Dictionary<string, string>(),
 				Body = body,
-				Extra = extra
+				Extra = extra ?? new Dictionary<string, string>(),
+				CorrelationID = correlationID ?? UtilityService.NewUID
 			}, cancellationToken);
 		}
 		#endregion
@@ -634,7 +640,7 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
-		#region Authorization of files
+		#region Authorization (for working with of service of files)
 		/// <summary>
 		/// Gets the state that determines the user is able to upload the attachment files or not
 		/// </summary>
@@ -714,7 +720,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		protected void Stop()
 		{
-			this._subscriber?.Dispose();
+			this._communicator?.Dispose();
 			this.CloseIncomingChannel();
 			this.CloseOutgoingChannel();
 		}

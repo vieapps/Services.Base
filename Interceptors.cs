@@ -9,7 +9,7 @@ using WampSharp.V2.Core.Contracts;
 namespace net.vieapps.Services
 {
 	/// <summary>
-	/// Presents a registration interceptor for registering a service
+	/// Presents an interceptor for registering a service
 	/// </summary>
 	public class RegistrationInterceptor : CalleeRegistrationInterceptor
 	{
@@ -29,7 +29,7 @@ namespace net.vieapps.Services
 	//  --------------------------------------------------------------------------------------------
 
 	/// <summary>
-	/// Presents a proxy interceptor for calling a service
+	/// Presents an interceptor for calling a service
 	/// </summary>
 	public class ProxyInterceptor : CalleeProxyInterceptor
 	{

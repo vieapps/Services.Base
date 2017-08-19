@@ -13,7 +13,7 @@ using net.vieapps.Components.Security;
 namespace net.vieapps.Services
 {
 	/// <summary>
-	/// Presents a session
+	/// Presents a working session
 	/// </summary>
 	[Serializable]
 	public class Session

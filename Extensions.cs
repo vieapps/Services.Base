@@ -79,6 +79,5 @@ namespace net.vieapps.Services
 			if (message.IsContains("potentially dangerous"))
 				context.Response.End();
 		}
-
 	}
 }

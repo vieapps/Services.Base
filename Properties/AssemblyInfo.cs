@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 
 // General Information about an assembly is controlled through the following set of attributes.
 // Change these attribute values to modify the information associated with an assembly.
-[assembly: AssemblyTitle("VIEApps NGX Base")]
+[assembly: AssemblyTitle("VIEApps NGX Base Service")]
 [assembly: AssemblyDescription("Core components of VIEApps NGX")]
 [assembly: AssemblyDefaultAlias("VIEApps.Services.Base")]
 [assembly: AssemblyConfiguration("Production/Stable")]
@@ -25,4 +25,4 @@ using System.Runtime.InteropServices;
 //
 [assembly: AssemblyVersion("10.1")]
 [assembly: AssemblyFileVersion("10.1")]
-[assembly: AssemblyInformationalVersion("10.1.msbc-2017.08.12")]
+[assembly: AssemblyInformationalVersion("10.1.mvpr-2017.08.19")]
