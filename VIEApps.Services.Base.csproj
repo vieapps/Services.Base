@@ -57,6 +57,15 @@
     <Reference Include="Microsoft.Win32.Primitives, Version=4.0.2.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
       <HintPath>..\..\packages\Microsoft.Win32.Primitives.4.3.0\lib\net46\Microsoft.Win32.Primitives.dll</HintPath>
     </Reference>
+    <Reference Include="MongoDB.Bson, Version=2.4.4.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\..\packages\MongoDB.Bson.2.4.4\lib\net45\MongoDB.Bson.dll</HintPath>
+    </Reference>
+    <Reference Include="MongoDB.Driver, Version=2.4.4.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\..\packages\MongoDB.Driver.2.4.4\lib\net45\MongoDB.Driver.dll</HintPath>
+    </Reference>
+    <Reference Include="MongoDB.Driver.Core, Version=2.4.4.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\..\packages\MongoDB.Driver.Core.2.4.4\lib\net45\MongoDB.Driver.Core.dll</HintPath>
+    </Reference>
     <Reference Include="MsgPack, Version=0.8.0.0, Culture=neutral, PublicKeyToken=a2625990d5dc0167, processorArchitecture=MSIL">
       <HintPath>..\..\packages\MsgPack.Cli.0.8.1\lib\net46\MsgPack.dll</HintPath>
     </Reference>
@@ -228,6 +237,10 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\Components\Repository\VIEApps.Components.Repository.csproj">
+      <Project>{9e0b8c70-1006-4910-8956-471a15b0511a}</Project>
+      <Name>VIEApps.Components.Repository</Name>
+    </ProjectReference>
     <ProjectReference Include="..\..\Components\Security\VIEApps.Components.Security.csproj">
       <Project>{bf8597e1-3fdf-4d5e-b990-6f8bcd8bbc70}</Project>
       <Name>VIEApps.Components.Security</Name>

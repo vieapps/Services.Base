@@ -634,9 +634,9 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected bool IsAuthorized(RequestInfo requestInfo, Components.Security.Action action, Privileges privileges = null, Func<User, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 		{
-			return requestInfo == null || requestInfo.Session == null || requestInfo.Session.User == null
-				? false
-				: requestInfo.Session.User.IsAuthorized(requestInfo.ServiceName, requestInfo.ObjectName, action, privileges, getPrivileges, getActions);
+			return requestInfo != null && requestInfo.Session != null && requestInfo.Session.User != null
+				? requestInfo.Session.User.IsAuthorized(requestInfo.ServiceName, requestInfo.ObjectName, action, privileges, getPrivileges, getActions)
+				: false;
 		}
 		#endregion
 
