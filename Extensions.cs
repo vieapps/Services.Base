@@ -149,7 +149,7 @@ namespace net.vieapps.Services
 				: Filters<T>.And();
 
 			foreach (var info in filterby)
-				if (!info.Key.IsEquals("Query"))
+				if (!info.Key.Equals("") && !info.Key.IsEquals("Query"))
 				{
 					IFilterBy<T> filter = null;
 					var name = info.Key;
@@ -259,19 +259,20 @@ namespace net.vieapps.Services
 		public static SortBy<T> ToSortBy<T>(this JObject sortby) where T : class
 		{
 			SortBy<T> sort = null;
-			foreach(var info in sortby)
-			{
-				var attribute = info.Key;
-				var mode = (info.Value as JValue).Value.ToString().ToEnum<SortMode>();
+			foreach (var info in sortby)
+				if (!info.Key.Equals(""))
+				{
+					var attribute = info.Key;
+					var mode = (info.Value as JValue).Value.ToString().ToEnum<SortMode>();
 
-				sort = sort != null
-					? mode.Equals(SortMode.Ascending)
-						? sort.ThenByAscending(attribute)
-						: sort.ThenByDescending(attribute)
-					: mode.Equals(SortMode.Ascending)
-						? Sorts<T>.Ascending(attribute)
-						: Sorts<T>.Descending(attribute);
-			}
+					sort = sort != null
+						? mode.Equals(SortMode.Ascending)
+							? sort.ThenByAscending(attribute)
+							: sort.ThenByDescending(attribute)
+						: mode.Equals(SortMode.Ascending)
+							? Sorts<T>.Ascending(attribute)
+							: Sorts<T>.Descending(attribute);
+				}
 			return sort;
 		}
 
@@ -314,7 +315,7 @@ namespace net.vieapps.Services
 		/// Gets MD5 hash
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
-		/// <param name="filterby"></param>
+		/// <param name="sortby"></param>
 		/// <returns></returns>
 		public static string GetMD5<T>(this SortBy<T> sortby) where T : class
 		{
