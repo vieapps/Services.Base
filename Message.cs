@@ -37,14 +37,14 @@ namespace net.vieapps.Services
 	[Serializable]
 	public class UpdateMessage : BaseMessage
 	{
-		public UpdateMessage(BaseMessage underlyingMessage = null) : base()
+		public UpdateMessage(BaseMessage message = null) : base()
 		{
 			this.DeviceID = "";
 			this.ExcludedDeviceID = "";
-			if (underlyingMessage != null)
+			if (message != null)
 			{
-				this.Type = underlyingMessage.Type;
-				this.Data = underlyingMessage.Data;
+				this.Type = message.Type;
+				this.Data = message.Data;
 			}
 		}
 
@@ -67,13 +67,13 @@ namespace net.vieapps.Services
 	[Serializable]
 	public class CommunicateMessage : BaseMessage
 	{
-		public CommunicateMessage(string serviceName = null, BaseMessage underlyingMessage = null) : base()
+		public CommunicateMessage(string serviceName = null, BaseMessage message = null) : base()
 		{
 			this.ServiceName = serviceName ?? "";
-			if (underlyingMessage != null)
+			if (message != null)
 			{
-				this.Type = underlyingMessage.Type;
-				this.Data = underlyingMessage.Data;
+				this.Type = message.Type;
+				this.Data = message.Data;
 			}
 		}
 
