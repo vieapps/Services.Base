@@ -15,7 +15,7 @@ namespace net.vieapps.Services
 	{
 		string _name;
 
-		public RegistrationInterceptor(string name, RegisterOptions options = null) : base(options != null ? options : new RegisterOptions() { Invoke = WampInvokePolicy.Roundrobin })
+		public RegistrationInterceptor(string name, RegisterOptions options = null) : base(options ?? new RegisterOptions() { Invoke = WampInvokePolicy.Roundrobin })
 		{
 			this._name = name;
 		}
@@ -35,7 +35,7 @@ namespace net.vieapps.Services
 	{
 		string _name;
 
-		public ProxyInterceptor(string name, CallOptions options = null) : base(options != null ? options : new CallOptions())
+		public ProxyInterceptor(string name, CallOptions options = null) : base(options ?? new CallOptions())
 		{
 			this._name = name;
 		}
