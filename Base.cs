@@ -419,7 +419,7 @@ namespace net.vieapps.Services
 		/// Writes the log into centralized log storage of all services
 		/// </summary>
 		/// <param name="requestInfo">The request information</param>
-		/// <param name="logs">The collection of log messages</param>
+		/// <param name="log">The collection of log messages</param>
 		/// <param name="exception">The exception</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
@@ -448,7 +448,7 @@ namespace net.vieapps.Services
 		/// Writes the log into centralized log storage of all services
 		/// </summary>
 		/// <param name="requestInfo">The request information</param>
-		/// <param name="logs">The collection of log messages</param>
+		/// <param name="log">The collection of log messages</param>
 		/// <param name="exception">The exception</param>
 		protected void WriteLog(RequestInfo requestInfo, string log, Exception exception = null)
 		{
