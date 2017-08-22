@@ -91,16 +91,14 @@ namespace net.vieapps.Services
 		#endregion
 
 		#region Filter
-		static FilterBy<T> GetFilterBy<T>(string attribute, JProperty info) where T : class
+		static FilterBy<T> GetFilterBy<T>(string attribute, string @operator, JValue value) where T : class
 		{
-			return info.Value != null
-				? new FilterBy<T>(new JObject()
-					{
-						{ "Attribute", attribute },
-						{ "Operator", info.Name },
-						{ "Value", info.Value }
-					})
-				: null;
+			return new FilterBy<T>(new JObject()
+			{
+				{ "Attribute", attribute },
+				{ "Operator", @operator },
+				{ "Value", value }
+			});
 		}
 
 		static FilterBys<T> GetFilterBys<T>(string @operator, JArray children) where T : class
@@ -108,9 +106,30 @@ namespace net.vieapps.Services
 			var childFilters = new List<IFilterBy<T>>();
 			foreach (JProperty info in children)
 			{
-				var filter = info.Value is JArray
-					? Extensions.GetFilterBys<T>(info.Name, info.Value as JArray) as IFilterBy<T>
-					: Extensions.GetFilterBy<T>(info.Name, (info.Value as JObject).Properties().First()) as IFilterBy<T>;
+				IFilterBy<T> filter = null;
+				var name = info.Name;
+				var value = info.Value;
+
+				// child expressions
+				if (value is JArray)
+					filter = Extensions.GetFilterBys<T>(name, value as JArray);
+
+				// special comparisons
+				else if (value is JValue)
+				{
+					var op = (value as JValue).Value.ToString();
+					if (op.IsEquals("IsNull") || op.IsEquals("IsNotNull") || op.IsEquals("IsEmpty") || op.IsEquals("IsNotEmpty"))
+						filter = Extensions.GetFilterBy<T>(name, op, null);
+				}
+
+				// normal comparison
+				else if (value is JObject)
+				{
+					var prop = (value as JObject).Properties().FirstOrDefault();
+					if (prop != null && prop.Value != null && prop.Value is JValue && (prop.Value as JValue).Value != null)
+						filter = Extensions.GetFilterBy<T>(name, prop.Name, prop.Value as JValue);
+				}
+
 				if (filter != null)
 					childFilters.Add(filter);
 			}
@@ -130,15 +149,35 @@ namespace net.vieapps.Services
 				: Filters<T>.And();
 
 			foreach (var info in filterby)
-			{
-				if (info.Key.IsEquals("Query"))
-					continue;
+				if (!info.Key.IsEquals("Query"))
+				{
+					IFilterBy<T> filter = null;
+					var name = info.Key;
+					var value = info.Value;
 
-				else if (info.Value is JArray && (info.Key.IsEquals("And") || info.Key.IsEquals("Or")))
-					filters.Add(Extensions.GetFilterBys<T>(info.Key, info.Value as JArray));
-				else if (info.Value is JObject)
-					filters.Add(Extensions.GetFilterBy<T>(info.Key, (info.Value as JObject).Properties().First()));
-			}
+					// child expressions
+					if (value is JArray && (name.IsEquals("And") || name.IsEquals("Or")))
+						filter = Extensions.GetFilterBys<T>(name, value as JArray);
+
+					// special comparisions
+					else if (value is JValue)
+					{
+						var op = (value as JValue).Value.ToString();
+						if (op.IsEquals("IsNull") || op.IsEquals("IsNotNull") || op.IsEquals("IsEmpty") || op.IsEquals("IsNotEmpty"))
+							filter = Extensions.GetFilterBy<T>(name, op, null);
+					}
+
+					// norma comparisions
+					else if (value is JObject)
+					{
+						var prop = (value as JObject).Properties().FirstOrDefault();
+						if (prop != null && prop.Value != null && prop.Value is JValue && (prop.Value as JValue).Value != null)
+							filter = Extensions.GetFilterBy<T>(name, prop.Name, prop.Value as JValue);
+					}
+
+					if (filter != null)
+						filters.Add(filter);
+				}
 
 			return filters != null && filters.Children.Count > 0
 				? filters
@@ -223,9 +262,7 @@ namespace net.vieapps.Services
 			foreach(var info in sortby)
 			{
 				var attribute = info.Key;
-				var mode = (info.Value as JValue).Value.ToString().IsEquals("ASC")
-					? SortMode.Ascending.ToString()
-					: SortMode.Descending.ToString();
+				var mode = (info.Value as JValue).Value.ToString().ToEnum<SortMode>();
 
 				sort = sort != null
 					? mode.Equals(SortMode.Ascending)
@@ -252,9 +289,7 @@ namespace net.vieapps.Services
 		static void AddClientJson(JObject clientJson, JObject serverJson)
 		{
 			var attribute = (serverJson["Attribute"] as JValue).Value.ToString();
-			var mode = (serverJson["Mode"] as JValue).Value.ToString().IsEquals("Ascending")
-				? "ASC"
-				: "DESC";
+			var mode = (serverJson["Mode"] as JValue).Value.ToString();
 			clientJson.Add(new JProperty(attribute, mode));
 
 			var thenby = serverJson["ThenBy"];
