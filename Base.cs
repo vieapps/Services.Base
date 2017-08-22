@@ -39,7 +39,7 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public abstract Task<JObject> ProcessRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken));
 
-		#region Attributes
+		#region Attributes & Properties
 		IWampChannel _incommingChannel = null, _outgoingChannel = null;
 		long _incommingChannelSessionID = 0, _outgoingChannelSessionID = 0;
 		System.Action _onIncomingChannelClosing = null, _onOutgoingChannelClosing = null;
@@ -50,7 +50,7 @@ namespace net.vieapps.Services
 		Dictionary<string, IService> _services = new Dictionary<string, IService>();
 
 		/// <summary>
-		/// Gets the full URI of this service
+		/// Gets the full URI of the service
 		/// </summary>
 		public string ServiceURI
 		{
