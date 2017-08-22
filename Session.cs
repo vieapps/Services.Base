@@ -18,16 +18,20 @@ namespace net.vieapps.Services
 	[Serializable]
 	public class Session
 	{
-		public Session()
+		/// <summary>
+		/// Initializes a new session
+		/// </summary>
+		/// <param name="session"></param>
+		public Session(Session session = null)
 		{
-			this.SessionID = "";
-			this.DeviceID = "";
-			this.IP = "";
-			this.AppName = "";
-			this.AppPlatform = "";
-			this.AppAgent = "";
-			this.AppOrigin = "";
-			this.User = new User();
+			this.SessionID = session != null ? session.SessionID : "";
+			this.DeviceID = session != null ? session.DeviceID : "";
+			this.IP = session != null ? session.IP : "";
+			this.AppName = session != null ? session.AppName : "";
+			this.AppPlatform = session != null ? session.AppPlatform : "";
+			this.AppAgent = session != null ? session.AppAgent : "";
+			this.AppOrigin = session != null ? session.AppOrigin : "";
+			this.User = session != null ? session.User : new User();
 		}
 
 		#region Properties
