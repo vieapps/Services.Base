@@ -165,7 +165,7 @@ namespace net.vieapps.Services
 		/// <param name="fullStack">The full stack (usually stack of the exception and all inners)</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		[WampProcedure("net.vieapps.services.management.writelog")]
+		[WampProcedure("net.vieapps.services.logs.management.single")]
 		Task WriteLogAsync(string correlationID, string serviceName, string objectName, string log, string simpleStack = null, string fullStack = null, CancellationToken cancellationToken = default(CancellationToken));
 
 		/// <summary>
@@ -179,7 +179,7 @@ namespace net.vieapps.Services
 		/// <param name="fullStack">The full stack (usually stack of the exception and all inners)</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		[WampProcedure("net.vieapps.services.management.writelogs")]
+		[WampProcedure("net.vieapps.services.logs.management.collection")]
 		Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, string simpleStack = null, string fullStack = null, CancellationToken cancellationToken = default(CancellationToken));
 	}
 }
