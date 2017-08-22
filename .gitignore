@@ -263,5 +263,4 @@ __pycache__/
 # Other kinds
 *~
 .DS_Store
-.vs/
 .vscode/

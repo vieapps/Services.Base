@@ -3,8 +3,9 @@
 ###############################################################################
 * text=auto
 *.cs eol=crlf
-*.csproj eol=crlf
 *.config eol=crlf
+*.csproj eol=crlf
+*.vbproj eol=crlf
 
 ###############################################################################
 # Set default behavior for command prompt diff.
