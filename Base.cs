@@ -273,11 +273,12 @@ namespace net.vieapps.Services
 						{
 							try
 							{
-								action(message);
+								action.Invoke(message);
 							}
 							catch { }
 						});
-				});
+				},
+				exception => this.WriteLog(UtilityService.BlankUID, "APIGateway", "RTU", "Error occurred while fetching inter-communicate message", exception));
 			}
 		}
 		#endregion

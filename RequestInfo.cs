@@ -108,8 +108,8 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public JObject GetRequestJson()
 		{
-			return this.Query.ContainsKey("request")
-				? JObject.Parse(this.Query["request"].Url64Decode())
+			return this.Query.ContainsKey("x-request")
+				? JObject.Parse(this.Query["x-request"].Url64Decode())
 				: new JObject();
 		}
 
@@ -179,6 +179,17 @@ namespace net.vieapps.Services
 			return this.Session != null && !string.IsNullOrWhiteSpace(this.Session.AppPlatform)
 				? this.Session.AppPlatform
 				: this.GetParameter("x-app-platform");
+		}
+
+		/// <summary>
+		/// Gets the object identity (from the parameter named 'object-identity' of the query)
+		/// </summary>
+		/// <returns></returns>
+		public string GetObjectIdentity()
+		{
+			return this.Query != null && this.Query.ContainsKey("object-identity")
+				? this.Query["object-identity"]
+				: null;
 		}
 		#endregion
 
