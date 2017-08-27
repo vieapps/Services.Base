@@ -31,7 +31,7 @@ namespace net.vieapps.Services
 			this.AppPlatform = session != null ? session.AppPlatform : "";
 			this.AppAgent = session != null ? session.AppAgent : "";
 			this.AppOrigin = session != null ? session.AppOrigin : "";
-			this.User = session != null ? session.User : new User();
+			this.User = session != null && session.User != null ? session.User : new User();
 		}
 
 		#region Properties

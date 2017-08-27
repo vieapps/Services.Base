@@ -8,6 +8,7 @@ using WampSharp.V2.Rpc;
 using Newtonsoft.Json.Linq;
 
 using net.vieapps.Components.Security;
+using net.vieapps.Components.Utility;
 #endregion
 
 namespace net.vieapps.Services
@@ -150,7 +151,7 @@ namespace net.vieapps.Services
 	//  --------------------------------------------------------------------------------------------
 
 	/// <summary>
-	/// Presents a service for managing the system
+	/// Presents a management service
 	/// </summary>
 	public interface IManagementService
 	{
@@ -181,5 +182,31 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.logs.management.collection")]
 		Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, string simpleStack = null, string fullStack = null, CancellationToken cancellationToken = default(CancellationToken));
+	}
+
+	//  --------------------------------------------------------------------------------------------
+
+	/// <summary>
+	/// Presents a messaging service for sending email and web-hook messages
+	/// </summary>
+	public interface IMessagingService
+	{
+		/// <summary>
+		/// Sends an email message
+		/// </summary>
+		/// <param name="message">The email message for sending</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		[WampProcedure("net.vieapps.services.messaging.email")]
+		Task SendEmailAsync(EmailMessage message, CancellationToken cancellationToken = default(CancellationToken));
+
+		/// <summary>
+		/// Sends a web hook message
+		/// </summary>
+		/// <param name="message">The web hook message for sending</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		[WampProcedure("net.vieapps.services.messaging.webhook")]
+		Task SendWebHookAsync(WebHookMessage message, CancellationToken cancellationToken = default(CancellationToken));
 	}
 }

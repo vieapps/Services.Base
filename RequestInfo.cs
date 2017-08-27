@@ -19,9 +19,14 @@ namespace net.vieapps.Services
 	{
 		public RequestInfo(Session session = null, User user = null)
 		{
-			this.Session = session ?? new Session();
-			if (session != null && user != null)
-				this.Session.User = user;
+			this.Session = new Session(session)
+			{
+				User = session != null && user != null
+					? user
+					: session != null
+						? session.User
+						: new User()
+			};
 			this.ServiceName = "";
 			this.ObjectName = "";
 			this.Verb = "GET";
@@ -127,25 +132,37 @@ namespace net.vieapps.Services
 
 		#region Methods: get parameters
 		/// <summary>
+		/// Gets the parameter from the header
+		/// </summary>
+		/// <param name="name">The string that presents name of parameter want to get</param>
+		/// <returns></returns>
+		public string GetHeaderParameter(string name)
+		{
+			return this.Header != null && !string.IsNullOrWhiteSpace(name) && this.Header.ContainsKey(name.ToLower())
+				? this.Header[name.ToLower()]
+				: null;
+		}
+
+		/// <summary>
+		/// Gets the parameter from the query
+		/// </summary>
+		/// <param name="name">The string that presents name of parameter want to get</param>
+		/// <returns></returns>
+		public string GetQueryParameter(string name)
+		{
+			return this.Query != null && !string.IsNullOrWhiteSpace(name) && this.Query.ContainsKey(name.ToLower())
+				? this.Query[name.ToLower()]
+				: null;
+		}
+
+		/// <summary>
 		/// Gets the parameter with two steps: first from header, then second step is from query if header has no value
 		/// </summary>
 		/// <param name="name">The string that presents name of parameter want to get</param>
 		/// <returns></returns>
 		public string GetParameter(string name)
 		{
-			if (string.IsNullOrWhiteSpace(name))
-				return null;
-
-			var value = this.Header != null && this.Header.ContainsKey(name.ToLower())
-				? this.Header[name.ToLower()]
-				: null;
-
-			if (string.IsNullOrWhiteSpace(value))
-				value = this.Query != null && this.Query.ContainsKey(name.ToLower())
-					? this.Query[name.ToLower()]
-					: null;
-
-			return value;
+			return this.GetHeaderParameter(name) ?? this.GetQueryParameter(name);
 		}
 
 		/// <summary>
@@ -187,9 +204,7 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public string GetObjectIdentity()
 		{
-			return this.Query != null && this.Query.ContainsKey("object-identity")
-				? this.Query["object-identity"]
-				: null;
+			return this.GetQueryParameter("object-identity");
 		}
 		#endregion
 

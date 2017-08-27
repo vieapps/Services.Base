@@ -47,6 +47,7 @@ namespace net.vieapps.Services
 		IDisposable _communicator = null;
 		IRTUService _rtuService = null;
 		IManagementService _managementService = null;
+		IMessagingService _messagingService = null;
 		Dictionary<string, IService> _services = new Dictionary<string, IService>();
 
 		/// <summary>
@@ -346,6 +347,117 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
+		#region Send email & web hook messages
+		async Task InitializeMessagingServiceAsync()
+		{
+			if (this._messagingService == null)
+			{
+				await this.OpenOutgoingChannelAsync();
+				this._messagingService = this._outgoingChannel.RealmProxy.Services.GetCalleeProxy<IMessagingService>();
+			}
+		}
+
+		/// <summary>
+		/// Sends an email message
+		/// </summary>
+		/// <param name="message">The email message for sending</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		protected async Task SendEmailAsync(EmailMessage message, CancellationToken cancellationToken = default(CancellationToken))
+		{
+			try
+			{
+				await this.InitializeMessagingServiceAsync();
+				await this._messagingService.SendEmailAsync(message, cancellationToken);
+			}
+			catch { }
+		}
+
+		/// <summary>
+		/// Sends an email message
+		/// </summary>
+		/// <param name="from"></param>
+		/// <param name="replyTo"></param>
+		/// <param name="to"></param>
+		/// <param name="cc"></param>
+		/// <param name="bcc"></param>
+		/// <param name="subject"></param>
+		/// <param name="body"></param>
+		/// <param name="smtpServer"></param>
+		/// <param name="smtpServerPort"></param>
+		/// <param name="smtpServerEnableSsl"></param>
+		/// <param name="smtpUsername"></param>
+		/// <param name="smtpPassword"></param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		protected Task SendEmailAsync(string from, string replyTo, string to, string cc, string bcc, string subject, string body, string smtpServer, int smtpServerPort, bool smtpServerEnableSsl, string smtpUsername, string smtpPassword, CancellationToken cancellationToken = default(CancellationToken))
+		{
+			return this.SendEmailAsync(new EmailMessage()
+			{
+				From = from,
+				ReplyTo = replyTo,
+				To = to,
+				Cc = cc,
+				Bcc = bcc,
+				Subject = subject,
+				Body = body,
+				SmtpServer = smtpServer,
+				SmtpServerPort = smtpServerPort,
+				SmtpUsername = smtpUsername,
+				SmtpPassword = smtpPassword,
+				SmtpServerEnableSsl = smtpServerEnableSsl
+			}, cancellationToken);
+		}
+
+		/// <summary>
+		/// Sends an email message
+		/// </summary>
+		/// <param name="from"></param>
+		/// <param name="to"></param>
+		/// <param name="subject"></param>
+		/// <param name="body"></param>
+		/// <param name="smtpServer"></param>
+		/// <param name="smtpServerPort"></param>
+		/// <param name="smtpServerEnableSsl"></param>
+		/// <param name="smtpUsername"></param>
+		/// <param name="smtpPassword"></param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		protected Task SendEmailAsync(string from, string to, string subject, string body, string smtpServer, int smtpServerPort, bool smtpServerEnableSsl, string smtpUsername, string smtpPassword, CancellationToken cancellationToken = default(CancellationToken))
+		{
+			return this.SendEmailAsync(from, null, to, null, null, subject, body, smtpServer, smtpServerPort, smtpServerEnableSsl, smtpUsername, smtpPassword, cancellationToken);
+		}
+
+		/// <summary>
+		/// Sends an email message
+		/// </summary>
+		/// <param name="to"></param>
+		/// <param name="subject"></param>
+		/// <param name="body"></param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		protected Task SendEmailAsync(string to, string subject, string body, CancellationToken cancellationToken = default(CancellationToken))
+		{
+			return this.SendEmailAsync(null, to, subject, body, null, 0, false, null, null, cancellationToken);
+		}
+
+		/// <summary>
+		/// Sends a web hook message
+		/// </summary>
+		/// <param name="message"></param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		protected async Task SendWebHookAsync(WebHookMessage message, CancellationToken cancellationToken = default(CancellationToken))
+		{
+			try
+			{
+				await this.InitializeMessagingServiceAsync();
+				await this._messagingService.SendWebHookAsync(message, cancellationToken);
+			}
+			catch { }
+		}
+		#endregion
+
 		#region Working with logs
 		async Task InitializeManagementServiceAsync()
 		{
@@ -555,7 +667,7 @@ namespace net.vieapps.Services
 
 		#region Call other services
 		/// <summary>
-		/// Calls other service
+		/// Calls a service to process a request
 		/// </summary>
 		/// <param name="requestInfo">The requesting information</param>
 		/// <param name="cancellationToken">The cancellation token</param>
@@ -583,32 +695,25 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Calls other service
+		/// Calls a service to process a request
 		/// </summary>
-		/// <param name="session"></param>
+		/// <param name="requestInfo"></param>
 		/// <param name="serviceName"></param>
-		/// <param name="objectName"></param>
-		/// <param name="verb"></param>
-		/// <param name="query"></param>
-		/// <param name="header"></param>
-		/// <param name="body"></param>
-		/// <param name="extra"></param>
-		/// <param name="correlationID"></param>
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		protected async Task<JObject> CallServiceAsync(Session session, string serviceName, string objectName, string verb = "GET", Dictionary<string, string> query = null, Dictionary<string, string> header = null, string body = null, Dictionary<string, string> extra = null, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
+		protected async Task<JObject> CallServiceAsync(RequestInfo requestInfo, string serviceName, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			return await this.CallServiceAsync(new RequestInfo()
 			{
-				Session = session ?? new Session(),
-				ServiceName = serviceName ?? "unknown",
-				ObjectName = objectName ?? "unknown",
-				Verb = string.IsNullOrWhiteSpace(verb) ? "GET" : verb,
-				Query = query ?? new Dictionary<string, string>(),
-				Header = header ?? new Dictionary<string, string>(),
-				Body = body,
-				Extra = extra ?? new Dictionary<string, string>(),
-				CorrelationID = correlationID ?? UtilityService.NewUID
+				Session = requestInfo.Session,
+				ServiceName = serviceName ?? requestInfo.ServiceName,
+				ObjectName = requestInfo.ObjectName,
+				Verb = requestInfo.Verb,
+				Query = requestInfo.Query,
+				Header = requestInfo.Header,
+				Body = requestInfo.Body,
+				Extra = requestInfo.Extra,
+				CorrelationID = requestInfo.CorrelationID
 			}, cancellationToken);
 		}
 		#endregion
@@ -652,7 +757,9 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public virtual Task<bool> IsAbleToUploadAsync(User user, string systemID, string entityID, string objectID)
 		{
-			return Task.FromResult(true);
+			return user == null || string.IsNullOrWhiteSpace(user.ID)
+				? Task.FromResult(false)
+				: Task.FromResult(user.IsAuthorized(this.ServiceName, null, Components.Security.Action.Create));
 		}
 
 		/// <summary>
@@ -678,7 +785,7 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public virtual Task<bool> IsAbleToDeleteAsync(User user, string systemID, string entityID, string objectID)
 		{
-			return Task.FromResult(true);
+			return Task.FromResult(false);
 		}
 
 		/// <summary>
@@ -691,7 +798,7 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public virtual Task<bool> IsAbleToRestoreAsync(User user, string systemID, string entityID, string objectID)
 		{
-			return Task.FromResult(true);
+			return Task.FromResult(false);
 		}
 		#endregion
 
