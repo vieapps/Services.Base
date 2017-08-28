@@ -39,6 +39,12 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public abstract Task<JObject> ProcessRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken));
 
+		/// <summary>
+		/// Process the inter-communicate message
+		/// </summary>
+		/// <param name="message"></param>
+		protected virtual void ProcessInterCommunicateMessage(CommunicateMessage message) { }
+
 		#region Attributes & Properties
 		IWampChannel _incommingChannel = null, _outgoingChannel = null;
 		long _incommingChannelSessionID = 0, _outgoingChannelSessionID = 0;
@@ -232,7 +238,7 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
-		#region Register service & handler of inter-communicate messages
+		#region Register the service
 		/// <summary>
 		/// Registers the service
 		/// </summary>
@@ -244,42 +250,23 @@ namespace net.vieapps.Services
 			await this.OpenIncomingChannelAsync();
 			try
 			{
+				// register the service
 				await this._incommingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, new RegistrationInterceptor(this.ServiceName.ToLower().Trim()));
+
+				// register the handler of inter-communicate messages
+				this._communicator?.Dispose();
+				this._communicator = this._incommingChannel.RealmProxy.Services.GetSubject<CommunicateMessage>("net.vieapps.rtu.communicate.messages")
+					.Subscribe<CommunicateMessage>(
+						message => this.ProcessInterCommunicateMessage(message),
+						exception => this.WriteLog(UtilityService.BlankUID, "APIGateway", "RTU", "Error occurred while fetching inter-communicate message", exception)
+					);
+
+				// callback when done
 				onSuccess?.Invoke();
 			}
 			catch (Exception ex)
 			{
 				onError?.Invoke(ex);
-			}
-		}
-
-		/// <summary>
-		/// Registers the handler to process inter-communicate messages
-		/// </summary>
-		/// <param name="onInterCommunicateMessageReceived"></param>
-		/// <returns></returns>
-		protected async Task RegisterInterCommunicateMessageHandlerAsync(Action<CommunicateMessage> onInterCommunicateMessageReceived)
-		{
-			await this.OpenIncomingChannelAsync();
-			if (onInterCommunicateMessageReceived != null)
-			{
-				this._interCommunicateMessageHandlers.Add(onInterCommunicateMessageReceived);
-				this._communicator?.Dispose();
-
-				var subject = this._incommingChannel.RealmProxy.Services.GetSubject<CommunicateMessage>("net.vieapps.rtu.communicate.messages");
-				this._communicator = subject.Subscribe<CommunicateMessage>(message =>
-				{
-					if (message.ServiceName.IsEquals(this.ServiceName))
-						this._interCommunicateMessageHandlers.ForEach(action =>
-						{
-							try
-							{
-								action.Invoke(message);
-							}
-							catch { }
-						});
-				},
-				exception => this.WriteLog(UtilityService.BlankUID, "APIGateway", "RTU", "Error occurred while fetching inter-communicate message", exception));
 			}
 		}
 		#endregion
@@ -807,7 +794,6 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="onRegisterSuccess"></param>
 		/// <param name="onRegisterError"></param>
-		/// <param name="onInterCommunicateMessageReceived"></param>
 		/// <param name="onIncomingConnectionEstablished"></param>
 		/// <param name="onOutgoingConnectionEstablished"></param>
 		/// <param name="onIncomingConnectionBroken"></param>
@@ -815,11 +801,10 @@ namespace net.vieapps.Services
 		/// <param name="onIncomingConnectionError"></param>
 		/// <param name="onOutgoingConnectionError"></param>
 		/// <returns></returns>
-		protected async Task StartAsync(System.Action onRegisterSuccess = null, Action<Exception> onRegisterError = null, Action<CommunicateMessage> onInterCommunicateMessageReceived = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
+		protected async Task StartAsync(System.Action onRegisterSuccess = null, Action<Exception> onRegisterError = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
 		{
 			await this.OpenIncomingChannelAsync(onIncomingConnectionEstablished, onIncomingConnectionBroken, onIncomingConnectionError);
 			await this.RegisterServiceAsync(onRegisterSuccess, onRegisterError);
-			await this.RegisterInterCommunicateMessageHandlerAsync(onInterCommunicateMessageReceived);
 			await this.OpenOutgoingChannelAsync(onOutgoingConnectionEstablished, onOutgoingConnectionBroken, onOutgoingConnectionError);
 		}
 
@@ -890,33 +875,16 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
-		#region Dispose/Destructor
-		bool disposed = false;
-
+		#region Dispose
 		public void Dispose()
 		{
-			this.Dispose(true);
+			this.Stop();
 			GC.SuppressFinalize(this);
-		}
-
-		protected virtual void Dispose(bool disposing)
-		{
-			if (!disposed)
-			{
-				// free other state (managed objects)
-				if (disposing)
-				{
-				}
-
-				// free your own state (unmanaged objects).
-				this.Stop();
-				disposed = true;
-			}
 		}
 
 		~BaseService()
 		{
-			this.Dispose(false);
+			this.Dispose();
 		}
 		#endregion
 
