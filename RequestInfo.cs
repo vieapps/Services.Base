@@ -17,28 +17,29 @@ namespace net.vieapps.Services
 	[Serializable]
 	public class RequestInfo
 	{
-		public RequestInfo(RequestInfo requestInfo = null, string verb = null)
+		/// <summary>
+		/// Initializes a requesting information
+		/// </summary>
+		/// <param name="session"></param>
+		/// <param name="serviceName"></param>
+		/// <param name="objectName"></param>
+		/// <param name="verb"></param>
+		/// <param name="query"></param>
+		/// <param name="header"></param>
+		/// <param name="body"></param>
+		/// <param name="extra"></param>
+		/// <param name="correlationID"></param>
+		public RequestInfo(Session session = null, string serviceName = null, string objectName = null, string verb = null, Dictionary<string, string> query = null, Dictionary<string, string> header = null, string body = null, Dictionary<string, string> extra = null, string correlationID = null)
 		{
-			this.Session = requestInfo?.Session ?? new Session();
-			this.ServiceName = requestInfo != null ? requestInfo.ServiceName : "";
-			this.ObjectName = requestInfo != null ? requestInfo.ServiceName : "";
-			this.Verb = string.IsNullOrWhiteSpace(verb)
-				? requestInfo != null ? requestInfo.ServiceName : "GET"
-				: verb;
-			this.Query = requestInfo != null ? requestInfo.Query : new Dictionary<string, string>();
-			this.Header = requestInfo != null ? requestInfo.Header : new Dictionary<string, string>();
-			this.Body = requestInfo != null ? requestInfo.Body : "";
-			this.Extra = requestInfo != null ? requestInfo.Extra : new Dictionary<string, string>();
-			this.CorrelationID = requestInfo != null ? requestInfo.CorrelationID : UtilityService.GetUUID();
-		}
-
-		public RequestInfo(Session session, User user = null) : this(null, "")
-		{
-			if (session != null)
-				this.Session = new Session(session)
-				{
-					User = user ?? session.User
-				};
+			this.Session = new Session(session);
+			this.ServiceName = !string.IsNullOrWhiteSpace(serviceName) ? serviceName : "unknown";
+			this.ObjectName = !string.IsNullOrWhiteSpace(objectName) ? objectName : "unknown";
+			this.Verb = !string.IsNullOrWhiteSpace(verb) ? verb : "GET";
+			this.Query = new Dictionary<string, string>(query ?? new Dictionary<string, string>());
+			this.Header = new Dictionary<string, string>(header ?? new Dictionary<string, string>());
+			this.Body = !string.IsNullOrWhiteSpace(body) ? body : "";
+			this.Extra = new Dictionary<string, string>(extra ?? new Dictionary<string, string>());
+			this.CorrelationID = !string.IsNullOrWhiteSpace(correlationID) ? correlationID : UtilityService.NewUID;
 		}
 
 		#region Properties
