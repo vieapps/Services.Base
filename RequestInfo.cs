@@ -17,24 +17,28 @@ namespace net.vieapps.Services
 	[Serializable]
 	public class RequestInfo
 	{
-		public RequestInfo(Session session = null, User user = null)
+		public RequestInfo(RequestInfo requestInfo = null, string verb = null)
 		{
-			this.Session = new Session(session)
-			{
-				User = session != null && user != null
-					? user
-					: session != null
-						? session.User
-						: new User()
-			};
-			this.ServiceName = "";
-			this.ObjectName = "";
-			this.Verb = "GET";
-			this.Query = new Dictionary<string, string>();
-			this.Header = new Dictionary<string, string>();
-			this.Body = "";
-			this.Extra = new Dictionary<string, string>();
-			this.CorrelationID = UtilityService.GetUUID();
+			this.Session = requestInfo?.Session ?? new Session();
+			this.ServiceName = requestInfo != null ? requestInfo.ServiceName : "";
+			this.ObjectName = requestInfo != null ? requestInfo.ServiceName : "";
+			this.Verb = string.IsNullOrWhiteSpace(verb)
+				? requestInfo != null ? requestInfo.ServiceName : "GET"
+				: verb;
+			this.Query = requestInfo != null ? requestInfo.Query : new Dictionary<string, string>();
+			this.Header = requestInfo != null ? requestInfo.Header : new Dictionary<string, string>();
+			this.Body = requestInfo != null ? requestInfo.Body : "";
+			this.Extra = requestInfo != null ? requestInfo.Extra : new Dictionary<string, string>();
+			this.CorrelationID = requestInfo != null ? requestInfo.CorrelationID : UtilityService.GetUUID();
+		}
+
+		public RequestInfo(Session session, User user = null) : this(null, "")
+		{
+			if (session != null)
+				this.Session = new Session(session)
+				{
+					User = user ?? session.User
+				};
 		}
 
 		#region Properties
