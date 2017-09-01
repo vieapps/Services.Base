@@ -17,6 +17,8 @@ using Newtonsoft.Json.Linq;
 
 using net.vieapps.Components.Utility;
 using net.vieapps.Components.Security;
+using net.vieapps.Components.Caching;
+using net.vieapps.Components.Repository;
 #endregion
 
 namespace net.vieapps.Services
@@ -257,8 +259,13 @@ namespace net.vieapps.Services
 				this._communicator?.Dispose();
 				this._communicator = this._incommingChannel.RealmProxy.Services.GetSubject<CommunicateMessage>("net.vieapps.rtu.communicate.messages")
 					.Subscribe<CommunicateMessage>(
-						message => this.ProcessInterCommunicateMessage(message),
-						exception => this.WriteLog(UtilityService.BlankUID, "APIGateway", "RTU", "Error occurred while fetching inter-communicate message", exception)
+						(message) => {
+							if (this.ServiceName.IsEquals(message.ServiceName))
+								this.ProcessInterCommunicateMessage(message);
+						},
+						(exception) => {
+							this.WriteLog(UtilityService.BlankUID, "APIGateway", "RTU", "Error occurred while fetching inter-communicate message", exception);
+						}
 					);
 
 				// callback when done
@@ -786,6 +793,47 @@ namespace net.vieapps.Services
 		public virtual Task<bool> IsAbleToRestoreAsync(User user, string systemID, string entityID, string objectID)
 		{
 			return Task.FromResult(false);
+		}
+		#endregion
+
+		#region Working with cache
+		/// <summary>
+		/// Gets the key for working with caching
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="filter">The filtering expression</param>
+		/// <param name="sort">The sorting expression</param>
+		/// <param name="pageNumber">The page number</param>
+		/// <returns></returns>
+		protected string GetCacheKey<T>(IFilterBy<T> filter, SortBy<T> sort, int pageNumber = 0) where T : class
+		{
+			return typeof(T).GetTypeName(true) + "#"
+				+ (filter != null ? filter.GetMD5() + ":" : "")
+				+ (sort != null ? sort.GetMD5() + ":" : "")
+				+ (pageNumber > 0 ? pageNumber.ToString() : "");
+		}
+
+		/// <summary>
+		/// Clears the related data from the cache storage
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="cache">The cache storage</param>
+		/// <param name="filter">The filtering expression</param>
+		/// <param name="sort">The sorting expression</param>
+		protected void ClearRelatedCache<T>(CacheManager cache, IFilterBy<T> filter, SortBy<T> sort) where T : class
+		{
+			if (cache != null)
+			{
+				var key = this.GetCacheKey<T>(filter, sort);
+				var keys = new List<string>() { key, key + "-total" };
+				for (var index = 1; index <= 100; index++)
+				{
+					keys.Add(key + ":" + index.ToString());
+					keys.Add(key + ":" + index.ToString() + "-json");
+					keys.Add(key + ":" + index.ToString() + "-total");
+				}
+				cache.Remove(keys);
+			}
 		}
 		#endregion
 

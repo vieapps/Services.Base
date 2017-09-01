@@ -212,8 +212,12 @@ namespace net.vieapps.Services
 			}
 			else
 			{
+				var children = serverJson["Children"] as JArray;
+				if (children == null || children.Count < 1)
+					return null;
+
 				var clientJson = new JObject();
-				foreach(JObject childJson in serverJson["Children"] as JArray)
+				foreach(JObject childJson in children)
 					clientJson.Add(Extensions.AddClientJson(childJson));
 				return new JProperty(@operator, clientJson);
 			}
@@ -231,7 +235,11 @@ namespace net.vieapps.Services
 			var clientJson = new JObject();
 			if (!string.IsNullOrEmpty(query))
 				clientJson.Add(new JProperty("Query", query));
-			clientJson.Add(Extensions.AddClientJson(filterby.ToJson()));
+
+			var json = Extensions.AddClientJson(filterby.ToJson());
+			if (json != null)
+				clientJson.Add(json);
+
 			return clientJson;
 		}
 

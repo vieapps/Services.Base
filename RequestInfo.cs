@@ -129,8 +129,8 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public ExpandoObject GetRequestExpando()
 		{
-			return this.Query.ContainsKey("request")
-				? this.Query["request"].Url64Decode().ToExpandoObject()
+			return this.Query.ContainsKey("x-request")
+				? this.Query["x-request"].Url64Decode().ToExpandoObject()
 				: new ExpandoObject();
 		}
 		#endregion

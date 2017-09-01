@@ -158,6 +158,7 @@
     <Reference Include="System.Runtime, Version=4.1.1.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
       <HintPath>..\..\packages\System.Runtime.4.3.0\lib\net462\System.Runtime.dll</HintPath>
     </Reference>
+    <Reference Include="System.Runtime.Caching" />
     <Reference Include="System.Runtime.Extensions, Version=4.1.1.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
       <HintPath>..\..\packages\System.Runtime.Extensions.4.3.0\lib\net462\System.Runtime.Extensions.dll</HintPath>
     </Reference>
@@ -236,6 +237,10 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\Components\Caching\VIEApps.Components.Caching.csproj">
+      <Project>{98147bac-f0a1-48d8-9e1f-064dd227d281}</Project>
+      <Name>VIEApps.Components.Caching</Name>
+    </ProjectReference>
     <ProjectReference Include="..\..\Components\Repository\VIEApps.Components.Repository.csproj">
       <Project>{9e0b8c70-1006-4910-8956-471a15b0511a}</Project>
       <Name>VIEApps.Components.Repository</Name>
