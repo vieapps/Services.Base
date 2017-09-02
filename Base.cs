@@ -687,29 +687,6 @@ namespace net.vieapps.Services
 
 			return await service.ProcessRequestAsync(requestInfo, cancellationToken);
 		}
-
-		/// <summary>
-		/// Calls a service to process a request
-		/// </summary>
-		/// <param name="requestInfo"></param>
-		/// <param name="serviceName"></param>
-		/// <param name="cancellationToken"></param>
-		/// <returns></returns>
-		protected async Task<JObject> CallServiceAsync(RequestInfo requestInfo, string serviceName, CancellationToken cancellationToken = default(CancellationToken))
-		{
-			return await this.CallServiceAsync(new RequestInfo()
-			{
-				Session = requestInfo.Session,
-				ServiceName = serviceName ?? requestInfo.ServiceName,
-				ObjectName = requestInfo.ObjectName,
-				Verb = requestInfo.Verb,
-				Query = requestInfo.Query,
-				Header = requestInfo.Header,
-				Body = requestInfo.Body,
-				Extra = requestInfo.Extra,
-				CorrelationID = requestInfo.CorrelationID
-			}, cancellationToken);
-		}
 		#endregion
 
 		#region Authentication & Authorization
@@ -721,6 +698,39 @@ namespace net.vieapps.Services
 		protected bool IsAuthenticated(RequestInfo requestInfo)
 		{
 			return requestInfo != null && requestInfo.Session != null && requestInfo.Session.User != null && requestInfo.Session.User.IsAuthenticated;
+		}
+
+		/// <summary>
+		/// Gets the state that determines the user is system administrator or not
+		/// </summary>
+		/// <param name="requestInfo">The requesting information that contains user information</param>
+		/// <returns></returns>
+		public async Task<bool> IsSystemAdministratorAsync(RequestInfo requestInfo)
+		{
+			if (!this.IsAuthenticated(requestInfo))
+				return false;
+
+			else
+				try
+				{
+					var result = await this.CallServiceAsync(new RequestInfo()
+					{
+						Session = requestInfo.Session,
+						ServiceName = "users",
+						ObjectName = "account",
+						Verb = "GET",
+						Extra = new Dictionary<string, string>() { { "IsSystemAdministrator", "" } },
+						CorrelationID = requestInfo.CorrelationID
+					});
+
+					var id = result["ID"] as JValue;
+					var isAdmin = result["IsSystemAdministrator"] as JValue;
+					return id != null && requestInfo.Session.User.ID.IsEquals(id.Value as string) && isAdmin != null && isAdmin.Value.CastAs<bool>() == true;
+				}
+				catch
+				{
+					return false;
+				}
 		}
 
 		/// <summary>

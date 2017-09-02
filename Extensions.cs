@@ -101,18 +101,18 @@ namespace net.vieapps.Services
 			});
 		}
 
-		static FilterBys<T> GetFilterBys<T>(string @operator, JArray children) where T : class
+		static FilterBys<T> GetFilterBys<T>(string @operator, JObject children) where T : class
 		{
 			var childFilters = new List<IFilterBy<T>>();
-			foreach (JProperty info in children)
+			foreach (var info in children)
 			{
 				IFilterBy<T> filter = null;
-				var name = info.Name;
+				var name = info.Key;
 				var value = info.Value;
 
 				// child expressions
-				if (value is JArray)
-					filter = Extensions.GetFilterBys<T>(name, value as JArray);
+				if (value is JObject && (name.IsEquals("And") || name.IsEquals("Or")))
+					filter = Extensions.GetFilterBys<T>(name, value as JObject);
 
 				// special comparisons
 				else if (value is JValue)
@@ -144,11 +144,19 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static IFilterBy<T> ToFilterBy<T>(this JObject filterby) where T : class
 		{
-			var filters = filterby["Or"] != null && filterby["Or"] is JArray
+			var orFilters = filterby["Or"] as JObject;
+			var andFilters = filterby["And"] as JObject;
+			var rootFilters = orFilters != null
+				? orFilters
+				: andFilters != null
+					? andFilters
+					: filterby;
+
+			var filters = orFilters != null
 				? Filters<T>.Or()
 				: Filters<T>.And();
 
-			foreach (var info in filterby)
+			foreach (var info in rootFilters)
 				if (!info.Key.Equals("") && !info.Key.IsEquals("Query"))
 				{
 					IFilterBy<T> filter = null;
@@ -156,8 +164,8 @@ namespace net.vieapps.Services
 					var value = info.Value;
 
 					// child expressions
-					if (value is JArray && (name.IsEquals("And") || name.IsEquals("Or")))
-						filter = Extensions.GetFilterBys<T>(name, value as JArray);
+					if (value is JObject && (name.IsEquals("And") || name.IsEquals("Or")))
+						filter = Extensions.GetFilterBys<T>(name, value as JObject);
 
 					// special comparisions
 					else if (value is JValue)
@@ -167,7 +175,7 @@ namespace net.vieapps.Services
 							filter = Extensions.GetFilterBy<T>(name, op, null);
 					}
 
-					// norma comparisions
+					// normal comparisions
 					else if (value is JObject)
 					{
 						var prop = (value as JObject).Properties().FirstOrDefault();
@@ -202,12 +210,13 @@ namespace net.vieapps.Services
 			{
 				var token = @operator.IsEquals("IsNull") || @operator.IsEquals("IsNotNull") || @operator.IsEquals("IsEmpty") || @operator.IsEquals("IsNotEmpty")
 					? new JValue(@operator) as JToken
-					: new JObject() {
-							{
-								@operator,
-								new JValue(serverJson["Value"] != null ? (serverJson["Value"] as JValue).Value : null)
-							}
-						} as JToken;
+					: new JObject()
+					{
+						{
+							@operator,
+							new JValue((serverJson["Value"] as JValue)?.Value)
+						}
+					} as JToken;
 				return new JProperty((serverJson["Attribute"] as JValue).Value.ToString(), token);
 			}
 			else
@@ -399,29 +408,24 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static Tuple<long, int, int, int> GetPagination(this ExpandoObject pagination)
 		{
-			var totalRecords = pagination.Has("TotalRecords")
-				? pagination.Get<long>("TotalRecords")
-				: -1;
+			var totalRecords = pagination.Get<long>("TotalRecords", -1);
 
-			var pageSize = pagination.Has("PageSize")
-				? pagination.Get<int>("TotalRecords")
-				: 20;
-			if (pageSize < 0)
-				pageSize = 20;
+			var pageSize = pagination.Get<int>("PageSize", 20);
+			pageSize = pageSize < 0 ? 10 : pageSize;
 
-			var totalPages = pagination.Has("TotalPages")
-				? pagination.Get<int>("TotalPages")
-				: -1;
-			if (totalPages < 0)
-				totalPages = Extensions.GetTotalPages(totalRecords, pageSize);
+			var totalPages = pagination.Get<int>("TotalPages", -1);
+			totalPages = totalPages < 0
+				? totalRecords > 0
+					? Extensions.GetTotalPages(totalRecords, pageSize)
+					: 0
+				: totalPages;
 
-			var pageNumber = pagination.Has("PageNumber")
-				? pagination.Get<int>("PageNumber")
-				: 20;
-			if (pageNumber < 1)
-				pageNumber = 1;
-			else if (totalPages > 0 && pageNumber > totalPages)
-				pageNumber = totalPages;
+			var pageNumber = pagination.Get<int>("PageNumber", 1);
+			pageNumber = pageNumber < 1
+				? 1
+				: totalPages > 0 && pageNumber > totalPages
+					? totalPages
+					: pageNumber;
 
 			return new Tuple<long, int, int, int>(totalRecords, totalPages, pageSize, pageNumber);
 		}
