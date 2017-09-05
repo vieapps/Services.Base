@@ -259,11 +259,13 @@ namespace net.vieapps.Services
 				this._communicator?.Dispose();
 				this._communicator = this._incommingChannel.RealmProxy.Services.GetSubject<CommunicateMessage>("net.vieapps.rtu.communicate.messages")
 					.Subscribe<CommunicateMessage>(
-						(message) => {
-							if (this.ServiceName.IsEquals(message.ServiceName))
+						(message) =>
+						{
+							if (message.ServiceName.IsEquals(this.ServiceName))
 								this.ProcessInterCommunicateMessage(message);
 						},
-						(exception) => {
+						(exception) =>
+						{
 							this.WriteLog(UtilityService.BlankUID, "APIGateway", "RTU", "Error occurred while fetching inter-communicate message", exception);
 						}
 					);
