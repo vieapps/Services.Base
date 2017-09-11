@@ -94,11 +94,13 @@ namespace net.vieapps.Services
 		/// Gets the request body in JSON
 		/// </summary>
 		/// <returns></returns>
-		public JObject GetBodyJson()
+		public JToken GetBodyJson()
 		{
 			return string.IsNullOrWhiteSpace(this.Body)
 				? new JObject()
-				: JObject.Parse(this.Body);
+				: this.Body.StartsWith("[")
+					? JArray.Parse(this.Body) as JToken
+					: JObject.Parse(this.Body) as JToken;
 		}
 
 		/// <summary>
@@ -116,11 +118,14 @@ namespace net.vieapps.Services
 		/// Gets the value of the 'request' parameter of the query (in Base64Url) and converts to JSON
 		/// </summary>
 		/// <returns></returns>
-		public JObject GetRequestJson()
+		public JToken GetRequestJson()
 		{
-			return this.Query.ContainsKey("x-request")
-				? JObject.Parse(this.Query["x-request"].Url64Decode())
-				: new JObject();
+			var request = this.Query.ContainsKey("x-request")
+				? this.Query["x-request"].Url64Decode()
+				: "";
+			return request.StartsWith("[")
+				? JArray.Parse(request) as JToken
+				: JObject.Parse(request) as JToken;
 		}
 
 		/// <summary>
@@ -129,9 +134,12 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public ExpandoObject GetRequestExpando()
 		{
-			return this.Query.ContainsKey("x-request")
-				? this.Query["x-request"].Url64Decode().ToExpandoObject()
-				: new ExpandoObject();
+			var request = this.Query.ContainsKey("x-request")
+				? this.Query["x-request"].Url64Decode()
+				: "";
+			return string.IsNullOrWhiteSpace(request)
+				? new ExpandoObject()
+				: request.ToExpandoObject();
 		}
 		#endregion
 
