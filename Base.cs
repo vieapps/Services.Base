@@ -750,6 +750,33 @@ namespace net.vieapps.Services
 				? requestInfo.Session.User.IsAuthorized(requestInfo.ServiceName, requestInfo.ObjectName, action, privileges, getPrivileges, getActions)
 				: false;
 		}
+
+		/// <summary>
+		/// Gets the sessions of current working user. 1st element is session identity, 2nd element is device identity, 3rd element is app info, 4th element is online status
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <returns></returns>
+		protected async Task<List<Tuple<string, string, string, bool>>> GetSessionsAsync(RequestInfo requestInfo)
+		{
+			var result = await this.CallServiceAsync(new RequestInfo()
+			{
+				Session = requestInfo.Session,
+				ServiceName = "users",
+				ObjectName = "account",
+				Verb = "HEAD",
+				CorrelationID = requestInfo.CorrelationID
+			});
+
+			var sessions = new List<Tuple<string, string, string, bool>>();
+			foreach (JObject session in result["Sessions"] as JArray)
+				sessions.Add(new Tuple<string, string, string, bool>(
+					(session["SessionID"] as JValue).Value as string,
+					(session["DeviceID"] as JValue).Value as string,
+					(session["AppInfo"] as JValue).Value as string,
+					(session["IsOnline"] as JValue).Value.CastAs<bool>()
+				));
+			return sessions;
+		}
 		#endregion
 
 		#region Authorization (for working with of service of files)
