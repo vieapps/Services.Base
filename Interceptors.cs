@@ -15,6 +15,11 @@ namespace net.vieapps.Services
 	{
 		string _name;
 
+		/// <summary>
+		/// Initializes an interceptor for registering a service
+		/// </summary>
+		/// <param name="name">The string that presents name of the service (for registering with right URI)</param>
+		/// <param name="options">The options for registering (default is round robin)</param>
 		public RegistrationInterceptor(string name, RegisterOptions options = null) : base(options ?? new RegisterOptions() { Invoke = WampInvokePolicy.Roundrobin })
 		{
 			this._name = name;
@@ -35,6 +40,11 @@ namespace net.vieapps.Services
 	{
 		string _name;
 
+		/// <summary>
+		/// Initializes an interceptor for calling a service
+		/// </summary>
+		/// <param name="name">The string that presents name of the service (for registering with right URI)</param>
+		/// <param name="options">The options for calling</param>
 		public ProxyInterceptor(string name, CallOptions options = null) : base(options ?? new CallOptions())
 		{
 			this._name = name;

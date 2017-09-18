@@ -1,5 +1,6 @@
 ﻿#region Related components
 using System;
+using SystemEx;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -51,12 +52,13 @@ namespace net.vieapps.Services
 		IWampChannel _incommingChannel = null, _outgoingChannel = null;
 		long _incommingChannelSessionID = 0, _outgoingChannelSessionID = 0;
 		System.Action _onIncomingChannelClosing = null, _onOutgoingChannelClosing = null;
-		List<Action<CommunicateMessage>> _interCommunicateMessageHandlers = new List<Action<CommunicateMessage>>();
+
+		IAsyncDisposable _instance = null;
 		IDisposable _communicator = null;
 		IRTUService _rtuService = null;
 		IManagementService _managementService = null;
 		IMessagingService _messagingService = null;
-		Dictionary<string, IService> _services = new Dictionary<string, IService>();
+		Dictionary<string, IService> _businessServices = new Dictionary<string, IService>();
 
 		/// <summary>
 		/// Gets the full URI of the service
@@ -143,7 +145,7 @@ namespace net.vieapps.Services
 		/// <param name="delay"></param>
 		/// <param name="onSuccess"></param>
 		/// <param name="onError"></param>
-		protected void ReOpenIncomingChannel(int delay = 0, System.Action onSuccess = null, Action<Exception> onError = null)
+		protected void ReOpenIncomingChannel(int delay = 0, Action<IWampChannel> onSuccess = null, Action<Exception> onError = null)
 		{
 			if (this._incommingChannel != null)
 				(new WampChannelReconnector(this._incommingChannel, async () =>
@@ -152,7 +154,7 @@ namespace net.vieapps.Services
 					try
 					{
 						await this._incommingChannel.Open();
-						onSuccess?.Invoke();
+						onSuccess?.Invoke(this._incommingChannel);
 					}
 					catch (Exception ex)
 					{
@@ -221,7 +223,7 @@ namespace net.vieapps.Services
 		/// <param name="delay"></param>
 		/// <param name="onSuccess"></param>
 		/// <param name="onError"></param>
-		protected void ReOpenOutgoingChannel(int delay = 0, System.Action onSuccess = null, Action<Exception> onError = null)
+		protected void ReOpenOutgoingChannel(int delay = 0, Action<IWampChannel> onSuccess = null, Action<Exception> onError = null)
 		{
 			if (this._outgoingChannel != null)
 				(new WampChannelReconnector(this._outgoingChannel, async () =>
@@ -230,7 +232,7 @@ namespace net.vieapps.Services
 					try
 					{
 						await this._outgoingChannel.Open();
-						onSuccess?.Invoke();
+						onSuccess?.Invoke(this._outgoingChannel);
 					}
 					catch (Exception ex)
 					{
@@ -247,25 +249,26 @@ namespace net.vieapps.Services
 		/// <param name="onSuccess"></param>
 		/// <param name="onError"></param>
 		/// <returns></returns>
-		protected async Task RegisterServiceAsync(System.Action onSuccess = null, Action<Exception> onError = null)
+		protected async Task RegisterServiceAsync(Action<BaseService> onSuccess = null, Action<Exception> onError = null)
 		{
 			await this.OpenIncomingChannelAsync();
 			try
 			{
 				// register the service
-				await this._incommingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, new RegistrationInterceptor(this.ServiceName.ToLower().Trim()));
+				var name = this.ServiceName.Trim().ToLower();
+				this._instance = await this._incommingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, new RegistrationInterceptor(name));
 
 				// register the handler of inter-communicate messages
 				this._communicator?.Dispose();
 				this._communicator = this._incommingChannel.RealmProxy.Services
-					.GetSubject<CommunicateMessage>("net.vieapps.rtu.communicate.messages." + this.ServiceName.Trim().ToLower())
+					.GetSubject<CommunicateMessage>("net.vieapps.rtu.communicate.messages." + name)
 					.Subscribe<CommunicateMessage>(
 						message => this.ProcessInterCommunicateMessage(message),
-						exception => this.WriteLog(UtilityService.BlankUID, "APIGateway", "RTU", "Error occurred while fetching inter-communicate message", exception)
+						exception => this.WriteLog(UtilityService.NewUID, "APIGateway", "RTU", "Error occurred while fetching inter-communicate message of a service [" + this.ServiceName + "]: " + exception.Message, exception)
 					);
 
 				// callback when done
-				onSuccess?.Invoke();
+				onSuccess?.Invoke(this);
 			}
 			catch (Exception ex)
 			{
@@ -668,15 +671,15 @@ namespace net.vieapps.Services
 				? requestInfo.ServiceName.Trim().ToLower()
 				: "unknown";
 
-			if (!this._services.TryGetValue(name, out IService service))
+			if (!this._businessServices.TryGetValue(name, out IService service))
 			{
 				await this.OpenOutgoingChannelAsync();
-				lock (this._services)
+				lock (this._businessServices)
 				{
-					if (!this._services.TryGetValue(name, out service))
+					if (!this._businessServices.TryGetValue(name, out service))
 					{
 						service = this._outgoingChannel.RealmProxy.Services.GetCalleeProxy<IService>(new CachedCalleeProxyInterceptor(new ProxyInterceptor(name)));
-						this._services.Add(name, service);
+						this._businessServices.Add(name, service);
 					}
 				}
 			}
@@ -685,7 +688,7 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
-		#region Authentication & Authorization
+		#region Authentication & Working sessions
 		/// <summary>
 		/// Gets the state that determines the user is authenticated or not
 		/// </summary>
@@ -697,13 +700,47 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
+		/// Gets the sessions of an user. 1st element is session identity, 2nd element is device identity, 3rd element is app info, 4th element is online status
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <param name="userID"></param>
+		/// <returns></returns>
+		protected async Task<List<Tuple<string, string, string, bool>>> GetSessionsAsync(RequestInfo requestInfo, string userID = null)
+		{
+			var result = await this.CallServiceAsync(new RequestInfo()
+			{
+				Session = requestInfo.Session,
+				ServiceName = "users",
+				ObjectName = "account",
+				Verb = "HEAD",
+				Query = new Dictionary<string, string>()
+				{
+					{ "object-identity", userID ?? requestInfo.Session.User.ID }
+				},
+				CorrelationID = requestInfo.CorrelationID
+			});
+
+			return (result["Sessions"] as JArray).ToList(info =>
+				new Tuple<string, string, string, bool>(
+					(info["SessionID"] as JValue).Value as string,
+					(info["DeviceID"] as JValue).Value as string,
+					(info["AppInfo"] as JValue).Value as string,
+					(info["IsOnline"] as JValue).Value.CastAs<bool>()
+				)
+			);
+		}
+		#endregion
+
+		#region Authorization (for working with objects of the service)
+		/// <summary>
 		/// Gets the state that determines the user is system administrator or not
 		/// </summary>
-		/// <param name="requestInfo">The requesting information that contains user information</param>
+		/// <param name="user">The user information</param>
+		/// /// <param name="correlationID">The correlation identity</param>
 		/// <returns></returns>
-		public async Task<bool> IsSystemAdministratorAsync(RequestInfo requestInfo)
+		public async Task<bool> IsSystemAdministratorAsync(User user, string correlationID = null)
 		{
-			if (!this.IsAuthenticated(requestInfo))
+			if (user == null || !user.IsAuthenticated)
 				return false;
 
 			else
@@ -711,22 +748,32 @@ namespace net.vieapps.Services
 				{
 					var result = await this.CallServiceAsync(new RequestInfo()
 					{
-						Session = requestInfo.Session,
+						Session = new Session() { User = user },
 						ServiceName = "users",
 						ObjectName = "account",
 						Verb = "GET",
-						Extra = new Dictionary<string, string>() { { "IsSystemAdministrator", "" } },
-						CorrelationID = requestInfo.CorrelationID
+						Extra = new Dictionary<string, string>()
+						{
+							{ "IsSystemAdministrator", "" }
+						},
+						CorrelationID = correlationID ?? UtilityService.NewUID
 					});
-
-					var id = result["ID"] as JValue;
-					var isAdmin = result["IsSystemAdministrator"] as JValue;
-					return id != null && requestInfo.Session.User.ID.IsEquals(id.Value as string) && isAdmin != null && isAdmin.Value.CastAs<bool>() == true;
+					return user.ID.IsEquals((result["ID"] as JValue)?.Value as string) && (result["IsSystemAdministrator"] as JValue)?.Value.CastAs<bool>() == true;
 				}
 				catch
 				{
 					return false;
 				}
+		}
+
+		/// <summary>
+		/// Gets the state that determines the user is system administrator or not
+		/// </summary>
+		/// <param name="requestInfo">The requesting information that contains user information</param>
+		/// <returns></returns>
+		public async Task<bool> IsSystemAdministratorAsync(RequestInfo requestInfo)
+		{
+			return await this.IsSystemAdministratorAsync(requestInfo?.Session.User, requestInfo?.CorrelationID);
 		}
 
 		/// <summary>
@@ -738,38 +785,29 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		protected bool IsAuthorized(RequestInfo requestInfo, Components.Security.Action action, Privileges privileges = null, Func<User, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		protected virtual async Task<bool> IsAuthorizedAsync(RequestInfo requestInfo, Components.Security.Action action, Privileges privileges = null, Func<User, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 		{
-			return requestInfo != null && requestInfo.Session != null && requestInfo.Session.User != null
-				? requestInfo.Session.User.IsAuthorized(requestInfo.ServiceName, requestInfo.ObjectName, action, privileges, getPrivileges, getActions)
-				: false;
+			return await this.IsSystemAdministratorAsync(requestInfo)
+				? true
+				: requestInfo != null && requestInfo.Session != null && requestInfo.Session.User != null
+					? requestInfo.Session.User.IsAuthorized(requestInfo.ServiceName, requestInfo.ObjectName, action, privileges, getPrivileges, getActions)
+					: false;
 		}
 
 		/// <summary>
-		/// Gets the sessions of current working user. 1st element is session identity, 2nd element is device identity, 3rd element is app info, 4th element is online status
+		/// Gets the state that determines the user can perform the action or not
 		/// </summary>
-		/// <param name="requestInfo"></param>
+		/// <param name="requestInfo">The requesting information that contains user information</param>
+		/// <param name="entity">The business entity object</param>
+		/// <param name="action">The action to perform on the object of this service</param>
 		/// <returns></returns>
-		protected async Task<List<Tuple<string, string, string, bool>>> GetSessionsAsync(RequestInfo requestInfo)
+		protected virtual async Task<bool> IsAuthorizedAsync(RequestInfo requestInfo, IBusinessEntity entity, Components.Security.Action action)
 		{
-			var result = await this.CallServiceAsync(new RequestInfo()
-			{
-				Session = requestInfo.Session,
-				ServiceName = "users",
-				ObjectName = "account",
-				Verb = "HEAD",
-				CorrelationID = requestInfo.CorrelationID
-			});
-
-			var sessions = new List<Tuple<string, string, string, bool>>();
-			foreach (JObject session in result["Sessions"] as JArray)
-				sessions.Add(new Tuple<string, string, string, bool>(
-					(session["SessionID"] as JValue).Value as string,
-					(session["DeviceID"] as JValue).Value as string,
-					(session["AppInfo"] as JValue).Value as string,
-					(session["IsOnline"] as JValue).Value.CastAs<bool>()
-				));
-			return sessions;
+			return await this.IsSystemAdministratorAsync(requestInfo)
+				? true
+				: requestInfo != null && requestInfo.Session != null && requestInfo.Session.User != null
+					? requestInfo.Session.User.IsAuthorized(requestInfo.ServiceName, requestInfo.ObjectName, action, entity?.WorkingPrivileges, null, null)
+					: false;
 		}
 		#endregion
 
@@ -777,16 +815,47 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the state that determines the user is able to upload the attachment files or not
 		/// </summary>
-		/// <param name="user">The user who performs the download action</param>
+		/// <param name="user">The user who performs the upload action</param>
 		/// <param name="systemID">The identity of the business system that the attachment file is belong to</param>
 		/// <param name="entityID">The identity of the entity definition that the attachment file is belong to</param>
 		/// <param name="objectID">The identity of the business object that the attachment file is belong to</param>
 		/// <returns></returns>
-		public virtual Task<bool> IsAbleToUploadAsync(User user, string systemID, string entityID, string objectID)
+		public virtual async Task<bool> IsAbleToUploadAsync(User user, string systemID, string entityID, string objectID)
 		{
-			return user == null || string.IsNullOrWhiteSpace(user.ID)
-				? Task.FromResult(false)
-				: Task.FromResult(user.IsAuthorized(this.ServiceName, null, Components.Security.Action.Create));
+			// check
+			if (string.IsNullOrWhiteSpace(entityID) || !entityID.IsValidUUID() || string.IsNullOrWhiteSpace(objectID) || !objectID.IsValidUUID())
+				return false;
+
+			// system administrator can do anything
+			user = user ?? new User() { Roles = new List<string>() { SystemRole.All.ToString() } };
+			if (await this.IsSystemAdministratorAsync(user))
+				return true;
+
+			//get object
+			var entity = RepositoryMediator.GetRuntimeRepositoryEntity(entityID);
+			if (entity == null)
+				return false;
+
+			var @object = await RepositoryMediator.GetAsync(entity.Definition, objectID);
+			if (@object == null || !(@object is IBusinessEntity))
+				return false;
+
+			// check permissions
+			return user.IsAuthorized(this.ServiceName, null, Components.Security.Action.Create, (@object as IBusinessEntity).WorkingPrivileges, null, null);
+		}
+
+		/// <summary>
+		/// Gets the state that determines the user is able to upload the attachment files or not
+		/// </summary>
+		/// <param name="user">The user who performs the upload action</param>
+		/// <param name="objectName">The name of service's object that the attachment file is belong to</param>
+		/// <returns></returns>
+		public virtual async Task<bool> IsAbleToUploadAsync(User user, string objectName)
+		{
+			user = user ?? new User() { Roles = new List<string>() { SystemRole.All.ToString() } };
+			return await this.IsSystemAdministratorAsync(user)
+				? true
+				: user.IsAuthorized(this.ServiceName, objectName, Components.Security.Action.Create, null, null, null);
 		}
 
 		/// <summary>
@@ -797,35 +866,134 @@ namespace net.vieapps.Services
 		/// <param name="entityID">The identity of the entity definition that the attachment file is belong to</param>
 		/// <param name="objectID">The identity of the business object that the attachment file is belong to</param>
 		/// <returns></returns>
-		public virtual Task<bool> IsAbleToDownloadAsync(User user, string systemID, string entityID, string objectID)
+		public virtual async Task<bool> IsAbleToDownloadAsync(User user, string systemID, string entityID, string objectID)
 		{
-			return Task.FromResult(true);
+			// check
+			if (string.IsNullOrWhiteSpace(entityID) || !entityID.IsValidUUID() || string.IsNullOrWhiteSpace(objectID) || !objectID.IsValidUUID())
+				return false;
+
+			// system administrator can do anything
+			user = user ?? new User() { Roles = new List<string>() { SystemRole.All.ToString() } };
+			if (await this.IsSystemAdministratorAsync(user))
+				return true;
+
+			//get object
+			var entity = RepositoryMediator.GetRuntimeRepositoryEntity(entityID);
+			if (entity == null)
+				return false;
+
+			var @object = await RepositoryMediator.GetAsync(entity.Definition, objectID);
+			if (@object == null || !(@object is IBusinessEntity))
+				return false;
+
+			// check permissions
+			return user.IsAuthorized(this.ServiceName, null, Components.Security.Action.Download, (@object as IBusinessEntity).WorkingPrivileges, null, null);
+		}
+
+		/// <summary>
+		/// Gets the state that determines the user is able to download the attachment files or not
+		/// </summary>
+		/// <param name="user">The user who performs the download action</param>
+		/// <param name="objectName">The name of service's object that the attachment file is belong to</param>
+		/// <returns></returns>
+		public virtual async Task<bool> IsAbleToDownloadAsync(User user, string objectName)
+		{
+			user = user ?? new User() { Roles = new List<string>() { SystemRole.All.ToString() } };
+			return await this.IsSystemAdministratorAsync(user)
+				? true
+				: user.IsAuthorized(this.ServiceName, objectName, Components.Security.Action.Download, null, null, null);
 		}
 
 		/// <summary>
 		/// Gets the state that determines the user is able to delete the attachment files or not
 		/// </summary>
-		/// <param name="user">The user who performs the download action</param>
+		/// <param name="user">The user who performs the delete action</param>
 		/// <param name="systemID">The identity of the business system that the attachment file is belong to</param>
 		/// <param name="entityID">The identity of the entity definition that the attachment file is belong to</param>
 		/// <param name="objectID">The identity of the business object that the attachment file is belong to</param>
 		/// <returns></returns>
-		public virtual Task<bool> IsAbleToDeleteAsync(User user, string systemID, string entityID, string objectID)
+		public virtual async Task<bool> IsAbleToDeleteAsync(User user, string systemID, string entityID, string objectID)
 		{
-			return Task.FromResult(false);
+			// check
+			if (user == null || string.IsNullOrWhiteSpace(user.ID) || string.IsNullOrWhiteSpace(entityID) || !entityID.IsValidUUID() || string.IsNullOrWhiteSpace(objectID) || !objectID.IsValidUUID())
+				return false;
+
+			// system administrator can do anything
+			if (await this.IsSystemAdministratorAsync(user))
+				return true;
+
+			//get object
+			var entity = RepositoryMediator.GetRuntimeRepositoryEntity(entityID);
+			if (entity == null)
+				return false;
+
+			var @object = await RepositoryMediator.GetAsync(entity.Definition, objectID);
+			if (@object == null || !(@object is IBusinessEntity))
+				return false;
+
+			// check permissions
+			return user.IsAuthorized(this.ServiceName, null, Components.Security.Action.Delete, (@object as IBusinessEntity).WorkingPrivileges, null, null);
+		}
+
+		/// <summary>
+		/// Gets the state that determines the user is able to delete the attachment files or not
+		/// </summary>
+		/// <param name="user">The user who performs the delete action</param>
+		/// <param name="objectName">The name of service's object that the attachment file is belong to</param>
+		/// <returns></returns>
+		public virtual async Task<bool> IsAbleToDeleteAsync(User user, string objectName)
+		{
+			return user == null || string.IsNullOrWhiteSpace(user.ID)
+				? false
+				: await this.IsSystemAdministratorAsync(user)
+					? true
+					: user.IsAuthorized(this.ServiceName, objectName, Components.Security.Action.Delete, null, null, null);
 		}
 
 		/// <summary>
 		/// Gets the state that determines the user is able to restore the attachment files or not
 		/// </summary>
-		/// <param name="user">The user who performs the download action</param>
+		/// <param name="user">The user who performs the restore action</param>
 		/// <param name="systemID">The identity of the business system that the attachment file is belong to</param>
 		/// <param name="entityID">The identity of the entity definition that the attachment file is belong to</param>
 		/// <param name="objectID">The identity of the business object that the attachment file is belong to</param>
 		/// <returns></returns>
-		public virtual Task<bool> IsAbleToRestoreAsync(User user, string systemID, string entityID, string objectID)
+		public virtual async Task<bool> IsAbleToRestoreAsync(User user, string systemID, string entityID, string objectID)
 		{
-			return Task.FromResult(false);
+			// check
+			if (user == null || string.IsNullOrWhiteSpace(user.ID) || string.IsNullOrWhiteSpace(entityID) || !entityID.IsValidUUID() || string.IsNullOrWhiteSpace(objectID) || !objectID.IsValidUUID())
+				return false;
+
+			// system administrator can do anything
+			if (await this.IsSystemAdministratorAsync(user))
+				return true;
+
+			//get object
+			var entity = RepositoryMediator.GetRuntimeRepositoryEntity(entityID);
+			if (entity == null)
+				return false;
+
+			var @object = await RepositoryMediator.GetAsync(entity.Definition, objectID);
+			if (@object == null || !(@object is IBusinessEntity))
+				return false;
+
+			// check permissions
+			return user.IsAuthorized(this.ServiceName, null, Components.Security.Action.Update, (@object as IBusinessEntity).WorkingPrivileges, null, null);
+		}
+
+		/// <summary>
+		/// Gets the state that determines the user is able to restore the attachment files or not
+		/// </summary>
+		/// <param name="user">The user who performs the restore action</param>
+		/// <param name="objectName">The name of service's object that the attachment file is belong to</param>
+		/// <returns></returns>
+		public virtual async Task<bool> IsAbleToRestoreAsync(User user, string objectName)
+		{
+			return user == null || string.IsNullOrWhiteSpace(user.ID)
+				? false
+				: await this.IsSystemAdministratorAsync(user)
+					? true
+					: user.IsAuthorized(this.ServiceName, objectName, Components.Security.Action.Update, null, null, null);
 		}
 		#endregion
 
@@ -869,35 +1037,6 @@ namespace net.vieapps.Services
 			}
 		}
 		#endregion
-
-		/// <summary>
-		/// Starts the service in the short way (open channels and register service)
-		/// </summary>
-		/// <param name="onRegisterSuccess"></param>
-		/// <param name="onRegisterError"></param>
-		/// <param name="onIncomingConnectionEstablished"></param>
-		/// <param name="onOutgoingConnectionEstablished"></param>
-		/// <param name="onIncomingConnectionBroken"></param>
-		/// <param name="onOutgoingConnectionBroken"></param>
-		/// <param name="onIncomingConnectionError"></param>
-		/// <param name="onOutgoingConnectionError"></param>
-		/// <returns></returns>
-		protected async Task StartAsync(System.Action onRegisterSuccess = null, Action<Exception> onRegisterError = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
-		{
-			await this.OpenIncomingChannelAsync(onIncomingConnectionEstablished, onIncomingConnectionBroken, onIncomingConnectionError);
-			await this.RegisterServiceAsync(onRegisterSuccess, onRegisterError);
-			await this.OpenOutgoingChannelAsync(onOutgoingConnectionEstablished, onOutgoingConnectionBroken, onOutgoingConnectionError);
-		}
-
-		/// <summary>
-		/// Stops this service (close channels and clean-up)
-		/// </summary>
-		protected void Stop()
-		{
-			this._communicator?.Dispose();
-			this.CloseIncomingChannel();
-			this.CloseOutgoingChannel();
-		}
 
 		#region Get runtime exception
 		/// <summary>
@@ -956,7 +1095,51 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
-		#region Dispose
+		/// <summary>
+		/// Starts the service in the short way (open channels and register service)
+		/// </summary>
+		/// <param name="onRegisterSuccess"></param>
+		/// <param name="onRegisterError"></param>
+		/// <param name="onIncomingConnectionEstablished"></param>
+		/// <param name="onOutgoingConnectionEstablished"></param>
+		/// <param name="onIncomingConnectionBroken"></param>
+		/// <param name="onOutgoingConnectionBroken"></param>
+		/// <param name="onIncomingConnectionError"></param>
+		/// <param name="onOutgoingConnectionError"></param>
+		/// <returns></returns>
+		protected async Task StartAsync(Action<BaseService> onRegisterSuccess = null, Action<Exception> onRegisterError = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
+		{
+			await this.OpenIncomingChannelAsync(onIncomingConnectionEstablished, onIncomingConnectionBroken, onIncomingConnectionError);
+			await this.RegisterServiceAsync(onRegisterSuccess, onRegisterError);
+			await this.OpenOutgoingChannelAsync(onOutgoingConnectionEstablished, onOutgoingConnectionBroken, onOutgoingConnectionError);
+		}
+
+		/// <summary>
+		/// Stops this service (close channels and clean-up)
+		/// </summary>
+		protected void Stop()
+		{
+			this._communicator?.Dispose();
+			Task.Run(async () =>
+			{
+				if (this._instance != null)
+				{
+					try
+					{
+						await this._instance.DisposeAsync();
+					}
+					catch { }
+					this._instance = null;
+				}
+			})
+			.ContinueWith(task =>
+			{
+				this.CloseIncomingChannel();
+				this.CloseOutgoingChannel();
+			})
+			.ConfigureAwait(false);
+		}
+
 		public void Dispose()
 		{
 			this.Stop();
@@ -967,7 +1150,5 @@ namespace net.vieapps.Services
 		{
 			this.Dispose();
 		}
-		#endregion
-
 	}
 }

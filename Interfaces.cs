@@ -24,7 +24,7 @@ namespace net.vieapps.Services
 		string ServiceName { get; }
 
 		/// <summary>
-		/// Gets the full URI of this service
+		/// Gets the URI of this service (with full namespace, for working with related URIs)
 		/// </summary>
 		string ServiceURI { get; }
 
@@ -40,13 +40,22 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the state that determines the user is able to upload the attachment files or not
 		/// </summary>
-		/// <param name="user">The user who performs the download action</param>
+		/// <param name="user">The user who performs the upload action</param>
 		/// <param name="systemID">The identity of the business system that the attachment file is belong to</param>
 		/// <param name="entityID">The identity of the entity definition that the attachment file is belong to</param>
 		/// <param name="objectID">The identity of the business object that the attachment file is belong to</param>
 		/// <returns></returns>
-		[WampProcedure("net.vieapps.services.{0}.files.permissions.upload")]
+		[WampProcedure("net.vieapps.services.{0}.files.permissions.upload.entity")]
 		Task<bool> IsAbleToUploadAsync(User user, string systemID, string entityID, string objectID);
+
+		/// <summary>
+		/// Gets the state that determines the user is able to upload the attachment files or not
+		/// </summary>
+		/// <param name="user">The user who performs the upload action</param>
+		/// <param name="objectName">The name of service's object that the attachment file is belong to</param>
+		/// <returns></returns>
+		[WampProcedure("net.vieapps.services.{0}.files.permissions.upload.object")]
+		Task<bool> IsAbleToUploadAsync(User user, string objectName);
 
 		/// <summary>
 		/// Gets the state that determines the user is able to download the attachment files or not
@@ -56,30 +65,57 @@ namespace net.vieapps.Services
 		/// <param name="entityID">The identity of the entity definition that the attachment file is belong to</param>
 		/// <param name="objectID">The identity of the business object that the attachment file is belong to</param>
 		/// <returns></returns>
-		[WampProcedure("net.vieapps.services.{0}.files.permissions.download")]
+		[WampProcedure("net.vieapps.services.{0}.files.permissions.download.entity")]
 		Task<bool> IsAbleToDownloadAsync(User user, string systemID, string entityID, string objectID);
+
+		/// <summary>
+		/// Gets the state that determines the user is able to download the attachment files or not
+		/// </summary>
+		/// <param name="user">The user who performs the download action</param>
+		/// <param name="objectName">The name of service's object that the attachment file is belong to</param>
+		/// <returns></returns>
+		[WampProcedure("net.vieapps.services.{0}.files.permissions.download.object")]
+		Task<bool> IsAbleToDownloadAsync(User user, string objectName);
 
 		/// <summary>
 		/// Gets the state that determines the user is able to delete the attachment files or not
 		/// </summary>
-		/// <param name="user">The user who performs the download action</param>
+		/// <param name="user">The user who performs the delete action</param>
 		/// <param name="systemID">The identity of the business system that the attachment file is belong to</param>
 		/// <param name="entityID">The identity of the entity definition that the attachment file is belong to</param>
 		/// <param name="objectID">The identity of the business object that the attachment file is belong to</param>
 		/// <returns></returns>
-		[WampProcedure("net.vieapps.services.{0}.files.permissions.delete")]
+		[WampProcedure("net.vieapps.services.{0}.files.permissions.delete.entity")]
 		Task<bool> IsAbleToDeleteAsync(User user, string systemID, string entityID, string objectID);
+
+		/// <summary>
+		/// Gets the state that determines the user is able to delete the attachment files or not
+		/// </summary>
+		/// <param name="user">The user who performs the delete action</param>
+		/// <param name="objectName">The name of service's object that the attachment file is belong to</param>
+		/// <returns></returns>
+		[WampProcedure("net.vieapps.services.{0}.files.permissions.delete.object")]
+		Task<bool> IsAbleToDeleteAsync(User user, string objectName);
 
 		/// <summary>
 		/// Gets the state that determines the user is able to restore the attachment files or not
 		/// </summary>
-		/// <param name="user">The user who performs the download action</param>
+		/// <param name="user">The user who performs the restore action</param>
 		/// <param name="systemID">The identity of the business system that the attachment file is belong to</param>
 		/// <param name="entityID">The identity of the entity definition that the attachment file is belong to</param>
 		/// <param name="objectID">The identity of the business object that the attachment file is belong to</param>
 		/// <returns></returns>
-		[WampProcedure("net.vieapps.services.{0}.files.permissions.restore")]
+		[WampProcedure("net.vieapps.services.{0}.files.permissions.restore.entity")]
 		Task<bool> IsAbleToRestoreAsync(User user, string systemID, string entityID, string objectID);
+
+		/// <summary>
+		/// Gets the state that determines the user is able to restore the attachment files or not
+		/// </summary>
+		/// <param name="user">The user who performs the restore action</param>
+		/// <param name="objectName">The name of service's object that the attachment file is belong to</param>
+		/// <returns></returns>
+		[WampProcedure("net.vieapps.services.{0}.files.permissions.restore.object")]
+		Task<bool> IsAbleToRestoreAsync(User user, string objectName);
 	}
 
 	//  --------------------------------------------------------------------------------------------
@@ -95,7 +131,7 @@ namespace net.vieapps.Services
 		/// <param name="message">The message</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		[WampProcedure("net.vieapps.services.rtu.client.message")]
+		[WampProcedure("net.vieapps.services.rtu.update.message")]
 		Task SendUpdateMessageAsync(UpdateMessage message, CancellationToken cancellationToken = default(CancellationToken));
 
 		/// <summary>
@@ -106,7 +142,7 @@ namespace net.vieapps.Services
 		/// <param name="excludedDeviceID">The string that presents identity of a device to be excluded</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		[WampProcedure("net.vieapps.services.rtu.client.messages")]
+		[WampProcedure("net.vieapps.services.rtu.update.messages")]
 		Task SendUpdateMessagesAsync(List<BaseMessage> messages, string deviceID, string excludedDeviceID, CancellationToken cancellationToken = default(CancellationToken));
 
 		/// <summary>
@@ -116,7 +152,7 @@ namespace net.vieapps.Services
 		/// <param name="message">The message</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		[WampProcedure("net.vieapps.services.rtu.service.message.base")]
+		[WampProcedure("net.vieapps.services.rtu.service.intercommunicate.message")]
 		Task SendInterCommunicateMessageAsync(string serviceName, BaseMessage message, CancellationToken cancellationToken = default(CancellationToken));
 
 		/// <summary>
@@ -125,7 +161,7 @@ namespace net.vieapps.Services
 		/// <param name="message">The message</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		[WampProcedure("net.vieapps.services.rtu.service.message.full")]
+		[WampProcedure("net.vieapps.services.rtu.services.intercommunicate.message")]
 		Task SendInterCommunicateMessageAsync(CommunicateMessage message, CancellationToken cancellationToken = default(CancellationToken));
 
 		/// <summary>
@@ -135,7 +171,7 @@ namespace net.vieapps.Services
 		/// <param name="messages">The collection of messages</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		[WampProcedure("net.vieapps.services.rtu.service.messages.base")]
+		[WampProcedure("net.vieapps.services.rtu.service.intercommunicate.messages")]
 		Task SendInterCommunicateMessagesAsync(string serviceName, List<BaseMessage> messages, CancellationToken cancellationToken = default(CancellationToken));
 
 		/// <summary>
@@ -144,7 +180,7 @@ namespace net.vieapps.Services
 		/// <param name="messages">The collection of messages</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		[WampProcedure("net.vieapps.services.rtu.service.messages.full")]
+		[WampProcedure("net.vieapps.services.rtu.services.intercommunicate.messages")]
 		Task SendInterCommunicateMessagesAsync(List<CommunicateMessage> messages, CancellationToken cancellationToken = default(CancellationToken));
 	}
 
@@ -166,7 +202,7 @@ namespace net.vieapps.Services
 		/// <param name="fullStack">The full stack (usually stack of the exception and all inners)</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		[WampProcedure("net.vieapps.services.logs.management.single")]
+		[WampProcedure("net.vieapps.services.logs.entry")]
 		Task WriteLogAsync(string correlationID, string serviceName, string objectName, string log, string simpleStack = null, string fullStack = null, CancellationToken cancellationToken = default(CancellationToken));
 
 		/// <summary>
@@ -180,7 +216,7 @@ namespace net.vieapps.Services
 		/// <param name="fullStack">The full stack (usually stack of the exception and all inners)</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		[WampProcedure("net.vieapps.services.logs.management.collection")]
+		[WampProcedure("net.vieapps.services.logs.entries")]
 		Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, string simpleStack = null, string fullStack = null, CancellationToken cancellationToken = default(CancellationToken));
 	}
 
