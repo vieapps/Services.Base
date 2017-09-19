@@ -74,10 +74,10 @@ namespace net.vieapps.Services
 
 		#region Open/Close channels
 		/// <summary>
-		/// Gets the location information from configuration
+		/// Gets the information of WAMP router from configuration file
 		/// </summary>
 		/// <returns></returns>
-		protected virtual Tuple<string, string, bool> GetLocationInfo()
+		protected virtual Tuple<string, string, bool> GetRouterInfo()
 		{
 			var address = UtilityService.GetAppSetting("RouterAddress", "ws://127.0.0.1:26429/");
 			var realm = UtilityService.GetAppSetting("RouterRealm", "VIEAppsRealm");
@@ -98,7 +98,7 @@ namespace net.vieapps.Services
 			if (this._incommingChannel != null)
 				return;
 
-			var info = this.GetLocationInfo();
+			var info = this.GetRouterInfo();
 			var address = info.Item1;
 			var realm = info.Item2;
 			var useJsonChannel = info.Item3;
@@ -176,7 +176,7 @@ namespace net.vieapps.Services
 			if (this._outgoingChannel != null)
 				return;
 
-			var info = this.GetLocationInfo();
+			var info = this.GetRouterInfo();
 			var address = info.Item1;
 			var realm = info.Item2;
 			var useJsonChannel = info.Item3;
