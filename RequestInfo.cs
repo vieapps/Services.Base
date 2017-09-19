@@ -115,7 +115,7 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Gets the value of the 'request' parameter of the query (in Base64Url) and converts to JSON
+		/// Gets the value of the 'x-request' parameter of the query (in Base64Url) and converts to JSON
 		/// </summary>
 		/// <returns></returns>
 		public JToken GetRequestJson()
@@ -129,7 +129,7 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Gets the value of the 'request' parameter of the query (in Base64Url) and converts to Expando
+		/// Gets the value of the 'x-request' parameter of the query (in Base64Url) and converts to Expando
 		/// </summary>
 		/// <returns></returns>
 		public ExpandoObject GetRequestExpando()

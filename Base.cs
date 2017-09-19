@@ -67,7 +67,7 @@ namespace net.vieapps.Services
 		{
 			get
 			{
-				return "net.vieapps.services." + this.ServiceName.ToLower().Trim();
+				return "net.vieapps.services." + (this.ServiceName?.ToLower() ?? "unknown").Trim();
 			}
 		}
 		#endregion
@@ -704,8 +704,9 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="requestInfo"></param>
 		/// <param name="userID"></param>
+		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		protected async Task<List<Tuple<string, string, string, bool>>> GetSessionsAsync(RequestInfo requestInfo, string userID = null)
+		protected async Task<List<Tuple<string, string, string, bool>>> GetSessionsAsync(RequestInfo requestInfo, string userID = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			var result = await this.CallServiceAsync(new RequestInfo()
 			{
@@ -718,7 +719,7 @@ namespace net.vieapps.Services
 					{ "object-identity", userID ?? requestInfo.Session.User.ID }
 				},
 				CorrelationID = requestInfo.CorrelationID
-			});
+			}, cancellationToken);
 
 			return (result["Sessions"] as JArray).ToList(info =>
 				new Tuple<string, string, string, bool>(

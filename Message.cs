@@ -32,7 +32,7 @@ namespace net.vieapps.Services
 	//  --------------------------------------------------------------------------------------------
 
 	/// <summary>
-	/// Presents a message for updating via RTU (Real-Time Update) service
+	/// Presents a message for updating via RTU (Real-Time Update)
 	/// </summary>
 	[Serializable]
 	public class UpdateMessage : BaseMessage
