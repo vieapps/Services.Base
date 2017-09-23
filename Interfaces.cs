@@ -38,84 +38,130 @@ namespace net.vieapps.Services
 		Task<JObject> ProcessRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken));
 
 		/// <summary>
-		/// Gets the state that determines the user is able to upload the attachment files or not
+		/// Gets the state that determines the user is able to manage or not
 		/// </summary>
-		/// <param name="user">The user who performs the upload action</param>
-		/// <param name="systemID">The identity of the business system that the attachment file is belong to</param>
-		/// <param name="entityID">The identity of the entity definition that the attachment file is belong to</param>
-		/// <param name="objectID">The identity of the business object that the attachment file is belong to</param>
+		/// <param name="user">The user who performs the action</param>
+		/// <param name="objectName">The name of the service's object</param>
+		/// <param name="objectIdentity">The identity of the service's object</param>
 		/// <returns></returns>
-		[WampProcedure("net.vieapps.services.{0}.files.permissions.upload.entity")]
-		Task<bool> IsAbleToUploadAsync(User user, string systemID, string entityID, string objectID);
+		[WampProcedure("net.vieapps.services.{0}.permissions.manage.object")]
+		Task<bool> CanManageAsync(User user, string objectName, string objectIdentity);
 
 		/// <summary>
-		/// Gets the state that determines the user is able to upload the attachment files or not
+		/// Gets the state that determines the user is able to manage or not
 		/// </summary>
-		/// <param name="user">The user who performs the upload action</param>
-		/// <param name="objectName">The name of service's object that the attachment file is belong to</param>
+		/// <param name="user">The user who performs the action</param>
+		/// <param name="systemID">The identity of the business system</param>
+		/// <param name="definitionID">The identity of the entity definition</param>
+		/// <param name="objectID">The identity of the business object</param>
 		/// <returns></returns>
-		[WampProcedure("net.vieapps.services.{0}.files.permissions.upload.object")]
-		Task<bool> IsAbleToUploadAsync(User user, string objectName);
+		[WampProcedure("net.vieapps.services.{0}.permissions.manage.definition")]
+		Task<bool> CanManageAsync(User user, string systemID, string definitionID, string objectID);
+
+		/// <summary>
+		/// Gets the state that determines the user is able to moderate or not
+		/// </summary>
+		/// <param name="user">The user who performs the action</param>
+		/// <param name="objectName">The name of the service's object</param>
+		/// <param name="objectIdentity">The identity of the service's object</param>
+		/// <returns></returns>
+		[WampProcedure("net.vieapps.services.{0}.permissions.moderate.object")]
+		Task<bool> CanModerateAsync(User user, string objectName, string objectIdentity);
+
+		/// <summary>
+		/// Gets the state that determines the user is able to moderate or not
+		/// </summary>
+		/// <param name="user">The user who performs the action</param>
+		/// <param name="systemID">The identity of the business system</param>
+		/// <param name="definitionID">The identity of the entity definition</param>
+		/// <param name="objectID">The identity of the business object</param>
+		/// <returns></returns>
+		[WampProcedure("net.vieapps.services.{0}.permissions.moderate.definition")]
+		Task<bool> CanModerateAsync(User user, string systemID, string definitionID, string objectID);
+
+		/// <summary>
+		/// Gets the state that determines the user is able to edit or not
+		/// </summary>
+		/// <param name="user">The user who performs the action</param>
+		/// <param name="objectName">The name of the service's object</param>
+		/// <param name="objectIdentity">The identity of the service's object</param>
+		/// <returns></returns>
+		[WampProcedure("net.vieapps.services.{0}.permissions.edit.object")]
+		Task<bool> CanEditAsync(User user, string objectName, string objectIdentity);
+
+		/// <summary>
+		/// Gets the state that determines the user is able to edit or not
+		/// </summary>
+		/// <param name="user">The user who performs the action</param>
+		/// <param name="systemID">The identity of the business system</param>
+		/// <param name="definitionID">The identity of the entity definition</param>
+		/// <param name="objectID">The identity of the business object</param>
+		/// <returns></returns>
+		[WampProcedure("net.vieapps.services.{0}.permissions.edit.definition")]
+		Task<bool> CanEditAsync(User user, string systemID, string definitionID, string objectID);
+
+		/// <summary>
+		/// Gets the state that determines the user is able to contribute or not
+		/// </summary>
+		/// <param name="user">The user who performs the action</param>
+		/// <param name="objectName">The name of the service's object</param>
+		/// <param name="objectIdentity">The identity of the service's object</param>
+		/// <returns></returns>
+		[WampProcedure("net.vieapps.services.{0}.permissions.contribute.object")]
+		Task<bool> CanContributeAsync(User user, string objectName, string objectIdentity);
+
+		/// <summary>
+		/// Gets the state that determines the user is able to contribute or not
+		/// </summary>
+		/// <param name="user">The user who performs the action</param>
+		/// <param name="systemID">The identity of the business system</param>
+		/// <param name="definitionID">The identity of the entity definition</param>
+		/// <param name="objectID">The identity of the business object</param>
+		/// <returns></returns>
+		[WampProcedure("net.vieapps.services.{0}.permissions.contribute.definition")]
+		Task<bool> CanContributeAsync(User user, string systemID, string definitionID, string objectID);
+
+		/// <summary>
+		/// Gets the state that determines the user is able to view or not
+		/// </summary>
+		/// <param name="user">The user who performs the action</param>
+		/// <param name="objectName">The name of the service's object</param>
+		/// <param name="objectIdentity">The identity of the service's object</param>
+		/// <returns></returns>
+		[WampProcedure("net.vieapps.services.{0}.permissions.view.object")]
+		Task<bool> CanViewAsync(User user, string objectName, string objectIdentity);
+
+		/// <summary>
+		/// Gets the state that determines the user is able to view or not
+		/// </summary>
+		/// <param name="user">The user who performs the action</param>
+		/// <param name="systemID">The identity of the business system</param>
+		/// <param name="definitionID">The identity of the entity definition</param>
+		/// <param name="objectID">The identity of the business object</param>
+		/// <returns></returns>
+		[WampProcedure("net.vieapps.services.{0}.permissions.view.definition")]
+		Task<bool> CanViewAsync(User user, string systemID, string definitionID, string objectID);
+
+		/// <summary>
+		/// Gets the state that determines the user is able to download or not
+		/// </summary>
+		/// <param name="user">The user who performs the action</param>
+		/// <param name="objectName">The name of the service's object</param>
+		/// <param name="objectIdentity">The identity of the service's object</param>
+		/// <returns></returns>
+		[WampProcedure("net.vieapps.services.{0}.permissions.download.object")]
+		Task<bool> CanDownloadAsync(User user, string objectName, string objectIdentity);
 
 		/// <summary>
 		/// Gets the state that determines the user is able to download the attachment files or not
 		/// </summary>
-		/// <param name="user">The user who performs the download action</param>
-		/// <param name="systemID">The identity of the business system that the attachment file is belong to</param>
-		/// <param name="entityID">The identity of the entity definition that the attachment file is belong to</param>
-		/// <param name="objectID">The identity of the business object that the attachment file is belong to</param>
+		/// <param name="user">The user who performs the action</param>
+		/// <param name="systemID">The identity of the business system</param>
+		/// <param name="definitionID">The identity of the entity definition</param>
+		/// <param name="objectID">The identity of the business object</param>
 		/// <returns></returns>
-		[WampProcedure("net.vieapps.services.{0}.files.permissions.download.entity")]
-		Task<bool> IsAbleToDownloadAsync(User user, string systemID, string entityID, string objectID);
-
-		/// <summary>
-		/// Gets the state that determines the user is able to download the attachment files or not
-		/// </summary>
-		/// <param name="user">The user who performs the download action</param>
-		/// <param name="objectName">The name of service's object that the attachment file is belong to</param>
-		/// <returns></returns>
-		[WampProcedure("net.vieapps.services.{0}.files.permissions.download.object")]
-		Task<bool> IsAbleToDownloadAsync(User user, string objectName);
-
-		/// <summary>
-		/// Gets the state that determines the user is able to delete the attachment files or not
-		/// </summary>
-		/// <param name="user">The user who performs the delete action</param>
-		/// <param name="systemID">The identity of the business system that the attachment file is belong to</param>
-		/// <param name="entityID">The identity of the entity definition that the attachment file is belong to</param>
-		/// <param name="objectID">The identity of the business object that the attachment file is belong to</param>
-		/// <returns></returns>
-		[WampProcedure("net.vieapps.services.{0}.files.permissions.delete.entity")]
-		Task<bool> IsAbleToDeleteAsync(User user, string systemID, string entityID, string objectID);
-
-		/// <summary>
-		/// Gets the state that determines the user is able to delete the attachment files or not
-		/// </summary>
-		/// <param name="user">The user who performs the delete action</param>
-		/// <param name="objectName">The name of service's object that the attachment file is belong to</param>
-		/// <returns></returns>
-		[WampProcedure("net.vieapps.services.{0}.files.permissions.delete.object")]
-		Task<bool> IsAbleToDeleteAsync(User user, string objectName);
-
-		/// <summary>
-		/// Gets the state that determines the user is able to restore the attachment files or not
-		/// </summary>
-		/// <param name="user">The user who performs the restore action</param>
-		/// <param name="systemID">The identity of the business system that the attachment file is belong to</param>
-		/// <param name="entityID">The identity of the entity definition that the attachment file is belong to</param>
-		/// <param name="objectID">The identity of the business object that the attachment file is belong to</param>
-		/// <returns></returns>
-		[WampProcedure("net.vieapps.services.{0}.files.permissions.restore.entity")]
-		Task<bool> IsAbleToRestoreAsync(User user, string systemID, string entityID, string objectID);
-
-		/// <summary>
-		/// Gets the state that determines the user is able to restore the attachment files or not
-		/// </summary>
-		/// <param name="user">The user who performs the restore action</param>
-		/// <param name="objectName">The name of service's object that the attachment file is belong to</param>
-		/// <returns></returns>
-		[WampProcedure("net.vieapps.services.{0}.files.permissions.restore.object")]
-		Task<bool> IsAbleToRestoreAsync(User user, string objectName);
+		[WampProcedure("net.vieapps.services.{0}.permissions.download.definition")]
+		Task<bool> CanDownloadAsync(User user, string systemID, string definitionID, string objectID);
 	}
 
 	//  --------------------------------------------------------------------------------------------

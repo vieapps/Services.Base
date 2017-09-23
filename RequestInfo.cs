@@ -214,10 +214,16 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the object identity (from the parameter named 'object-identity' of the query)
 		/// </summary>
+		/// <param name="requireUUID">true to require object identity is valid UUID</param>
 		/// <returns></returns>
-		public string GetObjectIdentity()
+		public string GetObjectIdentity(bool requireUUID = false)
 		{
-			return this.GetQueryParameter("object-identity");
+			var objectIdentity = this.GetQueryParameter("object-identity");
+			return !requireUUID
+				? objectIdentity
+				: !string.IsNullOrWhiteSpace(objectIdentity) && objectIdentity.IsValidUUID()
+					? objectIdentity
+					: null;
 		}
 		#endregion
 

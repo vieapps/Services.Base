@@ -660,16 +660,14 @@ namespace net.vieapps.Services
 
 		#region Call other services
 		/// <summary>
-		/// Calls a service to process a request
+		/// Gets a service by name
 		/// </summary>
-		/// <param name="requestInfo">The requesting information</param>
-		/// <param name="cancellationToken">The cancellation token</param>
+		/// <param name="name">The string that presents name of a service</param>
 		/// <returns></returns>
-		protected async Task<JObject> CallServiceAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken))
+		protected async Task<IService> GetServiceAsync(string name)
 		{
-			var name = requestInfo != null && !string.IsNullOrWhiteSpace(requestInfo.ServiceName)
-				? requestInfo.ServiceName.Trim().ToLower()
-				: "unknown";
+			if (string.IsNullOrWhiteSpace(name))
+				return null;
 
 			if (!this._businessServices.TryGetValue(name, out IService service))
 			{
@@ -683,22 +681,26 @@ namespace net.vieapps.Services
 					}
 				}
 			}
+			return service;
+		}
 
-			return await service.ProcessRequestAsync(requestInfo, cancellationToken);
+		/// <summary>
+		/// Calls a service to process a request
+		/// </summary>
+		/// <param name="requestInfo">The requesting information</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		protected async Task<JObject> CallServiceAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken))
+		{
+			return await (await this.GetServiceAsync(
+				requestInfo != null && !string.IsNullOrWhiteSpace(requestInfo.ServiceName)
+					? requestInfo.ServiceName.Trim().ToLower()
+					: "unknown"
+				)).ProcessRequestAsync(requestInfo, cancellationToken);
 		}
 		#endregion
 
-		#region Authentication & Working sessions
-		/// <summary>
-		/// Gets the state that determines the user is authenticated or not
-		/// </summary>
-		/// <param name="requestInfo">The requesting information that contains user information</param>
-		/// <returns></returns>
-		protected bool IsAuthenticated(RequestInfo requestInfo)
-		{
-			return requestInfo != null && requestInfo.Session != null && requestInfo.Session.User != null && requestInfo.Session.User.IsAuthenticated;
-		}
-
+		#region Working sessions
 		/// <summary>
 		/// Gets the sessions of an user. 1st element is session identity, 2nd element is device identity, 3rd element is app info, 4th element is online status
 		/// </summary>
@@ -732,7 +734,17 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
-		#region Authorization (for working with objects of the service)
+		#region Authentication & Authorization
+		/// <summary>
+		/// Gets the state that determines the user is authenticated or not
+		/// </summary>
+		/// <param name="requestInfo">The requesting information that contains user information</param>
+		/// <returns></returns>
+		protected bool IsAuthenticated(RequestInfo requestInfo)
+		{
+			return requestInfo != null && requestInfo.Session != null && requestInfo.Session.User != null && requestInfo.Session.User.IsAuthenticated;
+		}
+
 		/// <summary>
 		/// Gets the state that determines the user is system administrator or not
 		/// </summary>
@@ -788,10 +800,14 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected virtual async Task<bool> IsAuthorizedAsync(RequestInfo requestInfo, Components.Security.Action action, Privileges privileges = null, Func<User, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 		{
-			return await this.IsSystemAdministratorAsync(requestInfo)
-				? true
-				: requestInfo != null && requestInfo.Session != null && requestInfo.Session.User != null
-					? requestInfo.Session.User.IsAuthorized(requestInfo.ServiceName, requestInfo.ObjectName, action, privileges, getPrivileges, getActions)
+			// administrator
+			if (await this.IsSystemAdministratorAsync(requestInfo))
+				return true;
+
+			// individual user
+			else
+				return requestInfo != null && requestInfo.Session != null && requestInfo.Session.User != null
+					? requestInfo.Session.User.IsAuthorized(requestInfo.ServiceName, requestInfo.ObjectName, requestInfo.GetObjectIdentity(true), action, privileges, getPrivileges, getActions)
 					: false;
 		}
 
@@ -801,200 +817,261 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo">The requesting information that contains user information</param>
 		/// <param name="entity">The business entity object</param>
 		/// <param name="action">The action to perform on the object of this service</param>
+		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
+		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		protected virtual async Task<bool> IsAuthorizedAsync(RequestInfo requestInfo, IBusinessEntity entity, Components.Security.Action action)
+		protected virtual async Task<bool> IsAuthorizedAsync(RequestInfo requestInfo, IBusinessEntity entity, Components.Security.Action action, Func<User, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 		{
 			return await this.IsSystemAdministratorAsync(requestInfo)
 				? true
 				: requestInfo != null && requestInfo.Session != null && requestInfo.Session.User != null
-					? requestInfo.Session.User.IsAuthorized(requestInfo.ServiceName, requestInfo.ObjectName, action, entity?.WorkingPrivileges, null, null)
+					? requestInfo.Session.User.IsAuthorized(requestInfo.ServiceName, requestInfo.ObjectName, entity?.ID, action, entity?.WorkingPrivileges, getPrivileges, getActions)
 					: false;
 		}
-		#endregion
-
-		#region Authorization (for working with of service of files)
-		/// <summary>
-		/// Gets the state that determines the user is able to upload the attachment files or not
-		/// </summary>
-		/// <param name="user">The user who performs the upload action</param>
-		/// <param name="systemID">The identity of the business system that the attachment file is belong to</param>
-		/// <param name="entityID">The identity of the entity definition that the attachment file is belong to</param>
-		/// <param name="objectID">The identity of the business object that the attachment file is belong to</param>
-		/// <returns></returns>
-		public virtual async Task<bool> IsAbleToUploadAsync(User user, string systemID, string entityID, string objectID)
-		{
-			// check
-			if (string.IsNullOrWhiteSpace(entityID) || !entityID.IsValidUUID() || string.IsNullOrWhiteSpace(objectID) || !objectID.IsValidUUID())
-				return false;
-
-			// system administrator can do anything
-			user = user ?? new User() { Roles = new List<string>() { SystemRole.All.ToString() } };
-			if (await this.IsSystemAdministratorAsync(user))
-				return true;
-
-			//get object
-			var entity = RepositoryMediator.GetRuntimeRepositoryEntity(entityID);
-			if (entity == null)
-				return false;
-
-			var @object = await RepositoryMediator.GetAsync(entity.Definition, objectID);
-			if (@object == null || !(@object is IBusinessEntity))
-				return false;
-
-			// check permissions
-			return user.IsAuthorized(this.ServiceName, null, Components.Security.Action.Create, (@object as IBusinessEntity).WorkingPrivileges, null, null);
-		}
 
 		/// <summary>
-		/// Gets the state that determines the user is able to upload the attachment files or not
+		/// Gets the state that determines the user is able to manage or not
 		/// </summary>
-		/// <param name="user">The user who performs the upload action</param>
-		/// <param name="objectName">The name of service's object that the attachment file is belong to</param>
+		/// <param name="user">The user who performs the action</param>
+		/// <param name="objectName">The name of the service's object</param>
+		/// <param name="objectIdentity">The identity of the service's object</param>
 		/// <returns></returns>
-		public virtual async Task<bool> IsAbleToUploadAsync(User user, string objectName)
+		public virtual async Task<bool> CanManageAsync(User user, string objectName, string objectIdentity)
 		{
-			user = user ?? new User() { Roles = new List<string>() { SystemRole.All.ToString() } };
 			return await this.IsSystemAdministratorAsync(user)
+				|| (user != null && user.IsAuthorized(this.ServiceName, objectName, objectIdentity, Components.Security.Action.Full, null, null, null));
+		}
+
+		/// <summary>
+		/// Gets the state that determines the user is able to manage or not
+		/// </summary>
+		/// <param name="user">The user who performs the action</param>
+		/// <param name="systemID">The identity of the business system</param>
+		/// <param name="definitionID">The identity of the entity definition</param>
+		/// <param name="objectID">The identity of the business object</param>
+		/// <returns></returns>
+		public virtual async Task<bool> CanManageAsync(User user, string systemID, string definitionID, string objectID)
+		{
+			// check user
+			if (user == null || string.IsNullOrWhiteSpace(user.ID))
+				return false;
+
+			// system administrator can do anything
+			if (await this.IsSystemAdministratorAsync(user))
+				return true;
+
+			// get the business object
+			var @object = await RepositoryMediator.GetAsync(definitionID, objectID);
+
+			// get the permissions state
+			return @object != null && @object is IBusinessEntity
+				? user.IsAuthorized(this.ServiceName, @object.GetType().GetTypeName(true), objectID, Components.Security.Action.Full, (@object as IBusinessEntity).WorkingPrivileges, null, null)
+				: false;
+		}
+
+		/// <summary>
+		/// Gets the state that determines the user is able to moderate or not
+		/// </summary>
+		/// <param name="user">The user who performs the action</param>
+		/// <param name="objectName">The name of the service's object</param>
+		/// <param name="objectIdentity">The identity of the service's object</param>
+		/// <returns></returns>
+		public virtual async Task<bool> CanModerateAsync(User user, string objectName, string objectIdentity)
+		{
+			return await this.CanManageAsync(user, objectName, objectIdentity)
 				? true
-				: user.IsAuthorized(this.ServiceName, objectName, Components.Security.Action.Create, null, null, null);
+				: user != null && user.IsAuthorized(this.ServiceName, objectName, objectIdentity, Components.Security.Action.Approve, null, null, null);
 		}
 
 		/// <summary>
-		/// Gets the state that determines the user is able to download the attachment files or not
+		/// Gets the state that determines the user is able to moderate or not
 		/// </summary>
-		/// <param name="user">The user who performs the download action</param>
-		/// <param name="systemID">The identity of the business system that the attachment file is belong to</param>
-		/// <param name="entityID">The identity of the entity definition that the attachment file is belong to</param>
-		/// <param name="objectID">The identity of the business object that the attachment file is belong to</param>
+		/// <param name="user">The user who performs the action</param>
+		/// <param name="systemID">The identity of the business system</param>
+		/// <param name="definitionID">The identity of the entity definition</param>
+		/// <param name="objectID">The identity of the business object</param>
 		/// <returns></returns>
-		public virtual async Task<bool> IsAbleToDownloadAsync(User user, string systemID, string entityID, string objectID)
+		public virtual async Task<bool> CanModerateAsync(User user, string systemID, string definitionID, string objectID)
 		{
-			// check
-			if (string.IsNullOrWhiteSpace(entityID) || !entityID.IsValidUUID() || string.IsNullOrWhiteSpace(objectID) || !objectID.IsValidUUID())
-				return false;
-
-			// system administrator can do anything
-			user = user ?? new User() { Roles = new List<string>() { SystemRole.All.ToString() } };
-			if (await this.IsSystemAdministratorAsync(user))
+			// administrator can do
+			if (await this.CanManageAsync(user, systemID, definitionID, objectID))
 				return true;
 
-			//get object
-			var entity = RepositoryMediator.GetRuntimeRepositoryEntity(entityID);
-			if (entity == null)
+			// check user
+			if (user == null || string.IsNullOrWhiteSpace(user.ID))
 				return false;
 
-			var @object = await RepositoryMediator.GetAsync(entity.Definition, objectID);
-			if (@object == null || !(@object is IBusinessEntity))
-				return false;
+			// get the business object
+			var @object = await RepositoryMediator.GetAsync(definitionID, objectID);
 
-			// check permissions
-			return user.IsAuthorized(this.ServiceName, null, Components.Security.Action.Download, (@object as IBusinessEntity).WorkingPrivileges, null, null);
+			// get the permissions state
+			return @object != null && @object is IBusinessEntity
+				? user.IsAuthorized(this.ServiceName, @object.GetType().GetTypeName(true), objectID, Components.Security.Action.Approve, (@object as IBusinessEntity).WorkingPrivileges, null, null)
+				: false;
 		}
 
 		/// <summary>
-		/// Gets the state that determines the user is able to download the attachment files or not
+		/// Gets the state that determines the user is able to edit or not
 		/// </summary>
-		/// <param name="user">The user who performs the download action</param>
-		/// <param name="objectName">The name of service's object that the attachment file is belong to</param>
+		/// <param name="user">The user who performs the action</param>
+		/// <param name="objectName">The name of the service's object</param>
+		/// <param name="objectIdentity">The identity of the service's object</param>
 		/// <returns></returns>
-		public virtual async Task<bool> IsAbleToDownloadAsync(User user, string objectName)
+		public virtual async Task<bool> CanEditAsync(User user, string objectName, string objectIdentity)
 		{
-			user = user ?? new User() { Roles = new List<string>() { SystemRole.All.ToString() } };
-			return await this.IsSystemAdministratorAsync(user)
+			return await this.CanModerateAsync(user, objectName, objectIdentity)
 				? true
-				: user.IsAuthorized(this.ServiceName, objectName, Components.Security.Action.Download, null, null, null);
+				: user != null && user.IsAuthorized(this.ServiceName, objectName, objectIdentity, Components.Security.Action.Update, null, null, null);
 		}
 
 		/// <summary>
-		/// Gets the state that determines the user is able to delete the attachment files or not
+		/// Gets the state that determines the user is able to edit or not
 		/// </summary>
-		/// <param name="user">The user who performs the delete action</param>
-		/// <param name="systemID">The identity of the business system that the attachment file is belong to</param>
-		/// <param name="entityID">The identity of the entity definition that the attachment file is belong to</param>
-		/// <param name="objectID">The identity of the business object that the attachment file is belong to</param>
+		/// <param name="user">The user who performs the action</param>
+		/// <param name="systemID">The identity of the business system</param>
+		/// <param name="definitionID">The identity of the entity definition</param>
+		/// <param name="objectID">The identity of the business object</param>
 		/// <returns></returns>
-		public virtual async Task<bool> IsAbleToDeleteAsync(User user, string systemID, string entityID, string objectID)
+		public virtual async Task<bool> CanEditAsync(User user, string systemID, string definitionID, string objectID)
 		{
-			// check
-			if (user == null || string.IsNullOrWhiteSpace(user.ID) || string.IsNullOrWhiteSpace(entityID) || !entityID.IsValidUUID() || string.IsNullOrWhiteSpace(objectID) || !objectID.IsValidUUID())
-				return false;
-
-			// system administrator can do anything
-			if (await this.IsSystemAdministratorAsync(user))
+			// moderator can do
+			if (await this.CanModerateAsync(user, systemID, definitionID, objectID))
 				return true;
 
-			//get object
-			var entity = RepositoryMediator.GetRuntimeRepositoryEntity(entityID);
-			if (entity == null)
+			// check user
+			if (user == null || string.IsNullOrWhiteSpace(user.ID))
 				return false;
 
-			var @object = await RepositoryMediator.GetAsync(entity.Definition, objectID);
-			if (@object == null || !(@object is IBusinessEntity))
-				return false;
+			// get the business object
+			var @object = await RepositoryMediator.GetAsync(definitionID, objectID);
 
-			// check permissions
-			return user.IsAuthorized(this.ServiceName, null, Components.Security.Action.Delete, (@object as IBusinessEntity).WorkingPrivileges, null, null);
+			// get the permissions state
+			return @object != null && @object is IBusinessEntity
+				? user.IsAuthorized(this.ServiceName, @object.GetType().GetTypeName(true), objectID, Components.Security.Action.Update, (@object as IBusinessEntity).WorkingPrivileges, null, null)
+				: false;
 		}
 
 		/// <summary>
-		/// Gets the state that determines the user is able to delete the attachment files or not
+		/// Gets the state that determines the user is able to contribute or not
 		/// </summary>
-		/// <param name="user">The user who performs the delete action</param>
-		/// <param name="objectName">The name of service's object that the attachment file is belong to</param>
+		/// <param name="user">The user who performs the action</param>
+		/// <param name="objectName">The name of the service's object</param>
+		/// <param name="objectIdentity">The identity of the service's object</param>
 		/// <returns></returns>
-		public virtual async Task<bool> IsAbleToDeleteAsync(User user, string objectName)
+		public virtual async Task<bool> CanContributeAsync(User user, string objectName, string objectIdentity)
 		{
-			return user == null || string.IsNullOrWhiteSpace(user.ID)
-				? false
-				: await this.IsSystemAdministratorAsync(user)
-					? true
-					: user.IsAuthorized(this.ServiceName, objectName, Components.Security.Action.Delete, null, null, null);
+			return await this.CanEditAsync(user, objectName, objectIdentity)
+				? true
+				: user != null && user.IsAuthorized(this.ServiceName, objectName, objectIdentity, Components.Security.Action.Create, null, null, null);
 		}
 
 		/// <summary>
-		/// Gets the state that determines the user is able to restore the attachment files or not
+		/// Gets the state that determines the user is able to contribute or not
 		/// </summary>
-		/// <param name="user">The user who performs the restore action</param>
-		/// <param name="systemID">The identity of the business system that the attachment file is belong to</param>
-		/// <param name="entityID">The identity of the entity definition that the attachment file is belong to</param>
-		/// <param name="objectID">The identity of the business object that the attachment file is belong to</param>
+		/// <param name="user">The user who performs the action</param>
+		/// <param name="systemID">The identity of the business system</param>
+		/// <param name="definitionID">The identity of the entity definition</param>
+		/// <param name="objectID">The identity of the business object</param>
 		/// <returns></returns>
-		public virtual async Task<bool> IsAbleToRestoreAsync(User user, string systemID, string entityID, string objectID)
+		public virtual async Task<bool> CanContributeAsync(User user, string systemID, string definitionID, string objectID)
 		{
-			// check
-			if (user == null || string.IsNullOrWhiteSpace(user.ID) || string.IsNullOrWhiteSpace(entityID) || !entityID.IsValidUUID() || string.IsNullOrWhiteSpace(objectID) || !objectID.IsValidUUID())
-				return false;
-
-			// system administrator can do anything
-			if (await this.IsSystemAdministratorAsync(user))
+			// editor can do
+			if (await this.CanEditAsync(user, systemID, definitionID, objectID))
 				return true;
 
-			//get object
-			var entity = RepositoryMediator.GetRuntimeRepositoryEntity(entityID);
-			if (entity == null)
+			// check user
+			if (user == null || string.IsNullOrWhiteSpace(user.ID))
 				return false;
 
-			var @object = await RepositoryMediator.GetAsync(entity.Definition, objectID);
-			if (@object == null || !(@object is IBusinessEntity))
-				return false;
+			// get the business object
+			var @object = await RepositoryMediator.GetAsync(definitionID, objectID);
 
-			// check permissions
-			return user.IsAuthorized(this.ServiceName, null, Components.Security.Action.Update, (@object as IBusinessEntity).WorkingPrivileges, null, null);
+			// get the permissions state
+			return @object != null && @object is IBusinessEntity
+				? user.IsAuthorized(this.ServiceName, @object.GetType().GetTypeName(true), objectID, Components.Security.Action.Create, (@object as IBusinessEntity).WorkingPrivileges, null, null)
+				: false;
 		}
 
 		/// <summary>
-		/// Gets the state that determines the user is able to restore the attachment files or not
+		/// Gets the state that determines the user is able to view or not
 		/// </summary>
-		/// <param name="user">The user who performs the restore action</param>
-		/// <param name="objectName">The name of service's object that the attachment file is belong to</param>
+		/// <param name="user">The user who performs the action</param>
+		/// <param name="objectName">The name of the service's object</param>
+		/// <param name="objectIdentity">The identity of the service's object</param>
 		/// <returns></returns>
-		public virtual async Task<bool> IsAbleToRestoreAsync(User user, string objectName)
+		public virtual async Task<bool> CanViewAsync(User user, string objectName, string objectIdentity)
 		{
-			return user == null || string.IsNullOrWhiteSpace(user.ID)
-				? false
-				: await this.IsSystemAdministratorAsync(user)
-					? true
-					: user.IsAuthorized(this.ServiceName, objectName, Components.Security.Action.Update, null, null, null);
+			return await this.CanContributeAsync(user, objectName, objectIdentity)
+				? true
+				: user != null && user.IsAuthorized(this.ServiceName, objectName, objectIdentity, Components.Security.Action.View, null, null, null);
+		}
+
+		/// <summary>
+		/// Gets the state that determines the user is able to view or not
+		/// </summary>
+		/// <param name="user">The user who performs the action</param>
+		/// <param name="systemID">The identity of the business system</param>
+		/// <param name="definitionID">The identity of the entity definition</param>
+		/// <param name="objectID">The identity of the business object</param>
+		/// <returns></returns>
+		public virtual async Task<bool> CanViewAsync(User user, string systemID, string definitionID, string objectID)
+		{
+			// contributor can do
+			if (await this.CanContributeAsync(user, systemID, definitionID, objectID))
+				return true;
+
+			// check user
+			if (user == null || string.IsNullOrWhiteSpace(user.ID))
+				return false;
+
+			// get the business object
+			var @object = await RepositoryMediator.GetAsync(definitionID, objectID);
+
+			// get the permissions state
+			return @object != null && @object is IBusinessEntity
+				? user.IsAuthorized(this.ServiceName, @object.GetType().GetTypeName(true), objectID, Components.Security.Action.View, (@object as IBusinessEntity).WorkingPrivileges, null, null)
+				: false;
+		}
+
+		/// <summary>
+		/// Gets the state that determines the user is able to download or not
+		/// </summary>
+		/// <param name="user">The user who performs the action</param>
+		/// <param name="objectName">The name of the service's object</param>
+		/// <param name="objectIdentity">The identity of the service's object</param>
+		/// <returns></returns>
+		public virtual async Task<bool> CanDownloadAsync(User user, string objectName, string objectIdentity)
+		{
+			return await this.CanModerateAsync(user, objectName, objectIdentity)
+				? true
+				: user != null && user.IsAuthorized(this.ServiceName, objectName, objectIdentity, Components.Security.Action.Download, null, null, null);
+		}
+
+		/// <summary>
+		/// Gets the state that determines the user is able to download or not
+		/// </summary>
+		/// <param name="user">The user who performs the action</param>
+		/// <param name="systemID">The identity of the business system</param>
+		/// <param name="definitionID">The identity of the entity definition</param>
+		/// <param name="objectID">The identity of the business object</param>
+		/// <returns></returns>
+		public virtual async Task<bool> CanDownloadAsync(User user, string systemID, string definitionID, string objectID)
+		{
+			// moderator can do
+			if (await this.CanModerateAsync(user, systemID, definitionID, objectID))
+				return true;
+
+			// check user
+			if (user == null || string.IsNullOrWhiteSpace(user.ID))
+				return false;
+
+			// get the business object
+			var @object = await RepositoryMediator.GetAsync(definitionID, objectID);
+
+			// get the permissions state
+			return @object != null && @object is IBusinessEntity
+				? user.IsAuthorized(this.ServiceName, @object.GetType().GetTypeName(true), objectID, Components.Security.Action.Download, (@object as IBusinessEntity).WorkingPrivileges, null, null)
+				: false;
 		}
 		#endregion
 
