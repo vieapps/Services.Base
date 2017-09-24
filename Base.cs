@@ -812,6 +812,88 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
+		/// The the global privilege role of the user in this service
+		/// </summary>
+		/// <param name="user"></param>
+		/// <returns></returns>
+		protected virtual string GetPrivilegeRole(User user)
+		{
+			var privilege = user != null && user.Privileges != null
+				? user.Privileges.FirstOrDefault(p => p.ServiceName.IsEquals(this.ServiceName) && string.IsNullOrWhiteSpace(p.ObjectName) && string.IsNullOrWhiteSpace(p.ObjectIdentity))
+				: null;
+			return privilege?.Role ?? PrivilegeRole.Viewer.ToString();
+		}
+
+		/// <summary>
+		/// Gets the default privileges  of the user in this service
+		/// </summary>
+		/// <param name="user"></param>
+		/// <param name="privileges"></param>
+		/// <returns></returns>
+		protected virtual List<Privilege> GetPrivileges(User user, Privileges privileges)
+		{
+			return null;
+		}
+
+		/// <summary>
+		/// Gets the default privilege actions in this service
+		/// </summary>
+		/// <param name="role"></param>
+		/// <returns></returns>
+		protected virtual List<string> GetPrivilegeActions(PrivilegeRole role)
+		{
+			var actions = new List<Components.Security.Action>();
+			switch (role)
+			{
+				case PrivilegeRole.Administrator:
+					actions = new List<Components.Security.Action>()
+					{
+						Components.Security.Action.Full
+					};
+					break;
+
+				case PrivilegeRole.Moderator:
+					actions = new List<Components.Security.Action>()
+					{
+						Components.Security.Action.Approve,
+						Components.Security.Action.Update,
+						Components.Security.Action.Create,
+						Components.Security.Action.View,
+						Components.Security.Action.Download
+					};
+					break;
+
+				case PrivilegeRole.Editor:
+					actions = new List<Components.Security.Action>()
+					{
+						Components.Security.Action.Update,
+						Components.Security.Action.Create,
+						Components.Security.Action.View,
+						Components.Security.Action.Download
+					};
+					break;
+
+				case PrivilegeRole.Contributor:
+					actions = new List<Components.Security.Action>()
+					{
+						Components.Security.Action.Create,
+						Components.Security.Action.View,
+						Components.Security.Action.Download
+					};
+					break;
+
+				default:
+					actions = new List<Components.Security.Action>()
+					{
+						Components.Security.Action.View,
+						Components.Security.Action.Download
+					};
+					break;
+			}
+			return actions.Select(a => a.ToString()).ToList();
+		}
+
+		/// <summary>
 		/// Gets the state that determines the user can perform the action or not
 		/// </summary>
 		/// <param name="requestInfo">The requesting information that contains user information</param>
@@ -839,7 +921,7 @@ namespace net.vieapps.Services
 		public virtual async Task<bool> CanManageAsync(User user, string objectName, string objectIdentity)
 		{
 			return await this.IsSystemAdministratorAsync(user)
-				|| (user != null && user.IsAuthorized(this.ServiceName, objectName, objectIdentity, Components.Security.Action.Full, null, null, null));
+				|| (user != null && user.IsAuthorized(this.ServiceName, objectName, objectIdentity, Components.Security.Action.Full, null, this.GetPrivileges, this.GetPrivilegeActions));
 		}
 
 		/// <summary>
@@ -865,7 +947,7 @@ namespace net.vieapps.Services
 
 			// get the permissions state
 			return @object != null && @object is IBusinessEntity
-				? user.IsAuthorized(this.ServiceName, @object.GetType().GetTypeName(true), objectID, Components.Security.Action.Full, (@object as IBusinessEntity).WorkingPrivileges, null, null)
+				? user.IsAuthorized(this.ServiceName, @object.GetType().GetTypeName(true), objectID, Components.Security.Action.Full, (@object as IBusinessEntity).WorkingPrivileges, this.GetPrivileges, this.GetPrivilegeActions)
 				: false;
 		}
 
@@ -880,7 +962,7 @@ namespace net.vieapps.Services
 		{
 			return await this.CanManageAsync(user, objectName, objectIdentity)
 				? true
-				: user != null && user.IsAuthorized(this.ServiceName, objectName, objectIdentity, Components.Security.Action.Approve, null, null, null);
+				: user != null && user.IsAuthorized(this.ServiceName, objectName, objectIdentity, Components.Security.Action.Approve, null, this.GetPrivileges, this.GetPrivilegeActions);
 		}
 
 		/// <summary>
@@ -906,7 +988,7 @@ namespace net.vieapps.Services
 
 			// get the permissions state
 			return @object != null && @object is IBusinessEntity
-				? user.IsAuthorized(this.ServiceName, @object.GetType().GetTypeName(true), objectID, Components.Security.Action.Approve, (@object as IBusinessEntity).WorkingPrivileges, null, null)
+				? user.IsAuthorized(this.ServiceName, @object.GetType().GetTypeName(true), objectID, Components.Security.Action.Approve, (@object as IBusinessEntity).WorkingPrivileges, this.GetPrivileges, this.GetPrivilegeActions)
 				: false;
 		}
 
@@ -921,7 +1003,7 @@ namespace net.vieapps.Services
 		{
 			return await this.CanModerateAsync(user, objectName, objectIdentity)
 				? true
-				: user != null && user.IsAuthorized(this.ServiceName, objectName, objectIdentity, Components.Security.Action.Update, null, null, null);
+				: user != null && user.IsAuthorized(this.ServiceName, objectName, objectIdentity, Components.Security.Action.Update, null, this.GetPrivileges, this.GetPrivilegeActions);
 		}
 
 		/// <summary>
@@ -947,7 +1029,7 @@ namespace net.vieapps.Services
 
 			// get the permissions state
 			return @object != null && @object is IBusinessEntity
-				? user.IsAuthorized(this.ServiceName, @object.GetType().GetTypeName(true), objectID, Components.Security.Action.Update, (@object as IBusinessEntity).WorkingPrivileges, null, null)
+				? user.IsAuthorized(this.ServiceName, @object.GetType().GetTypeName(true), objectID, Components.Security.Action.Update, (@object as IBusinessEntity).WorkingPrivileges, this.GetPrivileges, this.GetPrivilegeActions)
 				: false;
 		}
 
@@ -962,7 +1044,7 @@ namespace net.vieapps.Services
 		{
 			return await this.CanEditAsync(user, objectName, objectIdentity)
 				? true
-				: user != null && user.IsAuthorized(this.ServiceName, objectName, objectIdentity, Components.Security.Action.Create, null, null, null);
+				: user != null && user.IsAuthorized(this.ServiceName, objectName, objectIdentity, Components.Security.Action.Create, null, this.GetPrivileges, this.GetPrivilegeActions);
 		}
 
 		/// <summary>
@@ -988,7 +1070,7 @@ namespace net.vieapps.Services
 
 			// get the permissions state
 			return @object != null && @object is IBusinessEntity
-				? user.IsAuthorized(this.ServiceName, @object.GetType().GetTypeName(true), objectID, Components.Security.Action.Create, (@object as IBusinessEntity).WorkingPrivileges, null, null)
+				? user.IsAuthorized(this.ServiceName, @object.GetType().GetTypeName(true), objectID, Components.Security.Action.Create, (@object as IBusinessEntity).WorkingPrivileges, this.GetPrivileges, this.GetPrivilegeActions)
 				: false;
 		}
 
@@ -1003,7 +1085,7 @@ namespace net.vieapps.Services
 		{
 			return await this.CanContributeAsync(user, objectName, objectIdentity)
 				? true
-				: user != null && user.IsAuthorized(this.ServiceName, objectName, objectIdentity, Components.Security.Action.View, null, null, null);
+				: user != null && user.IsAuthorized(this.ServiceName, objectName, objectIdentity, Components.Security.Action.View, null, this.GetPrivileges, this.GetPrivilegeActions);
 		}
 
 		/// <summary>
@@ -1029,7 +1111,7 @@ namespace net.vieapps.Services
 
 			// get the permissions state
 			return @object != null && @object is IBusinessEntity
-				? user.IsAuthorized(this.ServiceName, @object.GetType().GetTypeName(true), objectID, Components.Security.Action.View, (@object as IBusinessEntity).WorkingPrivileges, null, null)
+				? user.IsAuthorized(this.ServiceName, @object.GetType().GetTypeName(true), objectID, Components.Security.Action.View, (@object as IBusinessEntity).WorkingPrivileges, this.GetPrivileges, this.GetPrivilegeActions)
 				: false;
 		}
 
@@ -1044,7 +1126,7 @@ namespace net.vieapps.Services
 		{
 			return await this.CanModerateAsync(user, objectName, objectIdentity)
 				? true
-				: user != null && user.IsAuthorized(this.ServiceName, objectName, objectIdentity, Components.Security.Action.Download, null, null, null);
+				: user != null && user.IsAuthorized(this.ServiceName, objectName, objectIdentity, Components.Security.Action.Download, null, this.GetPrivileges, this.GetPrivilegeActions);
 		}
 
 		/// <summary>
@@ -1070,7 +1152,7 @@ namespace net.vieapps.Services
 
 			// get the permissions state
 			return @object != null && @object is IBusinessEntity
-				? user.IsAuthorized(this.ServiceName, @object.GetType().GetTypeName(true), objectID, Components.Security.Action.Download, (@object as IBusinessEntity).WorkingPrivileges, null, null)
+				? user.IsAuthorized(this.ServiceName, @object.GetType().GetTypeName(true), objectID, Components.Security.Action.Download, (@object as IBusinessEntity).WorkingPrivileges, this.GetPrivileges, this.GetPrivilegeActions)
 				: false;
 		}
 		#endregion
