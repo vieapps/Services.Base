@@ -1181,7 +1181,7 @@ namespace net.vieapps.Services
 		/// <param name="cache">The cache storage</param>
 		/// <param name="filter">The filtering expression</param>
 		/// <param name="sort">The sorting expression</param>
-		protected void ClearRelatedCache<T>(CacheManager cache, IFilterBy<T> filter, SortBy<T> sort) where T : class
+		protected void ClearRelatedCache<T>(Cache cache, IFilterBy<T> filter, SortBy<T> sort) where T : class
 		{
 			if (cache != null)
 			{
