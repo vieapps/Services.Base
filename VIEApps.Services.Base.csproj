@@ -48,9 +48,6 @@
     </AssemblyOriginatorKeyFile>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="System" />
-  </ItemGroup>
-  <ItemGroup>
     <Compile Include="Interceptors.cs" />
     <Compile Include="Message.cs" />
     <Compile Include="RequestInfo.cs" />
@@ -61,23 +58,14 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.NETCore.Platforms">
+      <Version>2.0.0</Version>
+    </PackageReference>
     <PackageReference Include="NETStandard.Library">
       <Version>2.0.1</Version>
     </PackageReference>
-    <PackageReference Include="Newtonsoft.Json">
-      <Version>10.0.3</Version>
-    </PackageReference>
-    <PackageReference Include="VIEApps.Components.Caching">
-      <Version>10.1.0.1</Version>
-    </PackageReference>
     <PackageReference Include="VIEApps.Components.Repository">
-      <Version>10.1.0.2</Version>
-    </PackageReference>
-    <PackageReference Include="VIEApps.Components.Security">
-      <Version>10.1.0.2</Version>
-    </PackageReference>
-    <PackageReference Include="VIEApps.Components.Utility">
-      <Version>10.1.0.1</Version>
+      <Version>10.1.0.3</Version>
     </PackageReference>
     <PackageReference Include="WampSharp">
       <Version>1.2.6.44-beta</Version>
@@ -85,6 +73,9 @@
     <PackageReference Include="WampSharp.Default.Client">
       <Version>1.2.6.44-beta</Version>
     </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="app.config" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="..\..\packages\NETStandard.Library.2.0.1\build\netstandard2.0\NETStandard.Library.targets" Condition="Exists('..\..\packages\NETStandard.Library.2.0.1\build\netstandard2.0\NETStandard.Library.targets')" />
