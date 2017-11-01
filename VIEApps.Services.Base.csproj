@@ -1,46 +1,51 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
-    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
-    <AssemblyName>VIEApps.Services.Base</AssemblyName>
-    <Description>Core components of VIEApps NGX</Description>
-    <Authors>VIEApps.net</Authors>
-    <Company>VIEApps.net</Company>
-    <Product>VIEApps NGX</Product>
-    <Copyright>© 2017 VIEApps.net</Copyright>
-    <Version>10.1.1.1711</Version>
-    <AssemblyVersion>10.1.1.1711</AssemblyVersion>
-    <FileVersion>10.1.1.1711</FileVersion>
-    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-    <PackageId>VIEApps.Services.Base</PackageId>
-    <PackageTags>services;microservices;vieapps;vieapps.components;vieapps.services;vieapps.microservices</PackageTags>
-    <PackageProjectUrl>https://github.com/vieapps/Services.Base</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/vieapps/Services.Base</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>netstandard2.0</TargetFramework>
+		<AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+		<AssemblyName>VIEApps.Services.Base</AssemblyName>
+		<Description>Core components of VIEApps NGX</Description>
+		<Authors>VIEApps.net</Authors>
+		<Company>VIEApps.net</Company>
+		<Product>VIEApps NGX</Product>
+		<Copyright>© 2017 VIEApps.net</Copyright>
+		<Version>10.1.1.1711</Version>
+		<AssemblyVersion>10.1.1.1711</AssemblyVersion>
+		<FileVersion>10.1.1.1711</FileVersion>
+		<GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+		<PackageId>VIEApps.Services.Base</PackageId>
+		<PackageTags>services;microservices;vieapps;vieapps.components;vieapps.services;vieapps.microservices</PackageTags>
+		<PackageProjectUrl>https://github.com/vieapps/Services.Base</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/vieapps/Services.Base</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+	</PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <WarningLevel>3</WarningLevel>
-    <DocumentationFile>bin\Debug\netstandard2.0\VIEApps.Services.Base.xml</DocumentationFile>
-  </PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+		<WarningLevel>3</WarningLevel>
+		<DocumentationFile>bin\Debug\netstandard2.0\VIEApps.Services.Base.xml</DocumentationFile>
+	</PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-    <WarningLevel>3</WarningLevel>
-    <DocumentationFile>bin\Release\netstandard2.0\VIEApps.Services.Base.xml</DocumentationFile>
-  </PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+		<WarningLevel>3</WarningLevel>
+		<DocumentationFile>bin\Release\netstandard2.0\VIEApps.Services.Base.xml</DocumentationFile>
+	</PropertyGroup>
 
-  <ItemGroup>
-    <None Remove=".DS_Store" />
-    <None Remove=".gitattributes" />
-    <None Remove=".gitignore" />
-    <None Remove="README.md" />
-  </ItemGroup>
+	<ItemGroup>
+		<None Remove=".DS_Store" />
+		<None Remove=".gitattributes" />
+		<None Remove=".gitignore" />
+		<None Remove="README.md" />
+	</ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="VIEApps.Components.Repository" Version="10.1.1.1711" />
-    <PackageReference Include="WampSharp" Version="1.2.6.44-beta" />
-    <PackageReference Include="WampSharp.Default.Client" Version="1.2.6.44-beta" />
-  </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="System.Reactive" Version="3.1.1" />
+		<PackageReference Include="System.Reactive.Core" Version="3.1.1" />
+		<PackageReference Include="System.Reactive.Interfaces" Version="3.1.1" />
+		<PackageReference Include="System.Reactive.Linq" Version="3.1.1" />
+		<PackageReference Include="System.Reactive.PlatformServices" Version="3.1.1" />
+		<PackageReference Include="VIEApps.Components.Repository" Version="10.1.1.1711" />
+		<PackageReference Include="WampSharp" Version="1.2.6.44-beta" />
+		<PackageReference Include="WampSharp.Default.Client" Version="1.2.6.44-beta" />
+	</ItemGroup>
 
 </Project>

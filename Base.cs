@@ -25,7 +25,7 @@ using net.vieapps.Components.Repository;
 namespace net.vieapps.Services
 {
 	/// <summary>
-	/// Presents an abstract service (base of all services)
+	/// Base of all business services
 	/// </summary>
 	public abstract class ServiceBase : IService, IServiceComponent, IDisposable
 	{
@@ -1281,6 +1281,7 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
+		#region Start & Stop
 		/// <summary>
 		/// Starts the service
 		/// </summary>
@@ -1399,5 +1400,7 @@ namespace net.vieapps.Services
 		{
 			this.Dispose();
 		}
+		#endregion
+
 	}
 }
