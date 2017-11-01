@@ -65,7 +65,7 @@
       <Version>2.0.1</Version>
     </PackageReference>
     <PackageReference Include="VIEApps.Components.Repository">
-      <Version>10.1.0.3</Version>
+      <Version>10.1.1.1711</Version>
     </PackageReference>
     <PackageReference Include="WampSharp">
       <Version>1.2.6.44-beta</Version>
