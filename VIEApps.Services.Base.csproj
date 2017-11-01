@@ -1,95 +1,46 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProductVersion>8.0.30703</ProductVersion>
-    <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{C496CEF5-9FF8-4364-9860-FCDEFED4E277}</ProjectGuid>
-    <OutputType>Library</OutputType>
-    <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>net.vieapps.Services</RootNamespace>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <AssemblyName>VIEApps.Services.Base</AssemblyName>
-    <TargetFrameworkVersion>v4.7.1</TargetFrameworkVersion>
-    <FileAlignment>512</FileAlignment>
-    <TargetFrameworkProfile />
-    <NuGetPackageImportStamp>
-    </NuGetPackageImportStamp>
-    <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
+    <Description>Core components of VIEApps NGX</Description>
+    <Authors>VIEApps.net</Authors>
+    <Company>VIEApps.net</Company>
+    <Product>VIEApps NGX</Product>
+    <Copyright>© 2017 VIEApps.net</Copyright>
+    <Version>10.1.1.1711</Version>
+    <AssemblyVersion>10.1.1.1711</AssemblyVersion>
+    <FileVersion>10.1.1.1711</FileVersion>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <PackageId>VIEApps.Services.Base</PackageId>
+    <PackageTags>services;microservices;vieapps;vieapps.components;vieapps.services;vieapps.microservices</PackageTags>
+    <PackageProjectUrl>https://github.com/vieapps/Services.Base</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/vieapps/Services.Base</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <DebugSymbols>true</DebugSymbols>
-    <DebugType>full</DebugType>
-    <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
     <WarningLevel>3</WarningLevel>
-    <DocumentationFile>bin\Debug\VIEApps.Services.Base.xml</DocumentationFile>
-    <Prefer32Bit>false</Prefer32Bit>
-    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <DocumentationFile>bin\Debug\netstandard2.0\VIEApps.Services.Base.xml</DocumentationFile>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <DebugType>pdbonly</DebugType>
-    <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
-    <DefineConstants>TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
     <WarningLevel>3</WarningLevel>
-    <DocumentationFile>bin\Release\VIEApps.Services.Base.xml</DocumentationFile>
-    <Prefer32Bit>false</Prefer32Bit>
-    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <DocumentationFile>bin\Release\netstandard2.0\VIEApps.Services.Base.xml</DocumentationFile>
   </PropertyGroup>
-  <PropertyGroup>
-    <SignAssembly>false</SignAssembly>
-  </PropertyGroup>
-  <PropertyGroup>
-    <AssemblyOriginatorKeyFile>
-    </AssemblyOriginatorKeyFile>
-  </PropertyGroup>
+
   <ItemGroup>
-    <Compile Include="Interceptors.cs" />
-    <Compile Include="Message.cs" />
-    <Compile Include="RequestInfo.cs" />
-    <Compile Include="Extensions.cs" />
-    <Compile Include="Session.cs" />
-    <Compile Include="Base.cs" />
-    <Compile Include="Interfaces.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
+    <None Remove=".DS_Store" />
+    <None Remove=".gitattributes" />
+    <None Remove=".gitignore" />
+    <None Remove="README.md" />
   </ItemGroup>
+
   <ItemGroup>
-    <PackageReference Include="Microsoft.NETCore.Platforms">
-      <Version>2.0.0</Version>
-    </PackageReference>
-    <PackageReference Include="NETStandard.Library">
-      <Version>2.0.1</Version>
-    </PackageReference>
-    <PackageReference Include="VIEApps.Components.Repository">
-      <Version>10.1.1.1711</Version>
-    </PackageReference>
-    <PackageReference Include="WampSharp">
-      <Version>1.2.6.44-beta</Version>
-    </PackageReference>
-    <PackageReference Include="WampSharp.Default.Client">
-      <Version>1.2.6.44-beta</Version>
-    </PackageReference>
+    <PackageReference Include="VIEApps.Components.Repository" Version="10.1.1.1711" />
+    <PackageReference Include="WampSharp" Version="1.2.6.44-beta" />
+    <PackageReference Include="WampSharp.Default.Client" Version="1.2.6.44-beta" />
   </ItemGroup>
-  <ItemGroup>
-    <None Include="app.config" />
-  </ItemGroup>
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <Import Project="..\..\packages\NETStandard.Library.2.0.1\build\netstandard2.0\NETStandard.Library.targets" Condition="Exists('..\..\packages\NETStandard.Library.2.0.1\build\netstandard2.0\NETStandard.Library.targets')" />
-  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
-    <PropertyGroup>
-      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
-    </PropertyGroup>
-    <Error Condition="!Exists('..\..\packages\NETStandard.Library.2.0.1\build\netstandard2.0\NETStandard.Library.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\..\packages\NETStandard.Library.2.0.1\build\netstandard2.0\NETStandard.Library.targets'))" />
-  </Target>
-  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
-       Other similar extension points exist, see Microsoft.Common.targets.
-  <Target Name="BeforeBuild">
-  </Target>
-  <Target Name="AfterBuild">
-  </Target>
-  -->
+
 </Project>

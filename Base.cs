@@ -1,11 +1,11 @@
 ﻿#region Related components
 using System;
-using SystemEx;
+using System.Linq;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Configuration;
-using System.Linq;
+using System.Diagnostics;
 
 using WampSharp.V2;
 using WampSharp.V2.Rpc;
@@ -27,7 +27,7 @@ namespace net.vieapps.Services
 	/// <summary>
 	/// Presents an abstract service (base of all services)
 	/// </summary>
-	public abstract class BaseService : IService, IDisposable
+	public abstract class ServiceBase : IService, IServiceComponent, IDisposable
 	{
 		/// <summary>
 		/// Gets the name of this service (for working with related URIs)
@@ -53,7 +53,7 @@ namespace net.vieapps.Services
 		long _incommingChannelSessionID = 0, _outgoingChannelSessionID = 0;
 		System.Action _onIncomingChannelClosing = null, _onOutgoingChannelClosing = null;
 
-		IAsyncDisposable _instance = null;
+		SystemEx.IAsyncDisposable _instance = null;
 		IDisposable _communicator = null;
 		IRTUService _rtuService = null;
 		IManagementService _managementService = null;
@@ -249,7 +249,7 @@ namespace net.vieapps.Services
 		/// <param name="onSuccess"></param>
 		/// <param name="onError"></param>
 		/// <returns></returns>
-		protected async Task RegisterServiceAsync(Action<BaseService> onSuccess = null, Action<Exception> onError = null)
+		protected async Task RegisterServiceAsync(Action<ServiceBase> onSuccess = null, Action<Exception> onError = null)
 		{
 			await this.OpenIncomingChannelAsync();
 			try
@@ -655,6 +655,32 @@ namespace net.vieapps.Services
 		protected void WriteLogs(RequestInfo requestInfo, List<string> logs, Exception exception = null)
 		{
 			this.WriteLogs(requestInfo.CorrelationID, requestInfo.ServiceName, requestInfo.ObjectName, logs, exception);
+		}
+
+		/// <summary>
+		/// Writes a log message to the terminator or the standard output stream
+		/// </summary>
+		/// <param name="correlationID">The string that presents correlation identity</param>
+		/// <param name="message">The log message</param>
+		/// <param name="exception">The exception</param>
+		/// <param name="updateCentralizedLogs">true to update the log message into centralized logs of the API Gateway</param>
+		public virtual void WriteLog(string correlationID, string message, Exception exception = null, bool updateCentralizedLogs = true)
+		{
+			// prepare
+			var msg = string.IsNullOrWhiteSpace(message)
+				? exception?.Message ?? ""
+				: message;
+
+			// update the log message into centralized logs of the API Gateway
+			if (updateCentralizedLogs)
+				this.WriteLog(correlationID ?? UtilityService.NewUID, this.ServiceName, null, msg, exception);
+
+			// write to the terminator or the standard output stream
+			Console.WriteLine(msg);
+			if (exception != null)
+				Console.WriteLine("-----------------------\r\n" + "==> [" + exception.GetType().GetTypeName(true) + "]: " + exception.Message + "\r\n" + exception.StackTrace + "\r\n-----------------------");
+			else
+				Console.WriteLine("~~~~~~~~~~~~~~~~~~~~>");
 		}
 		#endregion
 
@@ -1256,6 +1282,69 @@ namespace net.vieapps.Services
 		#endregion
 
 		/// <summary>
+		/// Starts the service
+		/// </summary>
+		/// <param name="args">The starting arguments</param>
+		/// <param name="initializeRepository">true to initialize the repository of the service</param>
+		/// <param name="nextAction">The next action to run (synchronous)</param>
+		/// <param name="nextActionAsync">The next action to run (asynchronous)</param>
+		public virtual void Start(string[] args = null, bool initializeRepository = true, System.Action nextAction = null, Func<Task> nextActionAsync = null)
+		{
+			// prepare
+			var correlationID = UtilityService.NewUID;
+
+			// initialize repository
+			if (initializeRepository)
+				try
+				{
+					this.WriteLog(correlationID, "Initializing the repository");
+					RepositoryStarter.Initialize();
+				}
+				catch (Exception ex)
+				{
+					this.WriteLog(correlationID, "Error occurred while initializing the repository", ex);
+				}
+
+			// start the service
+			Task.Run(async () =>
+			{
+				try
+				{
+					await this.StartAsync(
+						service => this.WriteLog(correlationID, "The service is registered - PID: " + Process.GetCurrentProcess().Id.ToString()),
+						exception => this.WriteLog(correlationID, "Error occurred while registering the service", exception)
+					);
+				}
+				catch (Exception ex)
+				{
+					this.WriteLog(correlationID, "Error occurred while starting the service", ex);
+				}
+			})
+			.ContinueWith(async (task) =>
+			{
+				try
+				{
+					nextAction?.Invoke();
+				}
+				catch (Exception ex)
+				{
+					this.WriteLog(correlationID, "Error occurred while running the next action (sync)", ex);
+				}
+
+				if (nextActionAsync != null)
+					try
+					{
+						await nextActionAsync().ConfigureAwait(false);
+					}
+					catch (Exception ex)
+					{
+						this.WriteLog(correlationID, "Error occurred while running the next action (async)", ex);
+					}
+			})
+			.ConfigureAwait(false);
+		}
+
+		/// <summary>
 		/// Starts the service in the short way (open channels and register service)
 		/// </summary>
 		/// <param name="onRegisterSuccess"></param>
@@ -1267,7 +1356,7 @@ namespace net.vieapps.Services
 		/// <param name="onIncomingConnectionError"></param>
 		/// <param name="onOutgoingConnectionError"></param>
 		/// <returns></returns>
-		protected async Task StartAsync(Action<BaseService> onRegisterSuccess = null, Action<Exception> onRegisterError = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
+		protected virtual async Task StartAsync(Action<ServiceBase> onRegisterSuccess = null, Action<Exception> onRegisterError = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
 		{
 			await this.OpenIncomingChannelAsync(onIncomingConnectionEstablished, onIncomingConnectionBroken, onIncomingConnectionError);
 			await this.RegisterServiceAsync(onRegisterSuccess, onRegisterError);
@@ -1277,7 +1366,7 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Stops this service (close channels and clean-up)
 		/// </summary>
-		protected void Stop()
+		public void Stop()
 		{
 			this._communicator?.Dispose();
 			Task.Run(async () =>
@@ -1306,7 +1395,7 @@ namespace net.vieapps.Services
 			GC.SuppressFinalize(this);
 		}
 
-		~BaseService()
+		~ServiceBase()
 		{
 			this.Dispose();
 		}

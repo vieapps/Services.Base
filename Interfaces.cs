@@ -167,6 +167,42 @@ namespace net.vieapps.Services
 	//  --------------------------------------------------------------------------------------------
 
 	/// <summary>
+	/// Presents a service component
+	/// </summary>
+	public interface IServiceComponent : IDisposable
+	{
+		/// <summary>
+		/// Gets the name of the service (for working with related URI)
+		/// </summary>
+		string ServiceName { get; }
+
+		/// <summary>
+		/// Starts the service
+		/// </summary>
+		/// <param name="args">The starting arguments</param>
+		/// <param name="initializeRepository">true to initialize the repository of the service</param>
+		/// <param name="nextAction">The next action to run (synchronous)</param>
+		/// <param name="nextActionAsync">The next action to run (asynchronous)</param>
+		void Start(string[] args = null, bool initializeRepository = true, System.Action nextAction = null, Func<Task> nextActionAsync = null);
+
+		/// <summary>
+		/// Stops the service
+		/// </summary>
+		void Stop();
+
+		/// <summary>
+		/// Writes a log message to the terminator or the standard output stream
+		/// </summary>
+		/// <param name="correlationID">The string that presents correlation identity</param>
+		/// <param name="message">The log message</param>
+		/// <param name="exception">The exception</param>
+		/// <param name="updateCentralizedLogs">true to update the log message into centralized logs of the API Gateway</param>
+		void WriteLog(string correlationID, string message, Exception exception = null, bool updateCentralizedLogs = true);
+	}
+
+	//  --------------------------------------------------------------------------------------------
+
+	/// <summary>
 	/// Presents a real-time update (RTU) service
 	/// </summary>
 	public interface IRTUService
