@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Configuration;
 using System.Diagnostics;
+using System.Reflection;
 
 using WampSharp.V2;
 using WampSharp.V2.Rpc;
@@ -676,11 +677,12 @@ namespace net.vieapps.Services
 				this.WriteLog(correlationID ?? UtilityService.NewUID, this.ServiceName, null, msg, exception);
 
 			// write to the terminator or the standard output stream
-			Console.WriteLine(msg);
-			if (exception != null)
-				Console.WriteLine("-----------------------\r\n" + "==> [" + exception.GetType().GetTypeName(true) + "]: " + exception.Message + "\r\n" + exception.StackTrace + "\r\n-----------------------");
-			else
-				Console.WriteLine("~~~~~~~~~~~~~~~~~~~~>");
+			if (Environment.UserInteractive)
+			{
+				Console.WriteLine(msg);
+				if (exception != null)
+					Console.WriteLine("-----------------------\r\n" + "==> [" + exception.GetType().GetTypeName(true) + "]: " + exception.Message + "\r\n" + exception.StackTrace + "\r\n-----------------------");
+			}
 		}
 		#endregion
 
@@ -1299,7 +1301,18 @@ namespace net.vieapps.Services
 				try
 				{
 					this.WriteLog(correlationID, "Initializing the repository");
-					RepositoryStarter.Initialize();
+					var assembly = Assembly.GetCallingAssembly();
+					RepositoryStarter.Initialize(
+						(new List<Assembly>() { assembly }).Concat(
+							assembly.GetReferencedAssemblies()
+								.Where(n => !n.Name.IsStartsWith("MsCorLib") && !n.Name.IsStartsWith("Microsoft")
+									&& !n.Name.IsStartsWith("System") && !n.Name.IsEquals("netstandard")
+									&& !n.Name.IsStartsWith("Newtonsoft") && !n.Name.IsStartsWith("MongoDB") && !n.Name.IsStartsWith("WampSharp")
+									&& !n.Name.IsStartsWith("VIEApps.Components.") && !n.Name.IsEquals("VIEApps.Services.Base")
+								)
+								.Select(n => Assembly.Load(n))
+						)
+					);
 				}
 				catch (Exception ex)
 				{
