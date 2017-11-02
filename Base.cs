@@ -71,6 +71,11 @@ namespace net.vieapps.Services
 				return "net.vieapps.services." + (this.ServiceName?.ToLower() ?? "unknown").Trim();
 			}
 		}
+
+		/// <summary>
+		/// Gets or Sets the value indicating weather current service component is running in user interactive mode
+		/// </summary>
+		public bool IsUserInteractive { get; set; } = false;
 		#endregion
 
 		#region Open/Close channels
@@ -677,7 +682,7 @@ namespace net.vieapps.Services
 				this.WriteLog(correlationID ?? UtilityService.NewUID, this.ServiceName, null, msg, exception);
 
 			// write to the terminator or the standard output stream
-			if (Environment.UserInteractive)
+			if (this.IsUserInteractive)
 			{
 				Console.WriteLine(msg);
 				if (exception != null)

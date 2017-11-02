@@ -177,6 +177,11 @@ namespace net.vieapps.Services
 		string ServiceName { get; }
 
 		/// <summary>
+		/// Gets or Sets the value indicating weather current service component is running in the user interactive mode
+		/// </summary>
+		bool IsUserInteractive { get; set; }
+
+		/// <summary>
 		/// Starts the service
 		/// </summary>
 		/// <param name="args">The starting arguments</param>
