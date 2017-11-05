@@ -140,7 +140,7 @@ namespace net.vieapps.Services
 			if (this._incommingChannel != null)
 			{
 				this._onIncomingChannelClosing?.Invoke();
-				this._incommingChannel.Close("The incoming channel is closed when stop the service [" + this.ServiceURI + "]", new GoodbyeDetails());
+				this._incommingChannel.Close($"The incoming channel is closed when stop the service [{this.ServiceURI}]", new GoodbyeDetails());
 				this._incommingChannel = null;
 			}
 		}
@@ -218,7 +218,7 @@ namespace net.vieapps.Services
 			if (this._outgoingChannel != null)
 			{
 				this._onOutgoingChannelClosing?.Invoke();
-				this._outgoingChannel.Close("The outgoing channel is closed when stop the service [" + this.ServiceURI + "]", new GoodbyeDetails());
+				this._outgoingChannel.Close($"The outgoing channel is closed when stop the service [{this.ServiceURI}]", new GoodbyeDetails());
 				this._outgoingChannel = null;
 			}
 		}
@@ -267,10 +267,10 @@ namespace net.vieapps.Services
 				// register the handler of inter-communicate messages
 				this._communicator?.Dispose();
 				this._communicator = this._incommingChannel.RealmProxy.Services
-					.GetSubject<CommunicateMessage>("net.vieapps.rtu.communicate.messages." + name)
+					.GetSubject<CommunicateMessage>($"net.vieapps.rtu.communicate.messages.{name}")
 					.Subscribe<CommunicateMessage>(
 						message => this.ProcessInterCommunicateMessage(message),
-						exception => this.WriteLog(UtilityService.NewUID, "APIGateway", "RTU", "Error occurred while fetching inter-communicate message of a service [" + this.ServiceName + "]: " + exception.Message, exception)
+						exception => this.WriteLog(UtilityService.NewUID, "APIGateway", "RTU", $"Error occurred while fetching inter-communicate message of a service [{this.ServiceName}]: {exception.Message}", exception)
 					);
 
 				// callback when done
@@ -517,9 +517,7 @@ namespace net.vieapps.Services
 				while (inner != null)
 				{
 					counter++;
-					fullStack += "\r\n"
-						+ "-- Inner (" + counter.ToString() + ") ----------------- " + "\r\n"
-						+ inner.StackTrace;
+					fullStack += "\r\n" + $"-- Inner ({counter}) ----------------- " + "\r\n" + inner.StackTrace;
 					inner = inner.InnerException;
 				}
 			}
@@ -613,9 +611,7 @@ namespace net.vieapps.Services
 				while (inner != null)
 				{
 					counter++;
-					fullStack += "\r\n"
-						+ "-- Inner (" + counter.ToString() + ") ----------------- " + "\r\n"
-						+ inner.StackTrace;
+					fullStack += "\r\n" + $"-- Inner ({counter}) ----------------- " + "\r\n" + inner.StackTrace;
 					inner = inner.InnerException;
 				}
 			}
@@ -686,7 +682,7 @@ namespace net.vieapps.Services
 			{
 				Console.WriteLine(msg);
 				if (exception != null)
-					Console.WriteLine("-----------------------\r\n" + "==> [" + exception.GetType().GetTypeName(true) + "]: " + exception.Message + "\r\n" + exception.StackTrace + "\r\n-----------------------");
+					Console.WriteLine("-----------------------\r\n" + $"==> [{exception.GetType().GetTypeName(true)}]: {exception.Message}" + "\r\n" + exception.StackTrace + "\r\n-----------------------");
 			}
 		}
 		#endregion
@@ -1219,12 +1215,12 @@ namespace net.vieapps.Services
 			if (cache != null)
 			{
 				var key = this.GetCacheKey<T>(filter, sort);
-				var keys = new List<string>() { key, key + "-total" };
+				var keys = new List<string>() { key, $"{key}-total" };
 				for (var index = 1; index <= 100; index++)
 				{
-					keys.Add(key + ":" + index.ToString());
-					keys.Add(key + ":" + index.ToString() + "-json");
-					keys.Add(key + ":" + index.ToString() + "-total");
+					keys.Add($"{key}:{index}");
+					keys.Add($"{key}:{index}-json");
+					keys.Add($"{key}:{index}-total");
 				}
 				cache.Remove(keys);
 			}
@@ -1245,7 +1241,7 @@ namespace net.vieapps.Services
 			message = string.IsNullOrWhiteSpace(message)
 				? exception != null
 					? exception.Message
-					: "Error occurred while processing with the service [net.vieapps.services." + requestInfo.ServiceName.ToLower().Trim() + "]"
+					: $"Error occurred while processing with the service [net.vieapps.services.{requestInfo.ServiceName.ToLower().Trim()}]"
 				: message;
 
 			if (writeLogs)
@@ -1310,8 +1306,7 @@ namespace net.vieapps.Services
 					RepositoryStarter.Initialize(
 						(new List<Assembly>() { assembly }).Concat(
 							assembly.GetReferencedAssemblies()
-								.Where(n => !n.Name.IsStartsWith("MsCorLib") && !n.Name.IsStartsWith("Microsoft")
-									&& !n.Name.IsStartsWith("System") && !n.Name.IsEquals("netstandard")
+								.Where(n => !n.Name.IsStartsWith("MsCorLib") && !n.Name.IsStartsWith("Microsoft") && !n.Name.IsStartsWith("System") && !n.Name.IsEquals("netstandard")
 									&& !n.Name.IsStartsWith("Newtonsoft") && !n.Name.IsStartsWith("MongoDB") && !n.Name.IsStartsWith("WampSharp")
 									&& !n.Name.IsStartsWith("VIEApps.Components.") && !n.Name.IsEquals("VIEApps.Services.Base")
 								)
@@ -1330,7 +1325,7 @@ namespace net.vieapps.Services
 				try
 				{
 					await this.StartAsync(
-						service => this.WriteLog(correlationID, "The service is registered - PID: " + Process.GetCurrentProcess().Id.ToString()),
+						service => this.WriteLog(correlationID, $"The service is registered - PID: {Process.GetCurrentProcess().Id}"),
 						exception => this.WriteLog(correlationID, "Error occurred while registering the service", exception)
 					);
 				}
