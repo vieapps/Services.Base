@@ -17,6 +17,9 @@ using WampSharp.Core.Listener;
 
 using Newtonsoft.Json.Linq;
 
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
+
 using net.vieapps.Components.Utility;
 using net.vieapps.Components.Security;
 using net.vieapps.Components.Caching;
@@ -61,6 +64,36 @@ namespace net.vieapps.Services
 		IMessagingService _messagingService = null;
 		Dictionary<string, IService> _businessServices = new Dictionary<string, IService>();
 
+		ILogger _logger;
+
+		public ServiceBase()
+		{
+			this._logger = new ServiceCollection()
+				.AddLogging(builder =>
+				{
+#if DEBUG
+					builder.SetMinimumLevel(LogLevel.Debug);
+#else
+					builder.SetMinimumLevel(LogLevel.Information);
+#endif
+					builder.AddConsole();
+				})
+				.BuildServiceProvider()
+				.GetService<ILoggerFactory>()
+				.CreateLogger(this.GetType());
+		}
+
+		/// <summary>
+		/// Gets the logger of the service
+		/// </summary>
+		public ILogger Logger
+		{
+			get
+			{
+				return this._logger;
+			}
+		}
+
 		/// <summary>
 		/// Gets the full URI of the service
 		/// </summary>
@@ -85,7 +118,7 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected virtual Tuple<string, string, bool> GetRouterInfo()
 		{
-			var address = UtilityService.GetAppSetting("RouterAddress", "ws://127.0.0.1:26429/");
+			var address = UtilityService.GetAppSetting("RouterAddress", "ws://127.0.0.1:16429/");
 			var realm = UtilityService.GetAppSetting("RouterRealm", "VIEAppsRealm");
 			var mode = UtilityService.GetAppSetting("RouterChannelsMode", "MsgPack");
 			return new Tuple<string, string, bool>(address, realm, mode.IsEquals("json"));
@@ -127,7 +160,7 @@ namespace net.vieapps.Services
 			if (onConnectionError != null)
 				this._incommingChannel.RealmProxy.Monitor.ConnectionError += new EventHandler<WampConnectionErrorEventArgs>(onConnectionError);
 
-			await this._incommingChannel.Open();
+			await this._incommingChannel.Open().ConfigureAwait(false);
 
 			this._onIncomingChannelClosing = onClosingConnection;
 		}
@@ -159,7 +192,7 @@ namespace net.vieapps.Services
 					await Task.Delay(delay > 0 ? delay : 0);
 					try
 					{
-						await this._incommingChannel.Open();
+						await this._incommingChannel.Open().ConfigureAwait(false);
 						onSuccess?.Invoke(this._incommingChannel);
 					}
 					catch (Exception ex)
@@ -205,7 +238,7 @@ namespace net.vieapps.Services
 			if (onConnectionError != null)
 				this._outgoingChannel.RealmProxy.Monitor.ConnectionError += new EventHandler<WampConnectionErrorEventArgs>(onConnectionError);
 
-			await this._outgoingChannel.Open();
+			await this._outgoingChannel.Open().ConfigureAwait(false);
 
 			this._onOutgoingChannelClosing = onClosingConnection;
 		}
@@ -237,7 +270,7 @@ namespace net.vieapps.Services
 					await Task.Delay(delay > 0 ? delay : 0);
 					try
 					{
-						await this._outgoingChannel.Open();
+						await this._outgoingChannel.Open().ConfigureAwait(false);
 						onSuccess?.Invoke(this._outgoingChannel);
 					}
 					catch (Exception ex)
@@ -262,7 +295,7 @@ namespace net.vieapps.Services
 			{
 				// register the service
 				var name = this.ServiceName.Trim().ToLower();
-				this._instance = await this._incommingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, new RegistrationInterceptor(name));
+				this._instance = await this._incommingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, new RegistrationInterceptor(name)).ConfigureAwait(false);
 
 				// register the handler of inter-communicate messages
 				this._communicator?.Dispose();
@@ -288,7 +321,7 @@ namespace net.vieapps.Services
 		{
 			if (this._rtuService == null)
 			{
-				await this.OpenOutgoingChannelAsync();
+				await this.OpenOutgoingChannelAsync().ConfigureAwait(false);
 				this._rtuService = this._outgoingChannel.RealmProxy.Services.GetCalleeProxy<IRTUService>();
 			}
 		}
@@ -301,8 +334,8 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected async Task SendUpdateMessageAsync(UpdateMessage message, CancellationToken cancellationToken = default(CancellationToken))
 		{
-			await this.InitializeRTUServiceAsync();
-			await this._rtuService.SendUpdateMessageAsync(message, cancellationToken);
+			await this.InitializeRTUServiceAsync().ConfigureAwait(false);
+			await this._rtuService.SendUpdateMessageAsync(message, cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <summary>
@@ -315,8 +348,8 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected async Task SendUpdateMessagesAsync(List<BaseMessage> messages, string deviceID, string excludedDeviceID = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
-			await this.InitializeRTUServiceAsync();
-			await this._rtuService.SendUpdateMessagesAsync(messages, deviceID, excludedDeviceID, cancellationToken);
+			await this.InitializeRTUServiceAsync().ConfigureAwait(false);
+			await this._rtuService.SendUpdateMessagesAsync(messages, deviceID, excludedDeviceID, cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <summary>
@@ -328,8 +361,8 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected async Task SendInterCommunicateMessageAsync(string serviceName, BaseMessage message, CancellationToken cancellationToken = default(CancellationToken))
 		{
-			await this.InitializeRTUServiceAsync();
-			await this._rtuService.SendInterCommunicateMessageAsync(serviceName, message, cancellationToken);
+			await this.InitializeRTUServiceAsync().ConfigureAwait(false);
+			await this._rtuService.SendInterCommunicateMessageAsync(serviceName, message, cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <summary>
@@ -341,8 +374,8 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected async Task SendInterCommunicateMessagesAsync(string serviceName, List<BaseMessage> messages, CancellationToken cancellationToken = default(CancellationToken))
 		{
-			await this.InitializeRTUServiceAsync();
-			await this._rtuService.SendInterCommunicateMessagesAsync(serviceName, messages, cancellationToken);
+			await this.InitializeRTUServiceAsync().ConfigureAwait(false);
+			await this._rtuService.SendInterCommunicateMessagesAsync(serviceName, messages, cancellationToken).ConfigureAwait(false);
 		}
 		#endregion
 
@@ -351,7 +384,7 @@ namespace net.vieapps.Services
 		{
 			if (this._messagingService == null)
 			{
-				await this.OpenOutgoingChannelAsync();
+				await this.OpenOutgoingChannelAsync().ConfigureAwait(false);
 				this._messagingService = this._outgoingChannel.RealmProxy.Services.GetCalleeProxy<IMessagingService>();
 			}
 		}
@@ -366,8 +399,8 @@ namespace net.vieapps.Services
 		{
 			try
 			{
-				await this.InitializeMessagingServiceAsync();
-				await this._messagingService.SendEmailAsync(message, cancellationToken);
+				await this.InitializeMessagingServiceAsync().ConfigureAwait(false);
+				await this._messagingService.SendEmailAsync(message, cancellationToken).ConfigureAwait(false);
 			}
 			catch { }
 		}
@@ -450,8 +483,8 @@ namespace net.vieapps.Services
 		{
 			try
 			{
-				await this.InitializeMessagingServiceAsync();
-				await this._messagingService.SendWebHookAsync(message, cancellationToken);
+				await this.InitializeMessagingServiceAsync().ConfigureAwait(false);
+				await this._messagingService.SendWebHookAsync(message, cancellationToken).ConfigureAwait(false);
 			}
 			catch { }
 		}
@@ -462,7 +495,7 @@ namespace net.vieapps.Services
 		{
 			if (this._managementService == null)
 			{
-				await this.OpenOutgoingChannelAsync();
+				await this.OpenOutgoingChannelAsync().ConfigureAwait(false);
 				this._managementService = this._outgoingChannel.RealmProxy.Services.GetCalleeProxy<IManagementService>();
 			}
 		}
@@ -482,8 +515,8 @@ namespace net.vieapps.Services
 		{
 			try
 			{
-				await this.InitializeManagementServiceAsync();
-				await this._managementService.WriteLogAsync(correlationID, serviceName, objectName, log, simpleStack, fullStack, cancellationToken);
+				await this.InitializeManagementServiceAsync().ConfigureAwait(false);
+				await this._managementService.WriteLogAsync(correlationID, serviceName, objectName, log, simpleStack, fullStack, cancellationToken).ConfigureAwait(false);
 			}
 			catch { }
 		}
@@ -550,7 +583,7 @@ namespace net.vieapps.Services
 		{
 			Task.Run(async () =>
 			{
-				await this.WriteLogAsync(correlationID, serviceName, objectName, log, exception);
+				await this.WriteLogAsync(correlationID, serviceName, objectName, log, exception).ConfigureAwait(false);
 			}).ConfigureAwait(false);
 		}
 
@@ -580,8 +613,8 @@ namespace net.vieapps.Services
 		{
 			try
 			{
-				await this.InitializeManagementServiceAsync();
-				await this._managementService.WriteLogsAsync(correlationID, serviceName, objectName, logs, simpleStack, fullStack, cancellationToken);
+				await this.InitializeManagementServiceAsync().ConfigureAwait(false);
+				await this._managementService.WriteLogsAsync(correlationID, serviceName, objectName, logs, simpleStack, fullStack, cancellationToken).ConfigureAwait(false);
 			}
 			catch { }
 		}
@@ -644,7 +677,7 @@ namespace net.vieapps.Services
 		{
 			Task.Run(async () =>
 			{
-				await this.WriteLogsAsync(correlationID, serviceName, objectName, logs, exception);
+				await this.WriteLogsAsync(correlationID, serviceName, objectName, logs, exception).ConfigureAwait(false);
 			}).ConfigureAwait(false);
 		}
 
@@ -680,9 +713,10 @@ namespace net.vieapps.Services
 			// write to the terminator or the standard output stream
 			if (this.IsUserInteractive)
 			{
-				Console.WriteLine(msg);
-				if (exception != null)
-					Console.WriteLine("-----------------------\r\n" + $"==> [{exception.GetType().GetTypeName(true)}]: {exception.Message}" + "\r\n" + exception.StackTrace + "\r\n-----------------------");
+				if (exception == null)
+					this._logger.LogInformation(msg);
+				else
+					this._logger.LogError(exception, msg);
 			}
 		}
 		#endregion
@@ -1327,7 +1361,7 @@ namespace net.vieapps.Services
 					await this.StartAsync(
 						service => this.WriteLog(correlationID, $"The service is registered - PID: {Process.GetCurrentProcess().Id}"),
 						exception => this.WriteLog(correlationID, "Error occurred while registering the service", exception)
-					);
+					).ConfigureAwait(false);
 				}
 				catch (Exception ex)
 				{
@@ -1372,9 +1406,9 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected virtual async Task StartAsync(Action<ServiceBase> onRegisterSuccess = null, Action<Exception> onRegisterError = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
 		{
-			await this.OpenIncomingChannelAsync(onIncomingConnectionEstablished, onIncomingConnectionBroken, onIncomingConnectionError);
-			await this.RegisterServiceAsync(onRegisterSuccess, onRegisterError);
-			await this.OpenOutgoingChannelAsync(onOutgoingConnectionEstablished, onOutgoingConnectionBroken, onOutgoingConnectionError);
+			await this.OpenIncomingChannelAsync(onIncomingConnectionEstablished, onIncomingConnectionBroken, onIncomingConnectionError).ConfigureAwait(false);
+			await this.RegisterServiceAsync(onRegisterSuccess, onRegisterError).ConfigureAwait(false);
+			await this.OpenOutgoingChannelAsync(onOutgoingConnectionEstablished, onOutgoingConnectionBroken, onOutgoingConnectionError).ConfigureAwait(false);
 		}
 
 		/// <summary>
@@ -1389,7 +1423,7 @@ namespace net.vieapps.Services
 				{
 					try
 					{
-						await this._instance.DisposeAsync();
+						await this._instance.DisposeAsync().ConfigureAwait(false);
 					}
 					catch { }
 					this._instance = null;

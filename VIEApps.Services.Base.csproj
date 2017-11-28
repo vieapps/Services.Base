@@ -38,14 +38,12 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<PackageReference Include="Microsoft.Extensions.Logging" Version="2.0.0" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Console" Version="2.0.0" />
 		<PackageReference Include="System.Reactive" Version="3.1.1" />
-		<PackageReference Include="System.Reactive.Core" Version="3.1.1" />
-		<PackageReference Include="System.Reactive.Interfaces" Version="3.1.1" />
-		<PackageReference Include="System.Reactive.Linq" Version="3.1.1" />
-		<PackageReference Include="System.Reactive.PlatformServices" Version="3.1.1" />
-		<PackageReference Include="VIEApps.Components.Repository" Version="10.1.1.1711" />
-		<PackageReference Include="WampSharp" Version="1.2.6.44-beta" />
-		<PackageReference Include="WampSharp.Default.Client" Version="1.2.6.44-beta" />
+		<PackageReference Include="VIEApps.Components.Repository" Version="10.1.4.1712" />
+		<PackageReference Include="WampSharp" Version="1.2.7.45-beta" />
+		<PackageReference Include="WampSharp.Default.Client" Version="1.2.7.45-beta" />
 	</ItemGroup>
 
 </Project>

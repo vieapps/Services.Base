@@ -27,7 +27,7 @@ namespace net.vieapps.Services
 
 		public override string GetProcedureUri(MethodInfo method)
 		{
-			return string.Format(base.GetProcedureUri(method), this._name);
+			return string.Format(base.GetProcedureUri(method), this._name.Trim().ToLower());
 		}
 	}
 
@@ -52,7 +52,7 @@ namespace net.vieapps.Services
 
 		public override string GetProcedureUri(MethodInfo method)
 		{
-			return string.Format(base.GetProcedureUri(method), this._name);
+			return string.Format(base.GetProcedureUri(method), this._name.Trim().ToLower());
 		}
 	}
 }
