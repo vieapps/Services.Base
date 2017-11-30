@@ -274,9 +274,9 @@ namespace net.vieapps.Services
 	//  --------------------------------------------------------------------------------------------
 
 	/// <summary>
-	/// Presents a management service
+	/// Presents a centralize logging service
 	/// </summary>
-	public interface IManagementService
+	public interface ILoggingService
 	{
 		/// <summary>
 		/// Writes the log into centralized log storage of all services

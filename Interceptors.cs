@@ -20,14 +20,16 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="name">The string that presents name of the service (for registering with right URI)</param>
 		/// <param name="options">The options for registering (default is round robin)</param>
-		public RegistrationInterceptor(string name, RegisterOptions options = null) : base(options ?? new RegisterOptions() { Invoke = WampInvokePolicy.Roundrobin })
+		public RegistrationInterceptor(string name = null, RegisterOptions options = null) : base(options ?? new RegisterOptions() { Invoke = WampInvokePolicy.Roundrobin })
 		{
 			this._name = name;
 		}
 
 		public override string GetProcedureUri(MethodInfo method)
 		{
-			return string.Format(base.GetProcedureUri(method), this._name.Trim().ToLower());
+			return string.IsNullOrWhiteSpace(this._name)
+				? base.GetProcedureUri(method)
+				: string.Format(base.GetProcedureUri(method), this._name.Trim().ToLower());
 		}
 	}
 
@@ -45,14 +47,21 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="name">The string that presents name of the service (for registering with right URI)</param>
 		/// <param name="options">The options for calling</param>
-		public ProxyInterceptor(string name, CallOptions options = null) : base(options ?? new CallOptions())
+		public ProxyInterceptor(string name = null, CallOptions options = null) : base(options ?? new CallOptions())
 		{
 			this._name = name;
 		}
 
 		public override string GetProcedureUri(MethodInfo method)
 		{
-			return string.Format(base.GetProcedureUri(method), this._name.Trim().ToLower());
+			return string.IsNullOrWhiteSpace(this._name)
+				? base.GetProcedureUri(method)
+				: string.Format(base.GetProcedureUri(method), this._name.Trim().ToLower());
+		}
+
+		public static CachedCalleeProxyInterceptor Create(string name)
+		{
+			return new CachedCalleeProxyInterceptor(new ProxyInterceptor(name));
 		}
 	}
 }

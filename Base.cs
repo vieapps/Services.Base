@@ -60,7 +60,7 @@ namespace net.vieapps.Services
 		SystemEx.IAsyncDisposable _instance = null;
 		IDisposable _communicator = null;
 		IRTUService _rtuService = null;
-		IManagementService _managementService = null;
+		ILoggingService _loggingService = null;
 		IMessagingService _messagingService = null;
 		Dictionary<string, IService> _businessServices = new Dictionary<string, IService>();
 
@@ -491,12 +491,12 @@ namespace net.vieapps.Services
 		#endregion
 
 		#region Working with logs
-		async Task InitializeManagementServiceAsync()
+		async Task InitializeLoggingServiceAsync()
 		{
-			if (this._managementService == null)
+			if (this._loggingService == null)
 			{
 				await this.OpenOutgoingChannelAsync().ConfigureAwait(false);
-				this._managementService = this._outgoingChannel.RealmProxy.Services.GetCalleeProxy<IManagementService>();
+				this._loggingService = this._outgoingChannel.RealmProxy.Services.GetCalleeProxy<ILoggingService>();
 			}
 		}
 
@@ -515,8 +515,8 @@ namespace net.vieapps.Services
 		{
 			try
 			{
-				await this.InitializeManagementServiceAsync().ConfigureAwait(false);
-				await this._managementService.WriteLogAsync(correlationID, serviceName, objectName, log, simpleStack, fullStack, cancellationToken).ConfigureAwait(false);
+				await this.InitializeLoggingServiceAsync().ConfigureAwait(false);
+				await this._loggingService.WriteLogAsync(correlationID, serviceName, objectName, log, simpleStack, fullStack, cancellationToken).ConfigureAwait(false);
 			}
 			catch { }
 		}
@@ -613,8 +613,8 @@ namespace net.vieapps.Services
 		{
 			try
 			{
-				await this.InitializeManagementServiceAsync().ConfigureAwait(false);
-				await this._managementService.WriteLogsAsync(correlationID, serviceName, objectName, logs, simpleStack, fullStack, cancellationToken).ConfigureAwait(false);
+				await this.InitializeLoggingServiceAsync().ConfigureAwait(false);
+				await this._loggingService.WriteLogsAsync(correlationID, serviceName, objectName, logs, simpleStack, fullStack, cancellationToken).ConfigureAwait(false);
 			}
 			catch { }
 		}
@@ -739,7 +739,7 @@ namespace net.vieapps.Services
 				{
 					if (!this._businessServices.TryGetValue(name, out service))
 					{
-						service = this._outgoingChannel.RealmProxy.Services.GetCalleeProxy<IService>(new CachedCalleeProxyInterceptor(new ProxyInterceptor(name)));
+						service = this._outgoingChannel.RealmProxy.Services.GetCalleeProxy<IService>(ProxyInterceptor.Create(name));
 						this._businessServices.Add(name, service);
 					}
 				}
