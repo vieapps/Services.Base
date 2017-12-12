@@ -59,7 +59,12 @@ namespace net.vieapps.Services
 				: string.Format(base.GetProcedureUri(method), this._name.Trim().ToLower());
 		}
 
-		public static CachedCalleeProxyInterceptor Create(string name)
+		/// <summary>
+		/// Creates an interceptor for calling a service
+		/// </summary>
+		/// <param name="name">The string that presents name of service (for marking URI)</param>
+		/// <returns></returns>
+		public static CachedCalleeProxyInterceptor Create(string name = null)
 		{
 			return new CachedCalleeProxyInterceptor(new ProxyInterceptor(name));
 		}

@@ -4,14 +4,15 @@
 		<TargetFramework>netstandard2.0</TargetFramework>
 		<AllowUnsafeBlocks>false</AllowUnsafeBlocks>
 		<AssemblyName>VIEApps.Services.Base</AssemblyName>
-		<Description>Core components of VIEApps NGX</Description>
+		<AssemblyTitle>VIEApps NGX Base</AssemblyTitle>
 		<Authors>VIEApps.net</Authors>
 		<Company>VIEApps.net</Company>
 		<Product>VIEApps NGX</Product>
-		<Copyright>© 2017 VIEApps.net</Copyright>
-		<Version>10.1.1.1711</Version>
-		<AssemblyVersion>10.1.1.1711</AssemblyVersion>
-		<FileVersion>10.1.1.1711</FileVersion>
+		<Copyright>© 2018 VIEApps.net</Copyright>
+		<Version>10.1.2.1801</Version>
+		<AssemblyVersion>10.1.2.1801</AssemblyVersion>
+		<FileVersion>10.1.2.1801</FileVersion>
+		<InformationalVersion>v10.1.netstandard-2+rev:2018.01.02</InformationalVersion>
 		<GeneratePackageOnBuild>false</GeneratePackageOnBuild>
 		<PackageId>VIEApps.Services.Base</PackageId>
 		<PackageTags>services;microservices;vieapps;vieapps.components;vieapps.services;vieapps.microservices</PackageTags>
@@ -41,7 +42,8 @@
 		<PackageReference Include="Microsoft.Extensions.Logging" Version="2.0.0" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Console" Version="2.0.0" />
 		<PackageReference Include="System.Reactive" Version="3.1.1" />
-		<PackageReference Include="VIEApps.Components.Repository" Version="10.1.5.1801-rc" />
+		<PackageReference Include="VIEApps.Components.Repository" Version="10.1.5.1801-rc5" />
+		<PackageReference Include="VIEApps.Components.Utility" Version="10.1.4.1801-rc5" />
 		<PackageReference Include="WampSharp" Version="1.2.7.45-beta" />
 		<PackageReference Include="WampSharp.Default.Client" Version="1.2.7.45-beta" />
 	</ItemGroup>
