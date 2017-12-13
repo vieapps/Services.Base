@@ -1456,7 +1456,7 @@ namespace net.vieapps.Services
 			.ConfigureAwait(false);
 		}
 
-		public void Dispose()
+		public virtual void Dispose()
 		{
 			this.Stop();
 			GC.SuppressFinalize(this);
