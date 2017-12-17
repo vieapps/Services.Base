@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Configuration;
 using System.Diagnostics;
 using System.Reflection;
+using System.Reactive.Linq;
 
 using WampSharp.V2;
 using WampSharp.V2.Rpc;
@@ -64,9 +65,12 @@ namespace net.vieapps.Services
 		IMessagingService _messagingService = null;
 		Dictionary<string, IService> _businessServices = new Dictionary<string, IService>();
 
+		internal protected CancellationTokenSource CancellationTokenSource { get; private set; } = new CancellationTokenSource();
+		internal protected List<IDisposable> Timers { get; private set; } = new List<IDisposable>();
+
 		ILogger _logger;
 
-		public ServiceBase()
+		protected ServiceBase()
 		{
 			this._logger = new ServiceCollection()
 				.AddLogging(builder =>
@@ -1222,6 +1226,23 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
+		#region Working with timers
+		/// <summary>
+		/// Starts a timer (using ReactiveX)
+		/// </summary>
+		/// <param name="action">The action to fire</param>
+		/// <param name="interval">The elapsed time for firing the action (seconds)</param>
+		/// <param name="delay">Delay time (miliseconds) before firing the action</param>
+		/// <returns></returns>
+		protected IDisposable StartTimer(System.Action action, int interval, int delay = 0)
+		{
+			interval = interval < 1 ? 1 : interval;
+			var timer = Observable.Timer(TimeSpan.FromMilliseconds(delay > 0 ? delay : interval * 1000), TimeSpan.FromSeconds(interval)).Subscribe(_ => action?.Invoke());
+			this.Timers.Add(timer);
+			return timer;
+		}
+		#endregion
+
 		#region Working with cache
 		/// <summary>
 		/// Gets the key for working with caching
@@ -1435,7 +1456,16 @@ namespace net.vieapps.Services
 		/// </summary>
 		public void Stop()
 		{
+			try
+			{
+				this.CancellationTokenSource.Cancel();
+			}
+			catch { }
+			this.CancellationTokenSource.Dispose();
+			this.Timers.ForEach(timer => timer.Dispose());
+
 			this._communicator?.Dispose();
+
 			Task.Run(async () =>
 			{
 				if (this._instance != null)
