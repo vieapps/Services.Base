@@ -1369,22 +1369,25 @@ namespace net.vieapps.Services
 		{
 			// prepare
 			var correlationID = UtilityService.NewUID;
+			this.WriteLog(correlationID, "Start the service...");
 
 			// initialize repository
 			if (initializeRepository)
 				try
 				{
 					this.WriteLog(correlationID, "Initializing the repository");
-					var assembly = Assembly.GetCallingAssembly();
 					RepositoryStarter.Initialize(
-						(new List<Assembly>() { assembly }).Concat(
-							assembly.GetReferencedAssemblies()
-								.Where(n => !n.Name.IsStartsWith("MsCorLib") && !n.Name.IsStartsWith("Microsoft") && !n.Name.IsStartsWith("System") && !n.Name.IsEquals("netstandard")
-									&& !n.Name.IsStartsWith("Newtonsoft") && !n.Name.IsStartsWith("MongoDB") && !n.Name.IsStartsWith("WampSharp")
-									&& !n.Name.IsStartsWith("VIEApps.Components.") && !n.Name.IsEquals("VIEApps.Services.Base")
-								)
-								.Select(n => Assembly.Load(n))
-						)
+						new List<Assembly>() { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
+							.Where(n => !n.Name.IsStartsWith("MsCorLib") && !n.Name.IsStartsWith("System") && !n.Name.IsStartsWith("Microsoft") && !n.Name.IsEquals("NETStandard")
+								&& !n.Name.IsStartsWith("Newtonsoft") && !n.Name.IsStartsWith("WampSharp") && !n.Name.IsStartsWith("Castle.") && !n.Name.IsStartsWith("StackExchange.")
+								&& !n.Name.IsStartsWith("MongoDB") && !n.Name.IsStartsWith("MySql") && !n.Name.IsStartsWith("Oracle") && !n.Name.IsStartsWith("Npgsql")
+								&& !n.Name.IsStartsWith("VIEApps.Components.") && !n.Name.IsEquals("VIEApps.Services.Base") && !n.Name.IsStartsWith("VIEApps.Services.APIGateway"))
+							.Select(n => Assembly.Load(n))
+						),
+						(log, ex) =>
+						{
+							this.WriteLog(correlationID, log, ex);
+						}
 					);
 				}
 				catch (Exception ex)
