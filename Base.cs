@@ -70,23 +70,6 @@ namespace net.vieapps.Services
 
 		ILogger _logger;
 
-		protected ServiceBase()
-		{
-			this._logger = new ServiceCollection()
-				.AddLogging(builder =>
-				{
-#if DEBUG
-					builder.SetMinimumLevel(LogLevel.Debug);
-#else
-					builder.SetMinimumLevel(LogLevel.Information);
-#endif
-					builder.AddConsole();
-				})
-				.BuildServiceProvider()
-				.GetService<ILoggerFactory>()
-				.CreateLogger(this.GetType());
-		}
-
 		/// <summary>
 		/// Gets the logger of the service
 		/// </summary>
@@ -94,6 +77,20 @@ namespace net.vieapps.Services
 		{
 			get
 			{
+				if (this._logger == null)
+					this._logger = new ServiceCollection()
+						.AddLogging(builder =>
+						{
+#if DEBUG
+							builder.SetMinimumLevel(LogLevel.Debug);
+#else
+						builder.SetMinimumLevel(LogLevel.Information);
+#endif
+							builder.AddConsole();
+						})
+						.BuildServiceProvider()
+						.GetService<ILoggerFactory>()
+						.CreateLogger(this.GetType());
 				return this._logger;
 			}
 		}
@@ -644,9 +641,9 @@ namespace net.vieapps.Services
 			if (this.IsUserInteractive)
 			{
 				if (exception == null)
-					this._logger.LogInformation(log);
+					this.Logger.LogInformation(log);
 				else
-					this._logger.LogError(exception, log);
+					this.Logger.LogError(exception, log);
 			}
 		}
 
@@ -672,9 +669,9 @@ namespace net.vieapps.Services
 			if (this.IsUserInteractive)
 			{
 				if (exception == null)
-					this._logger.LogInformation(log);
+					this.Logger.LogInformation(log);
 				else
-					this._logger.LogError(exception, log);
+					this.Logger.LogError(exception, log);
 			}
 		}
 
@@ -1363,37 +1360,11 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="args">The starting arguments</param>
 		/// <param name="initializeRepository">true to initialize the repository of the service</param>
-		/// <param name="nextAction">The next action to run (synchronous)</param>
-		/// <param name="nextActionAsync">The next action to run (asynchronous)</param>
-		public virtual void Start(string[] args = null, bool initializeRepository = true, System.Action nextAction = null, Func<Task> nextActionAsync = null)
+		/// <param name="next">The next action to run</param>
+		public virtual void Start(string[] args = null, bool initializeRepository = true, Func<IService, Task> next = null)
 		{
 			// prepare
 			var correlationID = UtilityService.NewUID;
-			this.WriteLog(correlationID, "Start the service...");
-
-			// initialize repository
-			if (initializeRepository)
-				try
-				{
-					this.WriteLog(correlationID, "Initializing the repository");
-					RepositoryStarter.Initialize(
-						new List<Assembly>() { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
-							.Where(n => !n.Name.IsStartsWith("MsCorLib") && !n.Name.IsStartsWith("System") && !n.Name.IsStartsWith("Microsoft") && !n.Name.IsEquals("NETStandard")
-								&& !n.Name.IsStartsWith("Newtonsoft") && !n.Name.IsStartsWith("WampSharp") && !n.Name.IsStartsWith("Castle.") && !n.Name.IsStartsWith("StackExchange.")
-								&& !n.Name.IsStartsWith("MongoDB") && !n.Name.IsStartsWith("MySql") && !n.Name.IsStartsWith("Oracle") && !n.Name.IsStartsWith("Npgsql")
-								&& !n.Name.IsStartsWith("VIEApps.Components.") && !n.Name.IsEquals("VIEApps.Services.Base") && !n.Name.IsStartsWith("VIEApps.Services.APIGateway"))
-							.Select(n => Assembly.Load(n))
-						),
-						(log, ex) =>
-						{
-							this.WriteLog(correlationID, log, ex);
-						}
-					);
-				}
-				catch (Exception ex)
-				{
-					this.WriteLog(correlationID, "Error occurred while initializing the repository", ex);
-				}
 
 			// start the service
 			Task.Run(async () =>
@@ -1407,28 +1378,44 @@ namespace net.vieapps.Services
 				}
 				catch (Exception ex)
 				{
-					this.WriteLog(correlationID, "Error occurred while starting the service", ex);
+					await this.WriteLogAsync(correlationID, "Error occurred while starting the service", ex).ConfigureAwait(false);
 				}
 			})
 			.ContinueWith(async (task) =>
 			{
-				try
-				{
-					nextAction?.Invoke();
-				}
-				catch (Exception ex)
-				{
-					this.WriteLog(correlationID, "Error occurred while running the next action (sync)", ex);
-				}
-
-				if (nextActionAsync != null)
+				// initialize repository
+				if (initializeRepository)
 					try
 					{
-						await nextActionAsync().ConfigureAwait(false);
+						await this.WriteLogAsync(correlationID, "Initializing the repository").ConfigureAwait(false);
+						RepositoryStarter.Initialize(
+							new List<Assembly>() { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
+								.Where(n => !n.Name.IsStartsWith("MsCorLib") && !n.Name.IsStartsWith("System") && !n.Name.IsStartsWith("Microsoft") && !n.Name.IsEquals("NETStandard")
+									&& !n.Name.IsStartsWith("Newtonsoft") && !n.Name.IsStartsWith("WampSharp") && !n.Name.IsStartsWith("Castle.") && !n.Name.IsStartsWith("StackExchange.")
+									&& !n.Name.IsStartsWith("MongoDB") && !n.Name.IsStartsWith("MySql") && !n.Name.IsStartsWith("Oracle") && !n.Name.IsStartsWith("Npgsql")
+									&& !n.Name.IsStartsWith("VIEApps.Components.") && !n.Name.IsEquals("VIEApps.Services.Base") && !n.Name.IsStartsWith("VIEApps.Services.APIGateway"))
+								.Select(n => Assembly.Load(n))
+							),
+							(log, ex) =>
+							{
+								this.WriteLog(correlationID, log, ex);
+							}
+						);
 					}
 					catch (Exception ex)
 					{
-						this.WriteLog(correlationID, "Error occurred while running the next action (async)", ex);
+						await this.WriteLogAsync(correlationID, "Error occurred while initializing the repository", ex).ConfigureAwait(false);
+					}
+
+				// run the next action
+				if (next != null)
+					try
+					{
+						await next(this).ConfigureAwait(false);
+					}
+					catch (Exception ex)
+					{
+						await this.WriteLogAsync(correlationID, "Error occurred while running the next action", ex).ConfigureAwait(false);
 					}
 			})
 			.ConfigureAwait(false);
@@ -1489,15 +1476,17 @@ namespace net.vieapps.Services
 			.ConfigureAwait(false);
 		}
 
-		public virtual void Dispose()
-		{
-			this.Stop();
-			GC.SuppressFinalize(this);
-		}
+		protected ServiceBase() { }
 
 		~ServiceBase()
 		{
 			this.Dispose();
+		}
+
+		public virtual void Dispose()
+		{
+			this.Stop();
+			GC.SuppressFinalize(this);
 		}
 		#endregion
 

@@ -186,9 +186,8 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="args">The starting arguments</param>
 		/// <param name="initializeRepository">true to initialize the repository of the service</param>
-		/// <param name="nextAction">The next action to run (synchronous)</param>
-		/// <param name="nextActionAsync">The next action to run (asynchronous)</param>
-		void Start(string[] args = null, bool initializeRepository = true, System.Action nextAction = null, Func<Task> nextActionAsync = null);
+		/// <param name="next">The next action to run</param>
+		void Start(string[] args = null, bool initializeRepository = true, Func<IService, Task> next = null);
 
 		/// <summary>
 		/// Stops the service
