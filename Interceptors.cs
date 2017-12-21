@@ -31,6 +31,16 @@ namespace net.vieapps.Services
 				? base.GetProcedureUri(method)
 				: string.Format(base.GetProcedureUri(method), this._name.Trim().ToLower());
 		}
+
+		/// <summary>
+		/// Creates an interceptor for registering a service
+		/// </summary>
+		/// <param name="name">The string that presents name of service (for marking URI)</param>
+		/// <returns></returns>
+		public static RegistrationInterceptor Create(string name = null)
+		{
+			return new RegistrationInterceptor(name);
+		}
 	}
 
 	//  --------------------------------------------------------------------------------------------

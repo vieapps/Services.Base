@@ -77,21 +77,20 @@ namespace net.vieapps.Services
 		{
 			get
 			{
-				if (this._logger == null)
-					this._logger = new ServiceCollection()
+				return this._logger
+					?? (this._logger = new ServiceCollection()
 						.AddLogging(builder =>
 						{
 #if DEBUG
 							builder.SetMinimumLevel(LogLevel.Debug);
 #else
-						builder.SetMinimumLevel(LogLevel.Information);
+							builder.SetMinimumLevel(LogLevel.Information);
 #endif
 							builder.AddConsole();
 						})
 						.BuildServiceProvider()
 						.GetService<ILoggerFactory>()
-						.CreateLogger(this.GetType());
-				return this._logger;
+						.CreateLogger(this.GetType()));
 			}
 		}
 
@@ -296,7 +295,7 @@ namespace net.vieapps.Services
 			{
 				// register the service
 				var name = this.ServiceName.Trim().ToLower();
-				this._instance = await this._incommingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, new RegistrationInterceptor(name)).ConfigureAwait(false);
+				this._instance = await this._incommingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(name)).ConfigureAwait(false);
 
 				// register the handler of inter-communicate messages
 				this._communicator?.Dispose();
@@ -304,7 +303,7 @@ namespace net.vieapps.Services
 					.GetSubject<CommunicateMessage>($"net.vieapps.rtu.communicate.messages.{name}")
 					.Subscribe<CommunicateMessage>(
 						message => this.ProcessInterCommunicateMessage(message),
-						exception => this.WriteLog(UtilityService.NewUID, "APIGateway", "RTU", $"Error occurred while fetching inter-communicate message of a service [{this.ServiceName}]: {exception.Message}", exception)
+						exception => this.WriteLog(UtilityService.NewUID, "APIGateway", "RTU", $"Error occurred while fetching inter-communicate message of a service [{this.ServiceName}]", exception)
 					);
 
 				// callback when done
@@ -508,16 +507,15 @@ namespace net.vieapps.Services
 		/// <param name="serviceName">The name of service</param>
 		/// <param name="objectName">The name of serivice's object</param>
 		/// <param name="logs">The collection of log messages</param>
-		/// <param name="simpleStack">The simple stack (usually is Exception.StackTrace)</param>
-		/// <param name="fullStack">The full stack (usually stack of the exception and all inners)</param>
+		/// <param name="stack">The stack (usually is Exception.StackTrace)</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected async Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, string simpleStack = null, string fullStack = null, CancellationToken cancellationToken = default(CancellationToken))
+		protected async Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, string stack = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			try
 			{
 				await this.InitializeLoggingServiceAsync().ConfigureAwait(false);
-				await this._loggingService.WriteLogsAsync(correlationID, serviceName, objectName, logs, simpleStack, fullStack, cancellationToken).ConfigureAwait(false);
+				await this._loggingService.WriteLogsAsync(correlationID, serviceName, objectName, logs, stack, cancellationToken).ConfigureAwait(false);
 			}
 			catch { }
 		}
@@ -529,13 +527,12 @@ namespace net.vieapps.Services
 		/// <param name="serviceName">The name of service</param>
 		/// <param name="objectName">The name of serivice's object</param>
 		/// <param name="log">The log message</param>
-		/// <param name="simpleStack">The simple stack (usually is Exception.StackTrace)</param>
-		/// <param name="fullStack">The full stack (usually stack of the exception and all inners)</param>
+		/// <param name="stack">The stack (usually is Exception.StackTrace)</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task WriteLogAsync(string correlationID, string serviceName, string objectName, string log, string simpleStack = null, string fullStack = null, CancellationToken cancellationToken = default(CancellationToken))
+		protected Task WriteLogAsync(string correlationID, string serviceName, string objectName, string log, string stack = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
-			return this.WriteLogsAsync(correlationID, serviceName, objectName, !string.IsNullOrWhiteSpace(log) ? new List<string>() { log } : null, simpleStack, fullStack, cancellationToken);
+			return this.WriteLogsAsync(correlationID, serviceName, objectName, !string.IsNullOrWhiteSpace(log) ? new List<string>() { log } : null, stack, cancellationToken);
 		}
 
 		/// <summary>
@@ -550,23 +547,27 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, Exception exception = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
-			var simpleStack = "";
-			var fullStack = "";
+			var stack = "";
 			if (exception != null)
 			{
-				simpleStack = exception.StackTrace;
-				fullStack = exception.StackTrace;
+				logs = logs ?? new List<string>();
+				logs.Add($"> Message: {exception.Message}");
+				logs.Add($"> Type: {exception.GetType().ToString()}");
+				stack = exception.StackTrace;
 				var inner = exception.InnerException;
 				var counter = 0;
 				while (inner != null)
 				{
 					counter++;
-					fullStack += "\r\n" + $"-- Inner ({counter}) ----------------- " + "\r\n" + inner.StackTrace;
+					stack += "\r\n" + $"--- Inner ({counter}): ---------------------- " + "\r\n"
+						+ "> Message: " + inner.Message + "\r\n"
+						+ "> Type: " + inner.GetType().ToString() + "\r\n"
+						+ inner.StackTrace;
 					inner = inner.InnerException;
 				}
 			}
 
-			return this.WriteLogsAsync(correlationID, serviceName, objectName, logs, simpleStack, fullStack, cancellationToken);
+			return this.WriteLogsAsync(correlationID, serviceName, objectName, logs, stack, cancellationToken);
 		}
 
 		/// <summary>
@@ -1372,8 +1373,8 @@ namespace net.vieapps.Services
 				try
 				{
 					await this.StartAsync(
-						service => this.WriteLog(correlationID, $"The service is registered - PID: {Process.GetCurrentProcess().Id}"),
-						exception => this.WriteLog(correlationID, "Error occurred while registering the service", exception)
+						service => this.WriteLog(correlationID, $"The service is started & registered - PID: {Process.GetCurrentProcess().Id}"),
+						exception => this.WriteLog(correlationID, "Error occurred while starting the service", exception)
 					).ConfigureAwait(false);
 				}
 				catch (Exception ex)
@@ -1381,6 +1382,8 @@ namespace net.vieapps.Services
 					await this.WriteLogAsync(correlationID, "Error occurred while starting the service", ex).ConfigureAwait(false);
 				}
 			})
+
+			// continue
 			.ContinueWith(async (task) =>
 			{
 				// initialize repository
@@ -1438,7 +1441,11 @@ namespace net.vieapps.Services
 			await this.OpenIncomingChannelAsync(onIncomingConnectionEstablished, onIncomingConnectionBroken, onIncomingConnectionError).ConfigureAwait(false);
 			await this.RegisterServiceAsync(onRegisterSuccess, onRegisterError).ConfigureAwait(false);
 			await this.OpenOutgoingChannelAsync(onOutgoingConnectionEstablished, onOutgoingConnectionBroken, onOutgoingConnectionError).ConfigureAwait(false);
-			await this.InitializeLoggingServiceAsync().ConfigureAwait(false);
+			await Task.WhenAll(
+				this.InitializeLoggingServiceAsync(),
+				this.InitializeRTUServiceAsync(),
+				this.InitializeMessagingServiceAsync()
+			).ConfigureAwait(false);
 		}
 
 		/// <summary>
@@ -1446,11 +1453,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		public void Stop()
 		{
-			try
-			{
-				this.CancellationTokenSource.Cancel();
-			}
-			catch { }
+			this.CancellationTokenSource.Cancel();
 			this.CancellationTokenSource.Dispose();
 			this.Timers.ForEach(timer => timer.Dispose());
 
@@ -1476,17 +1479,23 @@ namespace net.vieapps.Services
 			.ConfigureAwait(false);
 		}
 
+		bool _isDisposed = false;
+
+		public virtual void Dispose()
+		{
+			if (!this._isDisposed)
+			{
+				this.Stop();
+				GC.SuppressFinalize(this);
+				this._isDisposed = true;
+			}
+		}
+
 		protected ServiceBase() { }
 
 		~ServiceBase()
 		{
 			this.Dispose();
-		}
-
-		public virtual void Dispose()
-		{
-			this.Stop();
-			GC.SuppressFinalize(this);
 		}
 		#endregion
 
