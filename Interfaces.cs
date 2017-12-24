@@ -273,7 +273,7 @@ namespace net.vieapps.Services
 	//  --------------------------------------------------------------------------------------------
 
 	/// <summary>
-	/// Presents a centralize logging service
+	/// Presents a logging service
 	/// </summary>
 	public interface ILoggingService
 	{

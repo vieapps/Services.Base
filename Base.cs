@@ -301,7 +301,7 @@ namespace net.vieapps.Services
 				this._communicator?.Dispose();
 				this._communicator = this._incommingChannel.RealmProxy.Services
 					.GetSubject<CommunicateMessage>($"net.vieapps.rtu.communicate.messages.{name}")
-					.Subscribe<CommunicateMessage>(
+					.Subscribe(
 						message => this.ProcessInterCommunicateMessage(message),
 						exception => this.WriteLog(UtilityService.NewUID, "APIGateway", "RTU", $"Error occurred while fetching inter-communicate message of a service [{this.ServiceName}]", exception)
 					);
@@ -490,7 +490,7 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
-		#region Working with logs
+		#region Working with logs (multiple)
 		async Task InitializeLoggingServiceAsync()
 		{
 			if (this._loggingService == null)
@@ -510,7 +510,7 @@ namespace net.vieapps.Services
 		/// <param name="stack">The stack (usually is Exception.StackTrace)</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected async Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, string stack = null, CancellationToken cancellationToken = default(CancellationToken))
+		protected async Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, string stack, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			try
 			{
@@ -526,13 +526,15 @@ namespace net.vieapps.Services
 		/// <param name="correlationID">The identity of correlation</param>
 		/// <param name="serviceName">The name of service</param>
 		/// <param name="objectName">The name of serivice's object</param>
-		/// <param name="log">The log message</param>
+		/// <param name="logs">The collection of log messages</param>
 		/// <param name="stack">The stack (usually is Exception.StackTrace)</param>
-		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task WriteLogAsync(string correlationID, string serviceName, string objectName, string log, string stack = null, CancellationToken cancellationToken = default(CancellationToken))
+		protected void WriteLogs(string correlationID, string serviceName, string objectName, List<string> logs, string stack)
 		{
-			return this.WriteLogsAsync(correlationID, serviceName, objectName, !string.IsNullOrWhiteSpace(log) ? new List<string>() { log } : null, stack, cancellationToken);
+			Task.Run(async () =>
+			{
+				await this.WriteLogsAsync(correlationID, serviceName, objectName, logs, stack, this.CancellationTokenSource.Token).ConfigureAwait(false);
+			}).ConfigureAwait(false);
 		}
 
 		/// <summary>
@@ -582,98 +584,49 @@ namespace net.vieapps.Services
 		{
 			Task.Run(async () =>
 			{
-				await this.WriteLogsAsync(correlationID, serviceName, objectName, logs, exception).ConfigureAwait(false);
+				await this.WriteLogsAsync(correlationID, serviceName, objectName, logs, exception, this.CancellationTokenSource.Token).ConfigureAwait(false);
 			}).ConfigureAwait(false);
 		}
 
 		/// <summary>
-		/// Writes the log into centralized log storage of all services
+		/// Writes a log message to the terminator or the standard output stream
 		/// </summary>
-		/// <param name="correlationID">The identity of correlation</param>
-		/// <param name="serviceName">The name of service</param>
-		/// <param name="objectName">The name of serivice's object</param>
-		/// <param name="log">The log message</param>
+		/// <param name="correlationID">The string that presents correlation identity</param>
+		/// <param name="logs">The log messages</param>
 		/// <param name="exception">The exception</param>
-		/// <param name="cancellationToken">The cancellation token</param>
-		/// <returns></returns>
-		protected Task WriteLogAsync(string correlationID, string serviceName, string objectName, string log, Exception exception = null, CancellationToken cancellationToken = default(CancellationToken))
+		/// <param name="updateCentralizedLogs">true to update the log message into centralized logs of the API Gateway</param>
+		public virtual async Task WriteLogsAsync(string correlationID, List<string> logs, Exception exception = null, bool updateCentralizedLogs = true)
 		{
-			var logs = !string.IsNullOrWhiteSpace(log) || exception != null
-				? new List<string>() { !string.IsNullOrWhiteSpace(log) ? log : exception.Message }
-				: null;
-			return this.WriteLogsAsync(correlationID, serviceName, objectName, logs, exception, cancellationToken);
+			// update the log message into centralized logs of the API Gateway
+			if (updateCentralizedLogs)
+				await this.WriteLogsAsync(correlationID ?? UtilityService.NewUID, this.ServiceName, null, logs, exception, this.CancellationTokenSource.Token).ConfigureAwait(false);
+
+			// write to the terminator or the standard output stream
+			if (this.IsUserInteractive)
+			{
+				if (exception == null)
+					logs?.ForEach(log => this.Logger.LogInformation(log));
+				else
+				{
+					logs?.ForEach(log => this.Logger.LogError(log));
+					this.Logger.LogError(exception, exception.Message);
+				}
+			}
 		}
 
 		/// <summary>
-		/// Writes the log into centralized log storage of all services
+		/// Writes a log message to the terminator or the standard output stream
 		/// </summary>
-		/// <param name="correlationID">The identity of correlation</param>
-		/// <param name="serviceName">The name of service</param>
-		/// <param name="objectName">The name of serivice's object</param>
-		/// <param name="log">The log message</param>
+		/// <param name="correlationID">The string that presents correlation identity</param>
+		/// <param name="logs">The log messages</param>
 		/// <param name="exception">The exception</param>
-		protected void WriteLog(string correlationID, string serviceName, string objectName, string log, Exception exception = null)
+		/// <param name="updateCentralizedLogs">true to update the log message into centralized logs of the API Gateway</param>
+		public virtual void WriteLogs(string correlationID, List<string> logs, Exception exception = null, bool updateCentralizedLogs = true)
 		{
 			Task.Run(async () =>
 			{
-				await this.WriteLogAsync(correlationID, serviceName, objectName, log, exception).ConfigureAwait(false);
+				await this.WriteLogsAsync(correlationID, logs, exception, updateCentralizedLogs).ConfigureAwait(false);
 			}).ConfigureAwait(false);
-		}
-
-		/// <summary>
-		/// Writes a log message to the terminator or the standard output stream
-		/// </summary>
-		/// <param name="correlationID">The string that presents correlation identity</param>
-		/// <param name="log">The log message</param>
-		/// <param name="exception">The exception</param>
-		/// <param name="updateCentralizedLogs">true to update the log message into centralized logs of the API Gateway</param>
-		public virtual async Task WriteLogAsync(string correlationID, string log, Exception exception = null, bool updateCentralizedLogs = true)
-		{
-			// prepare
-			log = string.IsNullOrWhiteSpace(log)
-				? exception?.Message ?? ""
-				: log;
-
-			// update the log message into centralized logs of the API Gateway
-			if (updateCentralizedLogs)
-				await this.WriteLogAsync(correlationID ?? UtilityService.NewUID, this.ServiceName, null, log, exception).ConfigureAwait(false);
-
-			// write to the terminator or the standard output stream
-			if (this.IsUserInteractive)
-			{
-				if (exception == null)
-					this.Logger.LogInformation(log);
-				else
-					this.Logger.LogError(exception, log);
-			}
-		}
-
-		/// <summary>
-		/// Writes a log message to the terminator or the standard output stream
-		/// </summary>
-		/// <param name="correlationID">The string that presents correlation identity</param>
-		/// <param name="log">The log message</param>
-		/// <param name="exception">The exception</param>
-		/// <param name="updateCentralizedLogs">true to update the log message into centralized logs of the API Gateway</param>
-		public virtual void WriteLog(string correlationID, string log, Exception exception = null, bool updateCentralizedLogs = true)
-		{
-			// prepare
-			log = string.IsNullOrWhiteSpace(log)
-				? exception?.Message ?? ""
-				: log;
-
-			// update the log message into centralized logs of the API Gateway
-			if (updateCentralizedLogs)
-				this.WriteLog(correlationID ?? UtilityService.NewUID, this.ServiceName, null, log, exception);
-
-			// write to the terminator or the standard output stream
-			if (this.IsUserInteractive)
-			{
-				if (exception == null)
-					this.Logger.LogInformation(log);
-				else
-					this.Logger.LogError(exception, log);
-			}
 		}
 
 		/// <summary>
@@ -697,7 +650,102 @@ namespace net.vieapps.Services
 		/// <param name="exception">The exception</param>
 		protected void WriteLogs(RequestInfo requestInfo, List<string> logs, Exception exception = null)
 		{
-			this.WriteLogs(requestInfo.CorrelationID, requestInfo.ServiceName, requestInfo.ObjectName, logs, exception);
+			Task.Run(async () =>
+			{
+				await this.WriteLogsAsync(requestInfo, logs, exception, this.CancellationTokenSource.Token).ConfigureAwait(false);
+			}).ConfigureAwait(false);
+		}
+		#endregion
+
+		#region Working with logs (single)
+		/// <summary>
+		/// Writes the log into centralized log storage of all services
+		/// </summary>
+		/// <param name="correlationID">The identity of correlation</param>
+		/// <param name="serviceName">The name of service</param>
+		/// <param name="objectName">The name of serivice's object</param>
+		/// <param name="log">The log message</param>
+		/// <param name="stack">The stack (usually is Exception.StackTrace)</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		protected Task WriteLogAsync(string correlationID, string serviceName, string objectName, string log, string stack, CancellationToken cancellationToken = default(CancellationToken))
+		{
+			return this.WriteLogsAsync(correlationID, serviceName, objectName, !string.IsNullOrWhiteSpace(log) ? new List<string>() { log } : null, stack, cancellationToken);
+		}
+
+		/// <summary>
+		/// Writes the log into centralized log storage of all services
+		/// </summary>
+		/// <param name="correlationID">The identity of correlation</param>
+		/// <param name="serviceName">The name of service</param>
+		/// <param name="objectName">The name of serivice's object</param>
+		/// <param name="log">The log message</param>
+		/// <param name="stack">The stack (usually is Exception.StackTrace)</param>
+		/// <returns></returns>
+		protected void WriteLog(string correlationID, string serviceName, string objectName, string log, string stack)
+		{
+			Task.Run(async () =>
+			{
+				await this.WriteLogAsync(correlationID, serviceName, objectName, log, stack, this.CancellationTokenSource.Token).ConfigureAwait(false);
+			}).ConfigureAwait(false);
+		}
+
+		/// <summary>
+		/// Writes the log into centralized log storage of all services
+		/// </summary>
+		/// <param name="correlationID">The identity of correlation</param>
+		/// <param name="serviceName">The name of service</param>
+		/// <param name="objectName">The name of serivice's object</param>
+		/// <param name="log">The log message</param>
+		/// <param name="exception">The exception</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		protected Task WriteLogAsync(string correlationID, string serviceName, string objectName, string log, Exception exception = null, CancellationToken cancellationToken = default(CancellationToken))
+		{
+			return this.WriteLogsAsync(correlationID, serviceName, objectName, new List<string>() { string.IsNullOrWhiteSpace(log) ? exception?.Message ?? "" : log }, exception, cancellationToken);
+		}
+
+		/// <summary>
+		/// Writes the log into centralized log storage of all services
+		/// </summary>
+		/// <param name="correlationID">The identity of correlation</param>
+		/// <param name="serviceName">The name of service</param>
+		/// <param name="objectName">The name of serivice's object</param>
+		/// <param name="log">The log message</param>
+		/// <param name="exception">The exception</param>
+		protected void WriteLog(string correlationID, string serviceName, string objectName, string log, Exception exception = null)
+		{
+			Task.Run(async () =>
+			{
+				await this.WriteLogAsync(correlationID, serviceName, objectName, log, exception, this.CancellationTokenSource.Token).ConfigureAwait(false);
+			}).ConfigureAwait(false);
+		}
+
+		/// <summary>
+		/// Writes a log message to the terminator or the standard output stream
+		/// </summary>
+		/// <param name="correlationID">The string that presents correlation identity</param>
+		/// <param name="log">The log message</param>
+		/// <param name="exception">The exception</param>
+		/// <param name="updateCentralizedLogs">true to update the log message into centralized logs of the API Gateway</param>
+		public virtual Task WriteLogAsync(string correlationID, string log, Exception exception = null, bool updateCentralizedLogs = true)
+		{
+			return this.WriteLogsAsync(correlationID, new List<string>() { string.IsNullOrWhiteSpace(log) ? exception?.Message ?? "" : log }, exception, updateCentralizedLogs);
+		}
+
+		/// <summary>
+		/// Writes a log message to the terminator or the standard output stream
+		/// </summary>
+		/// <param name="correlationID">The string that presents correlation identity</param>
+		/// <param name="log">The log message</param>
+		/// <param name="exception">The exception</param>
+		/// <param name="updateCentralizedLogs">true to update the log message into centralized logs of the API Gateway</param>
+		public virtual void WriteLog(string correlationID, string log, Exception exception = null, bool updateCentralizedLogs = true)
+		{
+			Task.Run(async () =>
+			{
+				await this.WriteLogAsync(correlationID, log, exception, updateCentralizedLogs).ConfigureAwait(false);
+			}).ConfigureAwait(false);
 		}
 
 		/// <summary>
@@ -721,7 +769,10 @@ namespace net.vieapps.Services
 		/// <param name="exception">The exception</param>
 		protected void WriteLog(RequestInfo requestInfo, string log, Exception exception = null)
 		{
-			this.WriteLog(requestInfo.CorrelationID, requestInfo.ServiceName, requestInfo.ObjectName, log, exception);
+			Task.Run(async () =>
+			{
+				await this.WriteLogAsync(requestInfo, log, exception, this.CancellationTokenSource.Token).ConfigureAwait(false);
+			}).ConfigureAwait(false);
 		}
 		#endregion
 
@@ -1010,7 +1061,7 @@ namespace net.vieapps.Services
 				return true;
 
 			// get the business object
-			var @object = await RepositoryMediator.GetAsync(definitionID, objectID).ConfigureAwait(false);
+			var @object = await RepositoryMediator.GetAsync(definitionID, objectID, this.CancellationTokenSource.Token).ConfigureAwait(false);
 
 			// get the permissions state
 			return @object != null && @object is IBusinessEntity
@@ -1051,7 +1102,7 @@ namespace net.vieapps.Services
 				return false;
 
 			// get the business object
-			var @object = await RepositoryMediator.GetAsync(definitionID, objectID);
+			var @object = await RepositoryMediator.GetAsync(definitionID, objectID, this.CancellationTokenSource.Token).ConfigureAwait(false);
 
 			// get the permissions state
 			return @object != null && @object is IBusinessEntity
@@ -1092,7 +1143,7 @@ namespace net.vieapps.Services
 				return false;
 
 			// get the business object
-			var @object = await RepositoryMediator.GetAsync(definitionID, objectID).ConfigureAwait(false);
+			var @object = await RepositoryMediator.GetAsync(definitionID, objectID, this.CancellationTokenSource.Token).ConfigureAwait(false);
 
 			// get the permissions state
 			return @object != null && @object is IBusinessEntity
@@ -1133,7 +1184,7 @@ namespace net.vieapps.Services
 				return false;
 
 			// get the business object
-			var @object = await RepositoryMediator.GetAsync(definitionID, objectID).ConfigureAwait(false);
+			var @object = await RepositoryMediator.GetAsync(definitionID, objectID, this.CancellationTokenSource.Token).ConfigureAwait(false);
 
 			// get the permissions state
 			return @object != null && @object is IBusinessEntity
@@ -1174,7 +1225,7 @@ namespace net.vieapps.Services
 				return false;
 
 			// get the business object
-			var @object = await RepositoryMediator.GetAsync(definitionID, objectID).ConfigureAwait(false);
+			var @object = await RepositoryMediator.GetAsync(definitionID, objectID, this.CancellationTokenSource.Token).ConfigureAwait(false);
 
 			// get the permissions state
 			return @object != null && @object is IBusinessEntity
@@ -1215,7 +1266,7 @@ namespace net.vieapps.Services
 				return false;
 
 			// get the business object
-			var @object = await RepositoryMediator.GetAsync(definitionID, objectID).ConfigureAwait(false);
+			var @object = await RepositoryMediator.GetAsync(definitionID, objectID, this.CancellationTokenSource.Token).ConfigureAwait(false);
 
 			// get the permissions state
 			return @object != null && @object is IBusinessEntity
@@ -1238,6 +1289,14 @@ namespace net.vieapps.Services
 			var timer = Observable.Timer(TimeSpan.FromMilliseconds(delay > 0 ? delay : interval * 1000), TimeSpan.FromSeconds(interval)).Subscribe(_ => action?.Invoke());
 			this.Timers.Add(timer);
 			return timer;
+		}
+
+		/// <summary>
+		/// Stops all timers
+		/// </summary>
+		protected void StopTimers()
+		{
+			this.Timers.ForEach(timer => timer.Dispose());
 		}
 		#endregion
 
@@ -1455,8 +1514,8 @@ namespace net.vieapps.Services
 		{
 			this.CancellationTokenSource.Cancel();
 			this.CancellationTokenSource.Dispose();
-			this.Timers.ForEach(timer => timer.Dispose());
 
+			this.StopTimers();
 			this._communicator?.Dispose();
 
 			Task.Run(async () =>
