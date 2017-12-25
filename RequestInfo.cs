@@ -227,5 +227,27 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
+		/// <summary>
+		/// Gets the full URI of this request
+		/// </summary>
+		public string URI
+		{
+			get
+			{
+				var uri = "/" + this.ServiceName;
+				if (!string.IsNullOrWhiteSpace(this.ObjectName))
+				{
+					uri += "/" + this.ObjectName;
+					var id = this.GetObjectIdentity();
+					if (!string.IsNullOrWhiteSpace(id))
+					{
+						uri += "/" + id;
+						if (!id.IsValidUUID() && this.Query != null && this.Query.ContainsKey("id"))
+							uri += "/" + this.Query["id"];
+					}
+				}
+				return uri;
+			}
+		}
 	}
 }
