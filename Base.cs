@@ -35,12 +35,12 @@ namespace net.vieapps.Services
 	public abstract class ServiceBase : IService, IServiceComponent, IDisposable
 	{
 		/// <summary>
-		/// Gets the name of this service (for working with related URIs)
+		/// Gets the name for working with related URIs
 		/// </summary>
 		public abstract string ServiceName { get; }
 
 		/// <summary>
-		/// Process the request of this service
+		/// Process the request
 		/// </summary>
 		/// <param name="requestInfo">The requesting information</param>
 		/// <param name="cancellationToken">The cancellation token</param>
@@ -56,7 +56,7 @@ namespace net.vieapps.Services
 		#region Attributes & Properties
 		IWampChannel _incommingChannel = null, _outgoingChannel = null;
 		long _incommingChannelSessionID = 0, _outgoingChannelSessionID = 0;
-		System.Action _onIncomingChannelClosing = null, _onOutgoingChannelClosing = null;
+		bool _channelsAreClosedBySystem = false;
 
 		SystemEx.IAsyncDisposable _instance = null;
 		IDisposable _communicator = null;
@@ -71,7 +71,7 @@ namespace net.vieapps.Services
 		ILogger _logger;
 
 		/// <summary>
-		/// Gets the logger of the service
+		/// Gets the logger
 		/// </summary>
 		public ILogger Logger
 		{
@@ -95,7 +95,7 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Gets the full URI of the service
+		/// Gets the full URI
 		/// </summary>
 		public string ServiceURI
 		{
@@ -106,7 +106,7 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Gets or Sets the value indicating weather current service component is running in user interactive mode
+		/// Gets or sets the value indicating weather current service component is running under user interactive mode or not
 		/// </summary>
 		public bool IsUserInteractive { get; set; } = false;
 		#endregion
@@ -130,9 +130,8 @@ namespace net.vieapps.Services
 		/// <param name="onConnectionEstablished"></param>
 		/// <param name="onConnectionBroken"></param>
 		/// <param name="onConnectionError"></param>
-		/// <param name="onClosingConnection"></param>
 		/// <returns></returns>
-		protected async Task OpenIncomingChannelAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null, System.Action onClosingConnection = null)
+		protected async Task OpenIncomingChannelAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null)
 		{
 			if (this._incommingChannel != null)
 				return;
@@ -156,13 +155,21 @@ namespace net.vieapps.Services
 
 			if (onConnectionBroken != null)
 				this._incommingChannel.RealmProxy.Monitor.ConnectionBroken += new EventHandler<WampSessionCloseEventArgs>(onConnectionBroken);
+			else
+				this._incommingChannel.RealmProxy.Monitor.ConnectionBroken += (sender, args) =>
+				{
+					if (!this._channelsAreClosedBySystem && !args.CloseType.Equals(SessionCloseType.Disconnection))
+						this.ReOpenIncomingChannel(
+							123,
+							(cn) => this.WriteLog(UtilityService.NewUID, this.ServiceName, null, "Re-connect the incomming connection successful"),
+							(ex) => this.WriteLog(UtilityService.NewUID, this.ServiceName, null, "Cannot re-connect the incomming connection", ex)
+						);
+				};
 
 			if (onConnectionError != null)
 				this._incommingChannel.RealmProxy.Monitor.ConnectionError += new EventHandler<WampConnectionErrorEventArgs>(onConnectionError);
 
 			await this._incommingChannel.Open().ConfigureAwait(false);
-
-			this._onIncomingChannelClosing = onClosingConnection;
 		}
 
 		/// <summary>
@@ -172,7 +179,6 @@ namespace net.vieapps.Services
 		{
 			if (this._incommingChannel != null)
 			{
-				this._onIncomingChannelClosing?.Invoke();
 				this._incommingChannel.Close($"The incoming channel is closed when stop the service [{this.ServiceURI}]", new GoodbyeDetails());
 				this._incommingChannel = null;
 			}
@@ -187,11 +193,11 @@ namespace net.vieapps.Services
 		protected void ReOpenIncomingChannel(int delay = 0, Action<IWampChannel> onSuccess = null, Action<Exception> onError = null)
 		{
 			if (this._incommingChannel != null)
-				(new WampChannelReconnector(this._incommingChannel, async () =>
+				new WampChannelReconnector(this._incommingChannel, async () =>
 				{
-					await Task.Delay(delay > 0 ? delay : 0).ConfigureAwait(false);
 					try
 					{
+						await Task.Delay(delay > 0 ? delay : 0).ConfigureAwait(false);
 						await this._incommingChannel.Open().ConfigureAwait(false);
 						onSuccess?.Invoke(this._incommingChannel);
 					}
@@ -199,7 +205,7 @@ namespace net.vieapps.Services
 					{
 						onError?.Invoke(ex);
 					}
-				})).Start();
+				}).Start();
 		}
 
 		/// <summary>
@@ -208,9 +214,8 @@ namespace net.vieapps.Services
 		/// <param name="onConnectionEstablished"></param>
 		/// <param name="onConnectionBroken"></param>
 		/// <param name="onConnectionError"></param>
-		/// <param name="onClosingConnection"></param>
 		/// <returns></returns>
-		protected async Task OpenOutgoingChannelAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null, System.Action onClosingConnection = null)
+		protected async Task OpenOutgoingChannelAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null)
 		{
 			if (this._outgoingChannel != null)
 				return;
@@ -234,13 +239,21 @@ namespace net.vieapps.Services
 
 			if (onConnectionBroken != null)
 				this._outgoingChannel.RealmProxy.Monitor.ConnectionBroken += new EventHandler<WampSessionCloseEventArgs>(onConnectionBroken);
+			else
+				this._outgoingChannel.RealmProxy.Monitor.ConnectionBroken += (sender, args) =>
+				{
+					if (!this._channelsAreClosedBySystem && !args.CloseType.Equals(SessionCloseType.Disconnection))
+						this.ReOpenOutgoingChannel(
+							234,
+							(cn) => this.WriteLog(UtilityService.NewUID, this.ServiceName, null, "Re-connect the outgoing connection successful"),
+							(ex) => this.WriteLog(UtilityService.NewUID, this.ServiceName, null, "Cannot re-connect the outgoing connection", ex)
+						);
+				};
 
 			if (onConnectionError != null)
 				this._outgoingChannel.RealmProxy.Monitor.ConnectionError += new EventHandler<WampConnectionErrorEventArgs>(onConnectionError);
 
 			await this._outgoingChannel.Open().ConfigureAwait(false);
-
-			this._onOutgoingChannelClosing = onClosingConnection;
 		}
 
 		/// <summary>
@@ -250,7 +263,6 @@ namespace net.vieapps.Services
 		{
 			if (this._outgoingChannel != null)
 			{
-				this._onOutgoingChannelClosing?.Invoke();
 				this._outgoingChannel.Close($"The outgoing channel is closed when stop the service [{this.ServiceURI}]", new GoodbyeDetails());
 				this._outgoingChannel = null;
 			}
@@ -265,11 +277,11 @@ namespace net.vieapps.Services
 		protected void ReOpenOutgoingChannel(int delay = 0, Action<IWampChannel> onSuccess = null, Action<Exception> onError = null)
 		{
 			if (this._outgoingChannel != null)
-				(new WampChannelReconnector(this._outgoingChannel, async () =>
+				new WampChannelReconnector(this._outgoingChannel, async () =>
 				{
-					await Task.Delay(delay > 0 ? delay : 0).ConfigureAwait(false);
 					try
 					{
+						await Task.Delay(delay > 0 ? delay : 0).ConfigureAwait(false);
 						await this._outgoingChannel.Open().ConfigureAwait(false);
 						onSuccess?.Invoke(this._outgoingChannel);
 					}
@@ -277,7 +289,7 @@ namespace net.vieapps.Services
 					{
 						onError?.Invoke(ex);
 					}
-				})).Start();
+				}).Start();
 		}
 		#endregion
 
@@ -1452,10 +1464,10 @@ namespace net.vieapps.Services
 						await this.WriteLogAsync(correlationID, "Initializing the repository").ConfigureAwait(false);
 						RepositoryStarter.Initialize(
 							new List<Assembly>() { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
-								.Where(n => !n.Name.IsStartsWith("MsCorLib") && !n.Name.IsStartsWith("System") && !n.Name.IsStartsWith("Microsoft") && !n.Name.IsEquals("NETStandard")
+								.Where(n => !n.Name.IsStartsWith("mscorlib") && !n.Name.IsStartsWith("System") && !n.Name.IsStartsWith("Microsoft") && !n.Name.IsEquals("NETStandard")
 									&& !n.Name.IsStartsWith("Newtonsoft") && !n.Name.IsStartsWith("WampSharp") && !n.Name.IsStartsWith("Castle.") && !n.Name.IsStartsWith("StackExchange.")
 									&& !n.Name.IsStartsWith("MongoDB") && !n.Name.IsStartsWith("MySql") && !n.Name.IsStartsWith("Oracle") && !n.Name.IsStartsWith("Npgsql")
-									&& !n.Name.IsStartsWith("VIEApps.Components.") && !n.Name.IsEquals("VIEApps.Services.Base") && !n.Name.IsStartsWith("VIEApps.Services.APIGateway"))
+									&& !n.Name.IsStartsWith("VIEApps.Components.") && !n.Name.IsStartsWith("VIEApps.Services.Base") && !n.Name.IsStartsWith("VIEApps.Services.APIGateway"))
 								.Select(n => Assembly.Load(n))
 							),
 							(log, ex) =>
@@ -1484,7 +1496,7 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Starts the service in the short way (open channels and register service)
+		/// Starts the service (the short way - open channels and register service)
 		/// </summary>
 		/// <param name="onRegisterSuccess"></param>
 		/// <param name="onRegisterError"></param>
@@ -1518,24 +1530,27 @@ namespace net.vieapps.Services
 			this.StopTimers();
 			this._communicator?.Dispose();
 
-			Task.Run(async () =>
+			Task.WaitAll(new Task[]
 			{
-				if (this._instance != null)
+				Task.Run(async () =>
 				{
-					try
+					if (this._instance != null)
 					{
-						await this._instance.DisposeAsync().ConfigureAwait(false);
+						try
+						{
+							await this._instance.DisposeAsync().ConfigureAwait(false);
+						}
+						catch { }
+						this._instance = null;
 					}
-					catch { }
-					this._instance = null;
-				}
-			})
-			.ContinueWith(task =>
-			{
-				this.CloseIncomingChannel();
-				this.CloseOutgoingChannel();
-			})
-			.ConfigureAwait(false);
+				})
+				.ContinueWith(task =>
+				{
+					this._channelsAreClosedBySystem = true;
+					this.CloseIncomingChannel();
+					this.CloseOutgoingChannel();
+				})
+			}, TimeSpan.FromSeconds(13));
 		}
 
 		bool _isDisposed = false;
@@ -1544,9 +1559,9 @@ namespace net.vieapps.Services
 		{
 			if (!this._isDisposed)
 			{
+				this._isDisposed = true;
 				this.Stop();
 				GC.SuppressFinalize(this);
-				this._isDisposed = true;
 			}
 		}
 
