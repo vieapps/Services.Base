@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Dynamic;
 
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using net.vieapps.Components.Utility;
@@ -230,6 +231,7 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the full URI of this request
 		/// </summary>
+		[JsonIgnore]
 		public string URI
 		{
 			get

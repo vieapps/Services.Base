@@ -63,7 +63,7 @@ namespace net.vieapps.Services
 		IRTUService _rtuService = null;
 		ILoggingService _loggingService = null;
 		IMessagingService _messagingService = null;
-		Dictionary<string, IService> _businessServices = new Dictionary<string, IService>();
+		Dictionary<string, IService> _businessServices = new Dictionary<string, IService>(StringComparer.OrdinalIgnoreCase);
 
 		internal protected CancellationTokenSource CancellationTokenSource { get; private set; } = new CancellationTokenSource();
 		internal protected List<IDisposable> Timers { get; private set; } = new List<IDisposable>();
@@ -824,7 +824,7 @@ namespace net.vieapps.Services
 		{
 			return await (await this.GetServiceAsync(
 				requestInfo != null && !string.IsNullOrWhiteSpace(requestInfo.ServiceName)
-					? requestInfo.ServiceName.Trim().ToLower()
+					? requestInfo.ServiceName
 					: "unknown"
 				).ConfigureAwait(false)).ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false);
 		}
@@ -912,11 +912,43 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the state that determines the user is system administrator or not
 		/// </summary>
+		/// <param name="session">The session information</param>
+		/// /// <param name="correlationID">The correlation identity</param>
+		/// <returns></returns>
+		public Task<bool> IsSystemAdministratorAsync(Session session, string correlationID = null)
+		{
+			return this.IsSystemAdministratorAsync(session?.User, correlationID);
+		}
+
+		/// <summary>
+		/// Gets the state that determines the user is system administrator or not
+		/// </summary>
 		/// <param name="requestInfo">The requesting information that contains user information</param>
 		/// <returns></returns>
-		public async Task<bool> IsSystemAdministratorAsync(RequestInfo requestInfo)
+		public Task<bool> IsSystemAdministratorAsync(RequestInfo requestInfo)
 		{
-			return await this.IsSystemAdministratorAsync(requestInfo?.Session.User, requestInfo?.CorrelationID).ConfigureAwait(false);
+			return this.IsSystemAdministratorAsync(requestInfo?.Session?.User, requestInfo?.CorrelationID);
+		}
+
+		/// <summary>
+		/// Gets the state that determines the user can perform the action or not
+		/// </summary>
+		/// <param name="user">The user information</param>
+		/// <param name="serviceName">The name of the service</param>
+		/// <param name="objectName">The name of the service's object</param>
+		/// <param name="objectIdentity">The identity of the service's object</param>
+		/// <param name="action">The action to perform on the object of this service</param>
+		/// <param name="privileges">The working privileges of the object (entity)</param>
+		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
+		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <returns></returns>
+		protected virtual async Task<bool> IsAuthorizedAsync(User user, string serviceName, string objectName, string objectIdentity, Components.Security.Action action, Privileges privileges = null, Func<User, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		{
+			return await this.IsSystemAdministratorAsync(user).ConfigureAwait(false)
+				? true
+				: user != null
+					? user.IsAuthorized(serviceName, objectName, objectIdentity, action, privileges, getPrivileges, getActions)
+					: false;
 		}
 
 		/// <summary>
@@ -928,17 +960,9 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		protected virtual async Task<bool> IsAuthorizedAsync(RequestInfo requestInfo, Components.Security.Action action, Privileges privileges = null, Func<User, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		protected virtual Task<bool> IsAuthorizedAsync(RequestInfo requestInfo, Components.Security.Action action, Privileges privileges = null, Func<User, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 		{
-			// administrator
-			if (await this.IsSystemAdministratorAsync(requestInfo).ConfigureAwait(false))
-				return true;
-
-			// individual user
-			else
-				return requestInfo != null && requestInfo.Session != null && requestInfo.Session.User != null
-					? requestInfo.Session.User.IsAuthorized(requestInfo.ServiceName, requestInfo.ObjectName, requestInfo.GetObjectIdentity(true), action, privileges, getPrivileges, getActions)
-					: false;
+			return this.IsAuthorizedAsync(requestInfo.Session?.User, requestInfo.ServiceName, requestInfo.ObjectName, requestInfo.GetObjectIdentity(true), action, privileges, getPrivileges, getActions);
 		}
 
 		/// <summary>
