@@ -9,7 +9,6 @@ namespace net.vieapps.Services
 	/// <summary>
 	/// Presents a message for updating information
 	/// </summary>
-	[Serializable]
 	public class BaseMessage
 	{
 		public BaseMessage()
@@ -34,7 +33,6 @@ namespace net.vieapps.Services
 	/// <summary>
 	/// Presents a message for updating via RTU (Real-Time Update)
 	/// </summary>
-	[Serializable]
 	public class UpdateMessage : BaseMessage
 	{
 		public UpdateMessage(BaseMessage message = null) : base()
@@ -64,7 +62,6 @@ namespace net.vieapps.Services
 	/// <summary>
 	/// Presents a message for communicating between services
 	/// </summary>
-	[Serializable]
 	public class CommunicateMessage : BaseMessage
 	{
 		public CommunicateMessage(string serviceName = null, BaseMessage message = null) : base()

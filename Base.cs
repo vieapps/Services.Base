@@ -2,6 +2,7 @@
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Configuration;
@@ -63,7 +64,7 @@ namespace net.vieapps.Services
 		IRTUService _rtuService = null;
 		ILoggingService _loggingService = null;
 		IMessagingService _messagingService = null;
-		Dictionary<string, IService> _businessServices = new Dictionary<string, IService>(StringComparer.OrdinalIgnoreCase);
+		ConcurrentDictionary<string, IService> _businessServices = new ConcurrentDictionary<string, IService>(StringComparer.OrdinalIgnoreCase);
 
 		internal protected CancellationTokenSource CancellationTokenSource { get; private set; } = new CancellationTokenSource();
 		internal protected List<IDisposable> Timers { get; private set; } = new List<IDisposable>();
@@ -118,9 +119,9 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected virtual Tuple<string, string, bool> GetRouterInfo()
 		{
-			var address = UtilityService.GetAppSetting("RouterAddress", "ws://127.0.0.1:16429/");
-			var realm = UtilityService.GetAppSetting("RouterRealm", "VIEAppsRealm");
-			var mode = UtilityService.GetAppSetting("RouterChannelsMode", "MsgPack");
+			var address = UtilityService.GetAppSetting("Router:Address", "ws://127.0.0.1:16429/");
+			var realm = UtilityService.GetAppSetting("Router:Realm", "VIEAppsRealm");
+			var mode = UtilityService.GetAppSetting("Router:ChannelsMode", "MsgPack");
 			return new Tuple<string, string, bool>(address, realm, mode.IsEquals("json"));
 		}
 
@@ -788,7 +789,7 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
-		#region Call other services
+		#region Call services
 		/// <summary>
 		/// Gets a service by name
 		/// </summary>
@@ -796,10 +797,8 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected async Task<IService> GetServiceAsync(string name)
 		{
-			if (string.IsNullOrWhiteSpace(name))
-				return null;
-
-			if (!this._businessServices.TryGetValue(name, out IService service))
+			IService service = null;
+			if (!string.IsNullOrWhiteSpace(name) && !this._businessServices.TryGetValue(name, out service))
 			{
 				await this.OpenOutgoingChannelAsync().ConfigureAwait(false);
 				lock (this._businessServices)
@@ -807,7 +806,7 @@ namespace net.vieapps.Services
 					if (!this._businessServices.TryGetValue(name, out service))
 					{
 						service = this._outgoingChannel.RealmProxy.Services.GetCalleeProxy<IService>(ProxyInterceptor.Create(name));
-						this._businessServices.Add(name, service);
+						this._businessServices.TryAdd(name, service);
 					}
 				}
 			}
@@ -1356,7 +1355,7 @@ namespace net.vieapps.Services
 		List<string> GetRelatedCacheKeys<T>(IFilterBy<T> filter, SortBy<T> sort) where T : class
 		{
 			var key = this.GetCacheKey<T>(filter, sort);
-			var keys = new List<string>() { key, $"{key}-total" };
+			var keys = new List<string>() { key, $"{key}-json", $"{key}-total" };
 			for (var index = 1; index <= 100; index++)
 			{
 				keys.Add($"{key}:{index}");
