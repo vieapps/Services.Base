@@ -146,9 +146,9 @@ namespace net.vieapps.Services
 				? (new DefaultWampChannelFactory()).CreateJsonChannel(address, realm)
 				: (new DefaultWampChannelFactory()).CreateMsgpackChannel(address, realm);
 
-			this._incommingChannel.RealmProxy.Monitor.ConnectionEstablished += (sender, arguments) =>
+			this._incommingChannel.RealmProxy.Monitor.ConnectionEstablished += (sender, args) =>
 			{
-				this._incommingChannelSessionID = arguments.SessionId;
+				this._incommingChannelSessionID = args.SessionId;
 			};
 
 			if (onConnectionEstablished != null)
@@ -230,9 +230,9 @@ namespace net.vieapps.Services
 				? (new DefaultWampChannelFactory()).CreateJsonChannel(address, realm)
 				: (new DefaultWampChannelFactory()).CreateMsgpackChannel(address, realm);
 
-			this._outgoingChannel.RealmProxy.Monitor.ConnectionEstablished += (sender, arguments) =>
+			this._outgoingChannel.RealmProxy.Monitor.ConnectionEstablished += (sender, args) =>
 			{
-				this._outgoingChannelSessionID = arguments.SessionId;
+				this._outgoingChannelSessionID = args.SessionId;
 			};
 
 			if (onConnectionEstablished != null)
