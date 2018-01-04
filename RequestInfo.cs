@@ -248,7 +248,7 @@ namespace net.vieapps.Services
 							uri += "/" + this.Query["id"];
 					}
 				}
-				return uri;
+				return uri.ToLower();
 			}
 		}
 	}
