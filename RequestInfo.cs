@@ -36,10 +36,10 @@ namespace net.vieapps.Services
 			this.ServiceName = !string.IsNullOrWhiteSpace(serviceName) ? serviceName : "unknown";
 			this.ObjectName = !string.IsNullOrWhiteSpace(objectName) ? objectName : "unknown";
 			this.Verb = !string.IsNullOrWhiteSpace(verb) ? verb : "GET";
-			this.Query = new Dictionary<string, string>(query ?? new Dictionary<string, string>());
-			this.Header = new Dictionary<string, string>(header ?? new Dictionary<string, string>());
+			this.Query = new Dictionary<string, string>(query ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase);
+			this.Header = new Dictionary<string, string>(header ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase);
 			this.Body = !string.IsNullOrWhiteSpace(body) ? body : "";
-			this.Extra = new Dictionary<string, string>(extra ?? new Dictionary<string, string>());
+			this.Extra = new Dictionary<string, string>(extra ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase);
 			this.CorrelationID = !string.IsNullOrWhiteSpace(correlationID) ? correlationID : UtilityService.NewUID;
 		}
 
