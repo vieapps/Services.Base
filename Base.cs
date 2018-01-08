@@ -102,7 +102,7 @@ namespace net.vieapps.Services
 		{
 			get
 			{
-				return "net.vieapps.services." + (this.ServiceName?.ToLower() ?? "unknown").Trim();
+				return "net.vieapps.services." + (this.ServiceName ?? "unknown").Trim().ToLower();
 			}
 		}
 
@@ -860,6 +860,52 @@ namespace net.vieapps.Services
 					(info["IsOnline"] as JValue).Value.CastAs<bool>()
 				)
 			);
+		}
+		#endregion
+
+		#region Keys & HTTP URIs
+		/// <summary>
+		/// Gets a key from app settings
+		/// </summary>
+		/// <param name="name"></param>
+		/// <param name="defaultKey"></param>
+		/// <returns></returns>
+		protected string GetKey(string name, string defaultKey)
+		{
+			return UtilityService.GetAppSetting("Keys:" + name, defaultKey);
+		}
+
+		/// <summary>
+		/// Gets the key for encrypting/decrypting data with AES
+		/// </summary>
+		protected string EncryptionKey
+		{
+			get
+			{
+				return this.GetKey("Encryption", "VIEApps-59EF0859-NGX-BC1A-Services-4088-Encryption-9743-Key-51663AB720EF");
+			}
+		}
+
+		/// <summary>
+		/// Gets the key for validating data
+		/// </summary>
+		protected string ValidationKey
+		{
+			get
+			{
+				return this.GetKey("Validation", "VIEApps-D6C8C563-NGX-26CC-Services-43AC-Validation-9040-Key-E803AF0F36E4");
+			}
+		}
+
+		/// <summary>
+		/// Gets a HTTP URI from app settings
+		/// </summary>
+		/// <param name="name"></param>
+		/// <param name="defaultURI"></param>
+		/// <returns></returns>
+		protected string GetHttpURI(string name, string defaultURI)
+		{
+			return UtilityService.GetAppSetting("HttpUri:" + name, defaultURI);
 		}
 		#endregion
 
