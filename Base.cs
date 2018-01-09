@@ -143,8 +143,8 @@ namespace net.vieapps.Services
 			var useJsonChannel = info.Item3;
 
 			this._incommingChannel = useJsonChannel
-				? (new DefaultWampChannelFactory()).CreateJsonChannel(address, realm)
-				: (new DefaultWampChannelFactory()).CreateMsgpackChannel(address, realm);
+				? new DefaultWampChannelFactory().CreateJsonChannel(address, realm)
+				: new DefaultWampChannelFactory().CreateMsgpackChannel(address, realm);
 
 			this._incommingChannel.RealmProxy.Monitor.ConnectionEstablished += (sender, args) =>
 			{
@@ -227,8 +227,8 @@ namespace net.vieapps.Services
 			var useJsonChannel = info.Item3;
 
 			this._outgoingChannel = useJsonChannel
-				? (new DefaultWampChannelFactory()).CreateJsonChannel(address, realm)
-				: (new DefaultWampChannelFactory()).CreateMsgpackChannel(address, realm);
+				? new DefaultWampChannelFactory().CreateJsonChannel(address, realm)
+				: new DefaultWampChannelFactory().CreateMsgpackChannel(address, realm);
 
 			this._outgoingChannel.RealmProxy.Monitor.ConnectionEstablished += (sender, args) =>
 			{
