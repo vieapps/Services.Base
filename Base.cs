@@ -340,7 +340,7 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Send a message for updating data of client
+		/// Sends a message for updating data of client
 		/// </summary>
 		/// <param name="message">The message</param>
 		/// <param name="cancellationToken">The cancellation token</param>
@@ -352,7 +352,19 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Send a message for updating data of client
+		/// Sends updating messages to client
+		/// </summary>
+		/// <param name="messages">The messages</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		protected async Task SendUpdateMessagesAsync(List<UpdateMessage> messages, CancellationToken cancellationToken = default(CancellationToken))
+		{
+			await this.InitializeRTUServiceAsync().ConfigureAwait(false);
+			await messages.ForEachAsync((message, token) => this._rtuService.SendUpdateMessageAsync(message, token), cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <summary>
+		/// Sends updating messages to client
 		/// </summary>
 		/// <param name="messages">The collection of messages</param>
 		/// <param name="deviceID">The string that presents a client's device identity for receiving the messages</param>
@@ -1520,6 +1532,25 @@ namespace net.vieapps.Services
 				catch (Exception ex)
 				{
 					await this.WriteLogAsync(correlationID, "Error occurred while starting the service", ex).ConfigureAwait(false);
+					if (ex is ArgumentException && ex.Message.IsContains("Value does not fall within the expected range"))
+					{
+						await this.WriteLogAsync(correlationID, "Got a problem while connecting to WAMP router. Try to re-connect after few times...").ConfigureAwait(false);
+						await Task.Delay(UtilityService.GetRandomNumber(456, 789)).ConfigureAwait(false);
+
+						this._incommingChannel?.Close();
+						this._incommingChannel = null;
+						this._outgoingChannel?.Close();
+						this._outgoingChannel = null;
+
+						this._loggingService = null;
+						this._rtuService = null;
+						this._messagingService = null;
+
+						await this.StartAsync(
+							service => this.WriteLog(correlationID, $"The service is re-registered - PID: {Process.GetCurrentProcess().Id}"),
+							exception => this.WriteLog(correlationID, "Error occurred while re-starting the service", exception)
+						).ConfigureAwait(false);
+					}
 				}
 			})
 

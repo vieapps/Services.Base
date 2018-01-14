@@ -32,6 +32,7 @@ namespace net.vieapps.Services
 			this.AppAgent = session?.AppAgent ?? "";
 			this.AppOrigin = session?.AppOrigin ?? "";
 			this.User = session?.User ?? new User();
+			this.Verification = session != null ? session.Verification : false;
 		}
 
 		#region Properties
@@ -74,6 +75,11 @@ namespace net.vieapps.Services
 		/// Gets or sets the information of user who performs the action in the sesssion
 		/// </summary>
 		public User User { get; set; }
+
+		/// <summary>
+		/// Gets or sets two-factors verification status
+		/// </summary>
+		public bool Verification { get; set; }
 		#endregion
 
 	}
