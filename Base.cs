@@ -54,6 +54,11 @@ namespace net.vieapps.Services
 		/// <param name="message"></param>
 		protected virtual void ProcessInterCommunicateMessage(CommunicateMessage message) { }
 
+		/// <summary>
+		/// Gets or sets the single instance of current play service component
+		/// </summary>
+		public static ServiceBase ServiceComponent { get; set; }
+
 		#region Attributes & Properties
 		IWampChannel _incommingChannel = null, _outgoingChannel = null;
 		long _incommingChannelSessionID = 0, _outgoingChannelSessionID = 0;
