@@ -302,6 +302,28 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.logs.multiple")]
 		Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, string stack = null, CancellationToken cancellationToken = default(CancellationToken));
+
+		/// <summary>
+		/// Writes the debug log into centralized log storage of all services
+		/// </summary>
+		/// <param name="correlationID">The identity of correlation</param>
+		/// <param name="serviceName">The name of service</param>
+		/// <param name="logs">The log messages</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		[WampProcedure("net.vieapps.services.logs.debug.single")]
+		Task WriteDebugLogsAsync(string correlationID, string serviceName, string logs, CancellationToken cancellationToken = default(CancellationToken));
+
+		/// <summary>
+		/// Writes the debug log into centralized log storage of all services
+		/// </summary>
+		/// <param name="correlationID">The identity of correlation</param>
+		/// <param name="serviceName">The name of service</param>
+		/// <param name="logs">The collection of log messages</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		[WampProcedure("net.vieapps.services.logs.debug.multiple")]
+		Task WriteDebugLogsAsync(string correlationID, string serviceName, List<string> logs, CancellationToken cancellationToken = default(CancellationToken));
 	}
 
 	//  --------------------------------------------------------------------------------------------

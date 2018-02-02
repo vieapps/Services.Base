@@ -52,12 +52,10 @@ namespace net.vieapps.Services
 		/// Process the inter-communicate message
 		/// </summary>
 		/// <param name="message"></param>
-		protected virtual void ProcessInterCommunicateMessage(CommunicateMessage message) { }
-
-		/// <summary>
-		/// Gets or sets the single instance of current play service component
-		/// </summary>
-		public static ServiceBase ServiceComponent { get; set; }
+		protected virtual Task ProcessInterCommunicateMessageAsync(CommunicateMessage message)
+		{
+			return Task.CompletedTask;
+		}
 
 		#region Attributes & Properties
 		IWampChannel _incommingChannel = null, _outgoingChannel = null;
@@ -115,6 +113,11 @@ namespace net.vieapps.Services
 		/// Gets or sets the value indicating weather current service component is running under user interactive mode or not
 		/// </summary>
 		public bool IsUserInteractive { get; set; } = false;
+
+		/// <summary>
+		/// Gets or sets the single instance of current play service component
+		/// </summary>
+		public static ServiceBase ServiceComponent { get; set; }
 		#endregion
 
 		#region Open/Close channels
@@ -320,8 +323,17 @@ namespace net.vieapps.Services
 				this._communicator = this._incommingChannel.RealmProxy.Services
 					.GetSubject<CommunicateMessage>($"net.vieapps.rtu.communicate.messages.{name}")
 					.Subscribe(
-						message => this.ProcessInterCommunicateMessage(message),
-						exception => this.WriteLog(UtilityService.NewUID, "APIGateway", "RTU", $"Error occurred while fetching inter-communicate message of a service [{this.ServiceName}]", exception)
+						async (message) =>
+						{
+							await this.ProcessInterCommunicateMessageAsync(message).ConfigureAwait(false);
+						},
+						async (exception) =>
+						{
+							await Task.WhenAll(
+								this.WriteLogAsync(UtilityService.NewUID, this.ServiceName, null, "Error occurred while fetching inter-communicate message", exception),
+								this.WriteDebugLogsAsync(UtilityService.NewUID, "Error occurred while fetching inter-communicate message", exception)
+							).ConfigureAwait(false);
+						}
 					);
 
 				// callback when done
@@ -517,6 +529,36 @@ namespace net.vieapps.Services
 				await this._messagingService.SendWebHookAsync(message, cancellationToken).ConfigureAwait(false);
 			}
 			catch { }
+		}
+		#endregion
+
+		#region Working with logs (settings)
+#if DEBUG || DEBUGLOGS
+		string _IsDebugLogEnabled = "true", _IsInfoLogEnabled = "true";
+#else
+		string _IsDebugLogEnabled = null, _IsInfoLogEnabled = null;
+#endif
+
+		/// <summary>
+		/// Gets the state to write debug log from app settings (parameter named 'vieapps:Logs:Debug')
+		/// </summary>
+		protected bool IsDebugLogEnabled
+		{
+			get
+			{
+				return "true".IsEquals(this._IsDebugLogEnabled ?? (this._IsDebugLogEnabled = UtilityService.GetAppSetting("Logs:Debug", "false")));
+			}
+		}
+
+		/// <summary>
+		/// Gets the state to write information log from app settings (parameter named 'vieapps:Logs:Info')
+		/// </summary>
+		protected bool IsInfoLogEnabled
+		{
+			get
+			{
+				return this.IsDebugLogEnabled || "true".IsEquals(this._IsInfoLogEnabled ?? (this._IsInfoLogEnabled = UtilityService.GetAppSetting("Logs:Info", "true")));
+			}
 		}
 		#endregion
 
@@ -806,6 +848,87 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
+		#region Working with logs (debug)
+		/// <summary>
+		/// Writes the debug log into centralized log storage of all services
+		/// </summary>
+		/// <param name="correlationID">The identity of correlation</param>
+		/// <param name="logs">The collection of log messages</param>
+		/// <param name="exception">The error exception</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		protected async Task WriteDebugLogsAsync(string correlationID, List<string> logs, Exception exception = null, CancellationToken cancellationToken = default(CancellationToken))
+		{
+			try
+			{
+				if (exception != null)
+				{
+					logs = logs ?? new List<string>();
+					logs.Add($"> Message: {exception.Message}");
+					logs.Add($"> Type: {exception.GetType()}");
+					logs.Add($"> Stack: {exception.StackTrace}");
+
+					var inner = exception.InnerException;
+					var counter = 1;
+					while (inner != null)
+					{
+						logs.Add($"--- Inner ({counter}) ----------------");
+						logs.Add($"> Message: {inner.Message}");
+						logs.Add($"> Type: {inner.GetType()}");
+						logs.Add($"> Stack: {inner.StackTrace}");
+						inner = inner.InnerException;
+						counter++;
+					}
+				}
+
+				await this.InitializeLoggingServiceAsync().ConfigureAwait(false);
+				await this._loggingService.WriteDebugLogsAsync(correlationID, this.ServiceName, logs, cancellationToken).ConfigureAwait(false);
+			}
+			catch { }
+		}
+
+		/// <summary>
+		/// Writes the debug log into centralized log storage of all services
+		/// </summary>
+		/// <param name="correlationID">The identity of correlation</param>
+		/// <param name="logs">The collection of log messages</param>
+		/// <param name="exception">The error exception</param>
+		protected void WriteDebugLogs(string correlationID, List<string> logs, Exception exception = null)
+		{
+			Task.Run(async () =>
+			{
+				await this.WriteDebugLogsAsync(correlationID, logs, exception, this.CancellationTokenSource.Token).ConfigureAwait(false);
+			}).ConfigureAwait(false);
+		}
+
+		/// <summary>
+		/// Writes the debug log into centralized log storage of all services
+		/// </summary>
+		/// <param name="correlationID">The identity of correlation</param>
+		/// <param name="logs">The log messages</param>
+		/// <param name="exception">The error exception</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		protected Task WriteDebugLogsAsync(string correlationID, string logs, Exception exception = null, CancellationToken cancellationToken = default(CancellationToken))
+		{
+			return this.WriteDebugLogsAsync(correlationID, new List<string>() { logs }, exception, cancellationToken);
+		}
+
+		/// <summary>
+		/// Writes the debug log into centralized log storage of all services
+		/// </summary>
+		/// <param name="correlationID">The identity of correlation</param>
+		/// <param name="logs">The log messages</param>
+		/// <param name="exception">The error exception</param>
+		protected void WriteDebugLogs(string correlationID, string logs, Exception exception = null)
+		{
+			Task.Run(async () =>
+			{
+				await this.WriteDebugLogsAsync(correlationID, logs, exception, this.CancellationTokenSource.Token).ConfigureAwait(false);
+			}).ConfigureAwait(false);
+		}
+		#endregion
+
 		#region Call services
 		/// <summary>
 		/// Gets a service by name
@@ -990,6 +1113,75 @@ namespace net.vieapps.Services
 		public Task<bool> IsSystemAdministratorAsync(RequestInfo requestInfo)
 		{
 			return this.IsSystemAdministratorAsync(requestInfo?.Session?.User, requestInfo?.CorrelationID);
+		}
+
+		/// <summary>
+		/// Gets the state that determines the user is service administrator or not
+		/// </summary>
+		/// <param name="user">The user information</param>
+		/// /// <param name="serviceName">The name of service</param>
+		/// <returns></returns>
+		public async Task<bool> IsServiceAdministratorAsync(User user, string serviceName = null)
+		{
+			return user != null && user.IsAuthenticated
+				? await this.IsSystemAdministratorAsync(user).ConfigureAwait(false) || user.IsAuthorized(serviceName ?? this.ServiceName, null, null, Components.Security.Action.Full, null, this.GetPrivileges, this.GetPrivilegeActions)
+				: false;
+		}
+
+		/// <summary>
+		/// Gets the state that determines the user is service administrator or not
+		/// </summary>
+		/// <param name="session">The session information</param>
+		/// /// <param name="serviceName">The name of service</param>
+		/// <returns></returns>
+		public Task<bool> IsServiceAdministratorAsync(Session session, string serviceName = null)
+		{
+			return this.IsServiceAdministratorAsync(session?.User, serviceName);
+		}
+
+		/// <summary>
+		/// Gets the state that determines the user is service administrator or not
+		/// </summary>
+		/// <param name="requestInfo">The requesting information that contains user information and related service</param>
+		/// <returns></returns>
+		public Task<bool> IsServiceAdministratorAsync(RequestInfo requestInfo)
+		{
+			return this.IsServiceAdministratorAsync(requestInfo?.Session?.User, requestInfo?.ServiceName);
+		}
+
+
+		/// <summary>
+		/// Gets the state that determines the user is service administrator or not
+		/// </summary>
+		/// <param name="user">The user information</param>
+		/// /// <param name="serviceName">The name of service</param>
+		/// <returns></returns>
+		public async Task<bool> IsServiceModeratorAsync(User user, string serviceName = null)
+		{
+			return user != null && user.IsAuthenticated
+				? await this.IsServiceAdministratorAsync(user).ConfigureAwait(false) || user.IsAuthorized(serviceName ?? this.ServiceName, null, null, Components.Security.Action.Approve, null, this.GetPrivileges, this.GetPrivilegeActions)
+				: false;
+		}
+
+		/// <summary>
+		/// Gets the state that determines the user is service administrator or not
+		/// </summary>
+		/// <param name="session">The session information</param>
+		/// /// <param name="serviceName">The name of service</param>
+		/// <returns></returns>
+		public Task<bool> IsServiceModeratorAsync(Session session, string serviceName = null)
+		{
+			return this.IsServiceModeratorAsync(session?.User, serviceName);
+		}
+
+		/// <summary>
+		/// Gets the state that determines the user is service administrator or not
+		/// </summary>
+		/// <param name="requestInfo">The requesting information that contains user information and related service</param>
+		/// <returns></returns>
+		public Task<bool> IsServiceModeratorAsync(RequestInfo requestInfo)
+		{
+			return this.IsServiceModeratorAsync(requestInfo?.Session?.User, requestInfo?.ServiceName);
 		}
 
 		/// <summary>
@@ -1523,6 +1715,55 @@ namespace net.vieapps.Services
 		{
 			// prepare
 			var correlationID = UtilityService.NewUID;
+			Func<Task> continuation = async () =>
+			{
+				// initialize repository
+				if (initializeRepository)
+					try
+					{
+						await Task.Delay(UtilityService.GetRandomNumber(345, 678)).ConfigureAwait(false);
+						await Task.WhenAll(
+							this.WriteLogAsync(correlationID, "Initializing the repository"),
+							this.WriteDebugLogsAsync(correlationID, "Initializing the repository")
+						).ConfigureAwait(false);
+						RepositoryStarter.Initialize(
+							new List<Assembly>() { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
+								.Where(n => !n.Name.IsStartsWith("mscorlib") && !n.Name.IsStartsWith("System") && !n.Name.IsStartsWith("Microsoft") && !n.Name.IsEquals("NETStandard")
+									&& !n.Name.IsStartsWith("Newtonsoft") && !n.Name.IsStartsWith("WampSharp") && !n.Name.IsStartsWith("Castle.") && !n.Name.IsStartsWith("StackExchange.")
+									&& !n.Name.IsStartsWith("MongoDB") && !n.Name.IsStartsWith("MySql") && !n.Name.IsStartsWith("Oracle") && !n.Name.IsStartsWith("Npgsql")
+									&& !n.Name.IsStartsWith("VIEApps.Components.") && !n.Name.IsStartsWith("VIEApps.Services.Base") && !n.Name.IsStartsWith("VIEApps.Services.APIGateway"))
+								.Select(n => Assembly.Load(n))
+							),
+							(log, ex) =>
+							{
+								this.WriteLog(correlationID, log, ex);
+								if (ex != null)
+									this.WriteDebugLogs(correlationID, log, ex);
+							}
+						);
+					}
+					catch (Exception ex)
+					{
+						await Task.WhenAll(
+							this.WriteLogAsync(correlationID, "Error occurred while initializing the repository", ex),
+							this.WriteDebugLogsAsync(correlationID, "Error occurred while initializing the repository", ex)
+						).ConfigureAwait(false);
+					}
+
+				// run the next action
+				if (next != null)
+					try
+					{
+						await next(this).ConfigureAwait(false);
+					}
+					catch (Exception ex)
+					{
+						await Task.WhenAll(
+							this.WriteLogAsync(correlationID, "Error occurred while running the next action", ex),
+							this.WriteDebugLogsAsync(correlationID, "Error occurred while running the next action", ex)
+						).ConfigureAwait(false);
+					}
+			};
 
 			// start the service
 			Task.Run(async () =>
@@ -1530,16 +1771,34 @@ namespace net.vieapps.Services
 				try
 				{
 					await this.StartAsync(
-						service => this.WriteLog(correlationID, $"The service is started & registered - PID: {Process.GetCurrentProcess().Id}"),
-						exception => this.WriteLog(correlationID, "Error occurred while starting the service", exception)
+						async (service) =>
+						{
+							await Task.WhenAll(
+								this.WriteLogAsync(correlationID, $"The service is registered - PID: {Process.GetCurrentProcess().Id}"),
+								this.WriteDebugLogsAsync(correlationID, $"The service is registered - PID: {Process.GetCurrentProcess().Id}")
+							).ConfigureAwait(false);
+							await continuation().ConfigureAwait(false);
+						},
+						(exception) =>
+						{
+							this.WriteLog(correlationID, "Error occurred while registering the service", exception);
+							this.WriteDebugLogs(correlationID, "Error occurred while registering the service", exception);
+						}
 					).ConfigureAwait(false);
 				}
 				catch (Exception ex)
 				{
-					await this.WriteLogAsync(correlationID, "Error occurred while starting the service", ex).ConfigureAwait(false);
+					await Task.WhenAll(
+						this.WriteLogAsync(correlationID, "Error occurred while starting the service", ex),
+						this.WriteDebugLogsAsync(correlationID, "Error occurred while starting the service", ex)
+					).ConfigureAwait(false);
+
 					if (ex is ArgumentException && ex.Message.IsContains("Value does not fall within the expected range"))
 					{
-						await this.WriteLogAsync(correlationID, "Got a problem while connecting to WAMP router. Try to re-connect after few times...").ConfigureAwait(false);
+						await Task.WhenAll(
+							this.WriteLogAsync(correlationID, "Got a problem while connecting to WAMP router. Try to re-connect after few times..."),
+							this.WriteDebugLogsAsync(correlationID, "Got a problem while connecting to WAMP router. Try to re-connect after few times...")
+						).ConfigureAwait(false);
 						await Task.Delay(UtilityService.GetRandomNumber(456, 789)).ConfigureAwait(false);
 
 						this._incommingChannel?.Close();
@@ -1552,52 +1811,23 @@ namespace net.vieapps.Services
 						this._messagingService = null;
 
 						await this.StartAsync(
-							service => this.WriteLog(correlationID, $"The service is re-registered - PID: {Process.GetCurrentProcess().Id}"),
-							exception => this.WriteLog(correlationID, "Error occurred while re-starting the service", exception)
+							async (service) =>
+							{
+								await Task.WhenAll(
+									this.WriteLogAsync(correlationID, $"The service is re-registered - PID: {Process.GetCurrentProcess().Id}"),
+									this.WriteDebugLogsAsync(correlationID, $"The service is re-registered - PID: {Process.GetCurrentProcess().Id}")
+								).ConfigureAwait(false);
+								await continuation().ConfigureAwait(false);
+							},
+							(exception) =>
+							{
+								this.WriteLog(correlationID, "Error occurred while re-registering the service", exception);
+								this.WriteDebugLogs(correlationID, "Error occurred while re-registering the service", exception);
+							}
 						).ConfigureAwait(false);
 					}
 				}
-			})
-
-			// continue
-			.ContinueWith(async (task) =>
-			{
-				// initialize repository
-				if (initializeRepository)
-					try
-					{
-						await this.WriteLogAsync(correlationID, "Initializing the repository").ConfigureAwait(false);
-						RepositoryStarter.Initialize(
-							new List<Assembly>() { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
-								.Where(n => !n.Name.IsStartsWith("mscorlib") && !n.Name.IsStartsWith("System") && !n.Name.IsStartsWith("Microsoft") && !n.Name.IsEquals("NETStandard")
-									&& !n.Name.IsStartsWith("Newtonsoft") && !n.Name.IsStartsWith("WampSharp") && !n.Name.IsStartsWith("Castle.") && !n.Name.IsStartsWith("StackExchange.")
-									&& !n.Name.IsStartsWith("MongoDB") && !n.Name.IsStartsWith("MySql") && !n.Name.IsStartsWith("Oracle") && !n.Name.IsStartsWith("Npgsql")
-									&& !n.Name.IsStartsWith("VIEApps.Components.") && !n.Name.IsStartsWith("VIEApps.Services.Base") && !n.Name.IsStartsWith("VIEApps.Services.APIGateway"))
-								.Select(n => Assembly.Load(n))
-							),
-							(log, ex) =>
-							{
-								this.WriteLog(correlationID, log, ex);
-							}
-						);
-					}
-					catch (Exception ex)
-					{
-						await this.WriteLogAsync(correlationID, "Error occurred while initializing the repository", ex).ConfigureAwait(false);
-					}
-
-				// run the next action
-				if (next != null)
-					try
-					{
-						await next(this).ConfigureAwait(false);
-					}
-					catch (Exception ex)
-					{
-						await this.WriteLogAsync(correlationID, "Error occurred while running the next action", ex).ConfigureAwait(false);
-					}
-			})
-			.ConfigureAwait(false);
+			}).ConfigureAwait(false);
 		}
 
 		/// <summary>
@@ -1614,14 +1844,14 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected virtual async Task StartAsync(Action<ServiceBase> onRegisterSuccess = null, Action<Exception> onRegisterError = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
 		{
-			await this.OpenIncomingChannelAsync(onIncomingConnectionEstablished, onIncomingConnectionBroken, onIncomingConnectionError).ConfigureAwait(false);
-			await this.RegisterServiceAsync(onRegisterSuccess, onRegisterError).ConfigureAwait(false);
 			await this.OpenOutgoingChannelAsync(onOutgoingConnectionEstablished, onOutgoingConnectionBroken, onOutgoingConnectionError).ConfigureAwait(false);
 			await Task.WhenAll(
 				this.InitializeLoggingServiceAsync(),
 				this.InitializeRTUServiceAsync(),
 				this.InitializeMessagingServiceAsync()
 			).ConfigureAwait(false);
+			await this.OpenIncomingChannelAsync(onIncomingConnectionEstablished, onIncomingConnectionBroken, onIncomingConnectionError).ConfigureAwait(false);
+			await this.RegisterServiceAsync(onRegisterSuccess, onRegisterError).ConfigureAwait(false);
 		}
 
 		/// <summary>
@@ -1635,7 +1865,7 @@ namespace net.vieapps.Services
 			this.StopTimers();
 			this._communicator?.Dispose();
 
-			Task.WaitAll(new Task[]
+			Task.WaitAll(new[]
 			{
 				Task.Run(async () =>
 				{

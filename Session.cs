@@ -31,6 +31,7 @@ namespace net.vieapps.Services
 			this.AppPlatform = session?.AppPlatform ?? "";
 			this.AppAgent = session?.AppAgent ?? "";
 			this.AppOrigin = session?.AppOrigin ?? "";
+			this.AppMode = session?.AppMode ?? "Client";
 			this.User = session?.User ?? new User();
 			this.Verification = session != null ? session.Verification : false;
 		}
@@ -70,6 +71,11 @@ namespace net.vieapps.Services
 		/// Gets or sets the origin info (origin or refer url) of the app that associates with this session
 		/// </summary>
 		public string AppOrigin { get; set; }
+
+		/// <summary>
+		/// Gets or sets the mode of the app that associates with this session
+		/// </summary>
+		public string AppMode { get; set; }
 
 		/// <summary>
 		/// Gets or sets the information of user who performs the action in the sesssion

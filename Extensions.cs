@@ -9,6 +9,7 @@ using System.Collections.Generic;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using WampSharp.V2.Core.Contracts;
 
 using net.vieapps.Components.Utility;
 using net.vieapps.Components.Security;
@@ -418,7 +419,7 @@ namespace net.vieapps.Services
 		/// <param name="exception"></param>
 		/// <param name="requestInfo"></param>
 		/// <returns></returns>
-		public static Tuple<int, string, string, string, Exception, JObject> GetDetails(this WampSharp.V2.Core.Contracts.WampException exception, RequestInfo requestInfo = null)
+		public static Tuple<int, string, string, string, Exception, JObject> GetDetails(this WampException exception, RequestInfo requestInfo = null)
 		{
 			var code = 500;
 			var message = "";
@@ -427,6 +428,7 @@ namespace net.vieapps.Services
 			Exception inner = null;
 			JObject jsonException = null;
 
+			// unavailable
 			if (exception.ErrorUri.Equals("wamp.error.no_such_procedure") || exception.ErrorUri.Equals("wamp.error.callee_unregistered"))
 			{
 				if (exception.Arguments != null && exception.Arguments.Length > 0 && exception.Arguments[0] != null && exception.Arguments[0] is JValue)
@@ -434,16 +436,18 @@ namespace net.vieapps.Services
 					message = (exception.Arguments[0] as JValue).Value.ToString();
 					var start = message.IndexOf("'");
 					var end = message.IndexOf("'", start + 1);
-					message = $"The requested service is not found [{message.Substring(start + 1, end - start - 1).Replace("'", "")}]";
+					message = $"The requested service is unavailable [{message.Substring(start + 1, end - start - 1).Replace("'", "")}]";
 				}
 				else
-					message = "The requested service is not found";
+					message = "The requested service is unavailable";
 
-				type = "ServiceNotFoundException";
+				type = "ServiceUnavailableException";
 				stack = exception.StackTrace;
 				inner = exception;
-				code = 404;
+				code = 503;
 			}
+
+			// runtime error
 			else if (exception.ErrorUri.Equals("wamp.error.runtime_error"))
 			{
 				if (exception.Arguments != null && exception.Arguments.Length > 0 && exception.Arguments[0] != null && exception.Arguments[0] is JObject)
@@ -476,6 +480,7 @@ namespace net.vieapps.Services
 				inner = exception;
 			}
 
+			// unknown
 			else
 			{
 				message = exception.Message;
