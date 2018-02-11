@@ -309,7 +309,7 @@ namespace net.vieapps.Services
 		/// <param name="onSuccess"></param>
 		/// <param name="onError"></param>
 		/// <returns></returns>
-		protected async Task RegisterServiceAsync(Action<ServiceBase> onSuccess = null, Action<Exception> onError = null)
+		protected async Task RegisterServiceAsync(Func<ServiceBase, Task> onSuccess = null, Func<Exception, Task> onError = null)
 		{
 			await this.OpenIncomingChannelAsync().ConfigureAwait(false);
 			try
@@ -337,11 +337,13 @@ namespace net.vieapps.Services
 					);
 
 				// callback when done
-				onSuccess?.Invoke(this);
+				if (onSuccess != null)
+					await onSuccess(this).ConfigureAwait(false);
 			}
 			catch (Exception ex)
 			{
-				onError?.Invoke(ex);
+				if (onError != null)
+					await onError(ex).ConfigureAwait(false);
 			}
 		}
 		#endregion
@@ -624,20 +626,33 @@ namespace net.vieapps.Services
 			var stack = "";
 			if (exception != null)
 			{
-				logs = logs ?? new List<string>();
-				logs.Add($"> Message: {exception.Message}");
-				logs.Add($"> Type: {exception.GetType().ToString()}");
-				stack = exception.StackTrace;
-				var inner = exception.InnerException;
-				var counter = 0;
-				while (inner != null)
+				if (exception is WampException)
 				{
-					counter++;
-					stack += "\r\n" + $"--- Inner ({counter}): ---------------------- " + "\r\n"
-						+ "> Message: " + inner.Message + "\r\n"
-						+ "> Type: " + inner.GetType().ToString() + "\r\n"
-						+ inner.StackTrace;
-					inner = inner.InnerException;
+					var details = (exception as WampException).GetDetails();
+					logs = logs ?? new List<string>();
+					logs.Add($"> Message: {details.Item2}");
+					logs.Add($"> Type: {details.Item3}");
+					logs.Add($"> Stack: {details.Item4}");
+					if (details.Item6 != null)
+						logs.Add($"> Inners: {details.Item6.ToString(Newtonsoft.Json.Formatting.None)}");
+				}
+				else
+				{
+					logs = logs ?? new List<string>();
+					logs.Add($"> Message: {exception.Message}");
+					logs.Add($"> Type: {exception.GetType().ToString()}");
+					stack = exception.StackTrace;
+					var inner = exception.InnerException;
+					var counter = 0;
+					while (inner != null)
+					{
+						counter++;
+						stack += "\r\n" + $"--- Inner ({counter}): ---------------------- " + "\r\n"
+							+ "> Message: " + inner.Message + "\r\n"
+							+ "> Type: " + inner.GetType().ToString() + "\r\n"
+							+ inner.StackTrace;
+						inner = inner.InnerException;
+					}
 				}
 			}
 
@@ -1604,7 +1619,7 @@ namespace net.vieapps.Services
 			return typeof(T).GetTypeName(true) + "#"
 				+ (filter != null ? filter.GetMD5() + ":" : "")
 				+ (sort != null ? sort.GetMD5() + ":" : "")
-				+ (pageNumber > 0 ? pageNumber.ToString() : "");
+				+ (pageNumber > 0 ? $":{pageNumber}" : "");
 		}
 
 		List<string> GetRelatedCacheKeys<T>(IFilterBy<T> filter, SortBy<T> sort) where T : class
@@ -1779,10 +1794,12 @@ namespace net.vieapps.Services
 							).ConfigureAwait(false);
 							await continuation().ConfigureAwait(false);
 						},
-						(exception) =>
+						async (exception) =>
 						{
-							this.WriteLog(correlationID, "Error occurred while registering the service", exception);
-							this.WriteDebugLogs(correlationID, "Error occurred while registering the service", exception);
+							await Task.WhenAll(
+								this.WriteLogAsync(correlationID, "Error occurred while registering the service", exception),
+								this.WriteDebugLogsAsync(correlationID, "Error occurred while registering the service", exception)
+							).ConfigureAwait(false);
 						}
 					).ConfigureAwait(false);
 				}
@@ -1819,10 +1836,12 @@ namespace net.vieapps.Services
 								).ConfigureAwait(false);
 								await continuation().ConfigureAwait(false);
 							},
-							(exception) =>
+							async (exception) =>
 							{
-								this.WriteLog(correlationID, "Error occurred while re-registering the service", exception);
-								this.WriteDebugLogs(correlationID, "Error occurred while re-registering the service", exception);
+								await Task.WhenAll(
+									this.WriteLogAsync(correlationID, "Error occurred while registering the service", exception),
+									this.WriteDebugLogsAsync(correlationID, "Error occurred while registering the service", exception)
+								).ConfigureAwait(false);
 							}
 						).ConfigureAwait(false);
 					}
@@ -1842,7 +1861,7 @@ namespace net.vieapps.Services
 		/// <param name="onIncomingConnectionError"></param>
 		/// <param name="onOutgoingConnectionError"></param>
 		/// <returns></returns>
-		protected virtual async Task StartAsync(Action<ServiceBase> onRegisterSuccess = null, Action<Exception> onRegisterError = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
+		protected virtual async Task StartAsync(Func<ServiceBase, Task> onRegisterSuccess = null, Func<Exception, Task> onRegisterError = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
 		{
 			await this.OpenOutgoingChannelAsync(onOutgoingConnectionEstablished, onOutgoingConnectionBroken, onOutgoingConnectionError).ConfigureAwait(false);
 			await Task.WhenAll(
