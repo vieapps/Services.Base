@@ -170,8 +170,8 @@ namespace net.vieapps.Services
 					if (!this._channelsAreClosedBySystem && !args.CloseType.Equals(SessionCloseType.Disconnection))
 						this.ReOpenIncomingChannel(
 							123,
-							(cn) => this.WriteLog(UtilityService.NewUID, this.ServiceName, null, "Re-connect the incomming connection successful"),
-							(ex) => this.WriteLog(UtilityService.NewUID, this.ServiceName, null, "Cannot re-connect the incomming connection", ex)
+							(cn) => this.WriteLog(UtilityService.NewUUID, this.ServiceName, null, "Re-connect the incomming connection successful"),
+							(ex) => this.WriteLog(UtilityService.NewUUID, this.ServiceName, null, "Cannot re-connect the incomming connection", ex)
 						);
 				};
 
@@ -254,8 +254,8 @@ namespace net.vieapps.Services
 					if (!this._channelsAreClosedBySystem && !args.CloseType.Equals(SessionCloseType.Disconnection))
 						this.ReOpenOutgoingChannel(
 							234,
-							(cn) => this.WriteLog(UtilityService.NewUID, this.ServiceName, null, "Re-connect the outgoing connection successful"),
-							(ex) => this.WriteLog(UtilityService.NewUID, this.ServiceName, null, "Cannot re-connect the outgoing connection", ex)
+							(cn) => this.WriteLog(UtilityService.NewUUID, this.ServiceName, null, "Re-connect the outgoing connection successful"),
+							(ex) => this.WriteLog(UtilityService.NewUUID, this.ServiceName, null, "Cannot re-connect the outgoing connection", ex)
 						);
 				};
 
@@ -330,8 +330,8 @@ namespace net.vieapps.Services
 						async (exception) =>
 						{
 							await Task.WhenAll(
-								this.WriteLogAsync(UtilityService.NewUID, this.ServiceName, null, "Error occurred while fetching inter-communicate message", exception),
-								this.WriteDebugLogsAsync(UtilityService.NewUID, "Error occurred while fetching inter-communicate message", exception)
+								this.WriteLogAsync(UtilityService.NewUUID, this.ServiceName, null, "Error occurred while fetching inter-communicate message", exception),
+								this.WriteDebugLogsAsync(UtilityService.NewUUID, "Error occurred while fetching inter-communicate message", exception)
 							).ConfigureAwait(false);
 						}
 					);
@@ -686,7 +686,7 @@ namespace net.vieapps.Services
 		{
 			// update the log message into centralized logs of the API Gateway
 			if (updateCentralizedLogs)
-				await this.WriteLogsAsync(correlationID ?? UtilityService.NewUID, this.ServiceName, null, logs, exception, this.CancellationTokenSource.Token).ConfigureAwait(false);
+				await this.WriteLogsAsync(correlationID ?? UtilityService.NewUUID, this.ServiceName, null, logs, exception, this.CancellationTokenSource.Token).ConfigureAwait(false);
 
 			// write to the terminator or the standard output stream
 			if (this.IsUserInteractive)
@@ -1099,7 +1099,7 @@ namespace net.vieapps.Services
 						{
 							{ "IsSystemAdministrator", "" }
 						},
-						CorrelationID = correlationID ?? UtilityService.NewUID
+						CorrelationID = correlationID ?? UtilityService.NewUUID
 					}).ConfigureAwait(false);
 					return user.ID.IsEquals((result["ID"] as JValue)?.Value as string) && (result["IsSystemAdministrator"] as JValue)?.Value.CastAs<bool>() == true;
 				}
@@ -1729,7 +1729,7 @@ namespace net.vieapps.Services
 		public virtual void Start(string[] args = null, bool initializeRepository = true, Func<IService, Task> next = null)
 		{
 			// prepare
-			var correlationID = UtilityService.NewUID;
+			var correlationID = UtilityService.NewUUID;
 			Func<Task> continuation = async () =>
 			{
 				// initialize repository
