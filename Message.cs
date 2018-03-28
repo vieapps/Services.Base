@@ -11,21 +11,17 @@ namespace net.vieapps.Services
 	/// </summary>
 	public class BaseMessage
 	{
-		public BaseMessage()
-		{
-			this.Type = "";
-			this.Data = new JObject();
-		}
+		public BaseMessage() { }
 
 		/// <summary>
 		/// Gets or sets type of update message
 		/// </summary>
-		public string Type { get; set; }
+		public string Type { get; set; } = "";
 
 		/// <summary>
 		/// Gets or sets data of update message
 		/// </summary>
-		public JToken Data { get; set; }
+		public JToken Data { get; set; } = new JObject();
 	}
 
 	//  --------------------------------------------------------------------------------------------
@@ -37,24 +33,19 @@ namespace net.vieapps.Services
 	{
 		public UpdateMessage(BaseMessage message = null) : base()
 		{
-			this.DeviceID = "";
-			this.ExcludedDeviceID = "";
-			if (message != null)
-			{
-				this.Type = message.Type;
-				this.Data = message.Data;
-			}
+			this.Type = message?.Type ?? "";
+			this.Data = message?.Data ?? new JObject();
 		}
 
 		/// <summary>
 		/// Gets or sets identity of device that received the message
 		/// </summary>
-		public string DeviceID { get; set; }
+		public string DeviceID { get; set; } = "";
 
 		/// <summary>
 		/// Gets or sets the identity of excluded devices
 		/// </summary>
-		public string ExcludedDeviceID { get; set; }
+		public string ExcludedDeviceID { get; set; } = "";
 	}
 
 	//  --------------------------------------------------------------------------------------------
@@ -67,11 +58,8 @@ namespace net.vieapps.Services
 		public CommunicateMessage(string serviceName = null, BaseMessage message = null) : base()
 		{
 			this.ServiceName = serviceName ?? "";
-			if (message != null)
-			{
-				this.Type = message.Type;
-				this.Data = message.Data;
-			}
+			this.Type = message?.Type ?? "";
+			this.Data = message?.Data ?? new JObject();
 		}
 
 		/// <summary>

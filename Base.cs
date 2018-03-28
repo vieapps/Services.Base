@@ -51,8 +51,9 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Process the inter-communicate message
 		/// </summary>
-		/// <param name="message"></param>
-		protected virtual Task ProcessInterCommunicateMessageAsync(CommunicateMessage message)
+		/// <param name="message">The message</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		protected virtual Task ProcessInterCommunicateMessageAsync(CommunicateMessage message, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			return Task.CompletedTask;
 		}
@@ -641,7 +642,10 @@ namespace net.vieapps.Services
 					logs = logs ?? new List<string>();
 					logs.Add($"> Message: {exception.Message}");
 					logs.Add($"> Type: {exception.GetType().ToString()}");
-					stack = exception.StackTrace;
+					stack = exception.StackTrace
+						+ (exception is RepositoryOperationException
+							? "\r\n" + (exception as RepositoryOperationException).Info
+							: "");
 					var inner = exception.InnerException;
 					var counter = 0;
 					while (inner != null)
@@ -1164,7 +1168,6 @@ namespace net.vieapps.Services
 			return this.IsServiceAdministratorAsync(requestInfo?.Session?.User, requestInfo?.ServiceName);
 		}
 
-
 		/// <summary>
 		/// Gets the state that determines the user is service administrator or not
 		/// </summary>
@@ -1265,55 +1268,41 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected virtual List<string> GetPrivilegeActions(PrivilegeRole role)
 		{
-			var actions = new List<Components.Security.Action>();
-			switch (role)
-			{
-				case PrivilegeRole.Administrator:
-					actions = new List<Components.Security.Action>()
-					{
-						Components.Security.Action.Full
-					};
-					break;
-
-				case PrivilegeRole.Moderator:
-					actions = new List<Components.Security.Action>()
+			var actions = role.Equals(PrivilegeRole.Administrator)
+				? new List<Components.Security.Action>()
+				{
+					Components.Security.Action.Full
+				}
+				: role.Equals(PrivilegeRole.Moderator)
+					? new List<Components.Security.Action>()
 					{
 						Components.Security.Action.Approve,
 						Components.Security.Action.Update,
 						Components.Security.Action.Create,
 						Components.Security.Action.View,
 						Components.Security.Action.Download
-					};
-					break;
-
-				case PrivilegeRole.Editor:
-					actions = new List<Components.Security.Action>()
-					{
-						Components.Security.Action.Update,
-						Components.Security.Action.Create,
-						Components.Security.Action.View,
-						Components.Security.Action.Download
-					};
-					break;
-
-				case PrivilegeRole.Contributor:
-					actions = new List<Components.Security.Action>()
-					{
-						Components.Security.Action.Create,
-						Components.Security.Action.View,
-						Components.Security.Action.Download
-					};
-					break;
-
-				default:
-					actions = new List<Components.Security.Action>()
-					{
-						Components.Security.Action.View,
-						Components.Security.Action.Download
-					};
-					break;
-			}
-			return actions.Select(a => a.ToString()).ToList();
+					}
+					: role.Equals(PrivilegeRole.Editor)
+						? new List<Components.Security.Action>()
+						{
+							Components.Security.Action.Update,
+							Components.Security.Action.Create,
+							Components.Security.Action.View,
+							Components.Security.Action.Download
+						}
+						: role.Equals(PrivilegeRole.Contributor)
+							? new List<Components.Security.Action>()
+							{
+								Components.Security.Action.Create,
+								Components.Security.Action.View,
+								Components.Security.Action.Download
+							}
+							:  new List<Components.Security.Action>()
+							{
+								Components.Security.Action.View,
+								Components.Security.Action.Download
+							};
+			return actions.Select(action => action.ToString()).ToList();
 		}
 
 		/// <summary>
@@ -1617,20 +1606,20 @@ namespace net.vieapps.Services
 		protected string GetCacheKey<T>(IFilterBy<T> filter, SortBy<T> sort, int pageNumber = 0) where T : class
 		{
 			return typeof(T).GetTypeName(true) + "#"
-				+ (filter != null ? filter.GetMD5() + ":" : "")
-				+ (sort != null ? sort.GetMD5() + ":" : "")
-				+ (pageNumber > 0 ? $":{pageNumber}" : "");
+				+ (filter != null ? $"{filter.GetMD5()}:" : "")
+				+ (sort != null ? $"{sort.GetMD5()}:" : "")
+				+ (pageNumber > 0 ? $"{pageNumber}" : "");
 		}
 
 		List<string> GetRelatedCacheKeys<T>(IFilterBy<T> filter, SortBy<T> sort) where T : class
 		{
 			var key = this.GetCacheKey<T>(filter, sort);
-			var keys = new List<string>() { key, $"{key}-json", $"{key}-total" };
+			var keys = new List<string>() { key, $"{key}json", $"{key}total" };
 			for (var index = 1; index <= 100; index++)
 			{
-				keys.Add($"{key}:{index}");
-				keys.Add($"{key}:{index}-json");
-				keys.Add($"{key}:{index}-total");
+				keys.Add($"{key}{index}");
+				keys.Add($"{key}{index}:json");
+				keys.Add($"{key}{index}:total");
 			}
 			return keys;
 		}
@@ -1673,14 +1662,18 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public WampException GetRuntimeException(RequestInfo requestInfo, string message, Exception exception, bool writeLogs = true)
 		{
+			if (writeLogs)
+				this.WriteLog(requestInfo, message, exception);
+
+			exception = exception != null && exception is RepositoryOperationException
+				? exception.InnerException
+				: exception;
+
 			message = string.IsNullOrWhiteSpace(message)
 				? exception != null
 					? exception.Message
 					: $"Error occurred while processing with the service [net.vieapps.services.{requestInfo.ServiceName.ToLower().Trim()}]"
 				: message;
-
-			if (writeLogs)
-				this.WriteLog(requestInfo, message, exception);
 
 			if (exception is WampException)
 				return exception as WampException;
@@ -1688,12 +1681,13 @@ namespace net.vieapps.Services
 			else
 			{
 				var details = exception != null
-					? new Dictionary<string, object>() { { "0", exception.StackTrace } }
+					? new Dictionary<string, object>()
+					{
+						{ "0", exception.StackTrace }
+					}
 					: null;
 
-				var inner = exception != null
-					? exception.InnerException
-					: null;
+				var inner = exception ?.InnerException;
 				var counter = 0;
 				while (inner != null)
 				{
@@ -1702,7 +1696,7 @@ namespace net.vieapps.Services
 					inner = inner.InnerException;
 				}
 
-				return new WampRpcRuntimeException(details, new Dictionary<string, object>(), new Dictionary<string, object>() { { "RequestInfo", requestInfo.ToJson() } }, message, exception);
+				return new WampRpcRuntimeException(details, new Dictionary<string, object>(), new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase) { { "RequestInfo", requestInfo.ToJson() } }, message, exception);
 			}
 		}
 
@@ -1730,7 +1724,7 @@ namespace net.vieapps.Services
 		{
 			// prepare
 			var correlationID = UtilityService.NewUUID;
-			Func<Task> continuation = async () =>
+			async Task continuation()
 			{
 				// initialize repository
 				if (initializeRepository)
@@ -1778,7 +1772,7 @@ namespace net.vieapps.Services
 							this.WriteDebugLogsAsync(correlationID, "Error occurred while running the next action", ex)
 						).ConfigureAwait(false);
 					}
-			};
+			}
 
 			// start the service
 			Task.Run(async () =>
