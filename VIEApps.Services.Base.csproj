@@ -39,11 +39,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Microsoft.Extensions.Logging" Version="2.0.0" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Console" Version="2.0.0" />
+		<PackageReference Include="Microsoft.Extensions.Logging" Version="2.0.1" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Console" Version="2.0.1" />
 		<PackageReference Include="System.Reactive" Version="3.1.1" />
-		<PackageReference Include="VIEApps.Components.Repository" Version="10.1.13.1803" />
-		<PackageReference Include="VIEApps.Components.Utility" Version="10.1.13.1803" />
+		<PackageReference Include="VIEApps.Components.Repository" Version="10.1.14.1804" />
 		<PackageReference Include="WampSharp.Default.Client" Version="18.3.1" />
 	</ItemGroup>
 
