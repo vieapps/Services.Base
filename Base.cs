@@ -128,10 +128,11 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected virtual Tuple<string, string, bool> GetRouterInfo()
 		{
-			var address = UtilityService.GetAppSetting("Router:Address", "ws://127.0.0.1:16429/");
-			var realm = UtilityService.GetAppSetting("Router:Realm", "VIEAppsRealm");
-			var mode = UtilityService.GetAppSetting("Router:ChannelsMode", "MsgPack");
-			return new Tuple<string, string, bool>(address, realm, mode.IsEquals("json"));
+			return new Tuple<string, string, bool>(
+				UtilityService.GetAppSetting("Router:Address", "ws://127.0.0.1:16429/"),
+				UtilityService.GetAppSetting("Router:Realm", "VIEAppsRealm"),
+				"json".IsEquals(UtilityService.GetAppSetting("Router:ChannelsMode", "MsgPack"))
+			);
 		}
 
 		/// <summary>
