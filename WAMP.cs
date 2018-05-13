@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 
+using WampSharp.Binding;
 using WampSharp.Core.Listener;
 using WampSharp.V2;
 using WampSharp.V2.Realm;
@@ -182,9 +183,8 @@ namespace net.vieapps.Services
 		#endregion
 
 		#region Re-open & Close
-		public static void Reopen(this IWampChannel wampChannel, Action<IWampChannel> onSuccess = null, Action<Exception> onError = null)
-		{
-			new WampChannelReconnector(wampChannel, async () =>
+		public static void ReOpen(this IWampChannel wampChannel, Action<IWampChannel> onSuccess = null, Action<Exception> onError = null)
+			=> new WampChannelReconnector(wampChannel, async () =>
 			{
 				try
 				{
@@ -197,7 +197,6 @@ namespace net.vieapps.Services
 					onError?.Invoke(ex);
 				}
 			}).Start();
-		}
 
 		/// <summary>
 		/// Closes all WAMP channels
@@ -259,8 +258,17 @@ namespace net.vieapps.Services
 
 				type = "ServiceUnavailableException";
 				stack = exception.StackTrace;
-				inner = exception;
 				code = 503;
+			}
+
+			// cannot serialize
+			else if (exception.ErrorUri.Equals("wamp.error.invalid_argument"))
+			{
+				message = "Cannot serialize one of argument objects (or child object)";
+				if (exception.Arguments != null && exception.Arguments.Length > 0 && exception.Arguments[0] != null && exception.Arguments[0] is JValue)
+					message += $" => {(exception.Arguments[0] as JValue).Value}";
+				type = "SerializationException";
+				stack = exception.StackTrace;
 			}
 
 			// runtime error
@@ -300,7 +308,7 @@ namespace net.vieapps.Services
 			else
 			{
 				message = exception.Message;
-				type = exception.GetType().ToString().ToArray('.').Last();
+				type = exception.GetType().GetTypeName(true);
 				stack = exception.StackTrace;
 				inner = exception.InnerException;
 			}
@@ -340,11 +348,8 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static async Task<JObject> CallServiceAsync(this RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken))
 		{
-			return await (await WAMPConnections.GetServiceAsync(
-				requestInfo != null && !string.IsNullOrWhiteSpace(requestInfo.ServiceName)
-					? requestInfo.ServiceName
-					: "unknown"
-				).ConfigureAwait(false)).ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false);
+			var service = await WAMPConnections.GetServiceAsync(requestInfo != null && !string.IsNullOrWhiteSpace(requestInfo.ServiceName) ? requestInfo.ServiceName : "unknown").ConfigureAwait(false);
+			return await service.ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false);
 		}
 		#endregion
 

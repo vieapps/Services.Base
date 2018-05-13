@@ -13,7 +13,7 @@ namespace net.vieapps.Services
 	/// </summary>
 	public class RegistrationInterceptor : CalleeRegistrationInterceptor
 	{
-		string _name;
+		readonly string _name;
 
 		/// <summary>
 		/// Initializes an interceptor for registering a service
@@ -26,21 +26,16 @@ namespace net.vieapps.Services
 		}
 
 		public override string GetProcedureUri(MethodInfo method)
-		{
-			return string.IsNullOrWhiteSpace(this._name)
+			=> string.IsNullOrWhiteSpace(this._name)
 				? base.GetProcedureUri(method)
 				: string.Format(base.GetProcedureUri(method), this._name.Trim().ToLower());
-		}
 
 		/// <summary>
 		/// Creates an interceptor for registering a service
 		/// </summary>
 		/// <param name="name">The string that presents name of service (for marking URI)</param>
 		/// <returns></returns>
-		public static RegistrationInterceptor Create(string name = null)
-		{
-			return new RegistrationInterceptor(name);
-		}
+		public static RegistrationInterceptor Create(string name = null) => new RegistrationInterceptor(name);
 	}
 
 	//  --------------------------------------------------------------------------------------------
@@ -50,7 +45,7 @@ namespace net.vieapps.Services
 	/// </summary>
 	public class ProxyInterceptor : CalleeProxyInterceptor
 	{
-		string _name;
+		readonly string _name;
 
 		/// <summary>
 		/// Initializes an interceptor for calling a service
@@ -63,20 +58,15 @@ namespace net.vieapps.Services
 		}
 
 		public override string GetProcedureUri(MethodInfo method)
-		{
-			return string.IsNullOrWhiteSpace(this._name)
+			=> string.IsNullOrWhiteSpace(this._name)
 				? base.GetProcedureUri(method)
 				: string.Format(base.GetProcedureUri(method), this._name.Trim().ToLower());
-		}
 
 		/// <summary>
 		/// Creates an interceptor for calling a service
 		/// </summary>
 		/// <param name="name">The string that presents name of service (for marking URI)</param>
 		/// <returns></returns>
-		public static CachedCalleeProxyInterceptor Create(string name = null)
-		{
-			return new CachedCalleeProxyInterceptor(new ProxyInterceptor(name));
-		}
+		public static CachedCalleeProxyInterceptor Create(string name = null) => new CachedCalleeProxyInterceptor(new ProxyInterceptor(name));
 	}
 }
