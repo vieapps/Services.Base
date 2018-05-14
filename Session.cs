@@ -32,7 +32,7 @@ namespace net.vieapps.Services
 			this.AppAgent = session?.AppAgent ?? "";
 			this.AppOrigin = session?.AppOrigin ?? "";
 			this.AppMode = session?.AppMode ?? "Client";
-			this.User = session?.User ?? new UserIdentity();
+			this.User = session?.User ?? new User();
 			this.Verification = session != null ? session.Verification : false;
 		}
 
@@ -80,7 +80,7 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets or sets the information of user who performs the action in the sesssion
 		/// </summary>
-		public UserIdentity User { get; set; }
+		public User User { get; set; }
 
 		/// <summary>
 		/// Gets or sets two-factors verification status

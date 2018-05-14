@@ -416,7 +416,7 @@ namespace net.vieapps.Services
 		/// <param name="user">The user information</param>
 		/// /// <param name="correlationID">The correlation identity</param>
 		/// <returns></returns>
-		public static async Task<bool> IsSystemAdministratorAsync(this UserIdentity user, string correlationID = null)
+		public static async Task<bool> IsSystemAdministratorAsync(this IUser user, string correlationID = null)
 		{
 			if (user == null || !user.IsAuthenticated)
 				return false;
@@ -426,7 +426,7 @@ namespace net.vieapps.Services
 				{
 					var result = await new RequestInfo
 					{
-						Session = new Session() { User = user },
+						Session = new Session() { User = new User(user) },
 						ServiceName = "users",
 						ObjectName = "account",
 						Verb = "GET",
@@ -473,7 +473,7 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		public static async Task<bool> IsServiceAdministratorAsync(this UserIdentity user, string serviceName = null, Func<UserIdentity, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static async Task<bool> IsServiceAdministratorAsync(this IUser user, string serviceName = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 			=> user != null && user.IsAuthenticated
 				? await user.IsSystemAdministratorAsync().ConfigureAwait(false) || user.IsAuthorized(serviceName, null, null, Components.Security.Action.Full, null, getPrivileges, getActions)
 				: false;
@@ -486,7 +486,7 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		public static Task<bool> IsServiceAdministratorAsync(this Session session, string serviceName = null, Func<UserIdentity, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static Task<bool> IsServiceAdministratorAsync(this Session session, string serviceName = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 			=> session != null && session.User != null
 				? session.User.IsServiceAdministratorAsync(serviceName, getPrivileges, getActions)
 				: Task.FromResult(false);
@@ -498,7 +498,7 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		public static Task<bool> IsServiceAdministratorAsync(this RequestInfo requestInfo, Func<UserIdentity, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static Task<bool> IsServiceAdministratorAsync(this RequestInfo requestInfo, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 			=> requestInfo != null && requestInfo.Session != null
 				? requestInfo.Session.IsServiceAdministratorAsync(requestInfo.ServiceName, getPrivileges, getActions)
 				: Task.FromResult(false);
@@ -511,7 +511,7 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		public static async Task<bool> IsServiceModeratorAsync(this UserIdentity user, string serviceName = null, Func<UserIdentity, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static async Task<bool> IsServiceModeratorAsync(this IUser user, string serviceName = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 			=> user != null && user.IsAuthenticated
 				? await user.IsServiceAdministratorAsync(serviceName).ConfigureAwait(false) || user.IsAuthorized(serviceName, null, null, Components.Security.Action.Approve, null, getPrivileges, getActions)
 				: false;
@@ -524,7 +524,7 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		public static Task<bool> IsServiceModeratorAsync(this Session session, string serviceName = null, Func<UserIdentity, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static Task<bool> IsServiceModeratorAsync(this Session session, string serviceName = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 			=> session != null && session.User != null
 				? session.User.IsServiceModeratorAsync(serviceName, getPrivileges, getActions)
 				: Task.FromResult(false);
@@ -536,7 +536,7 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		public static Task<bool> IsServiceModeratorAsync(this RequestInfo requestInfo, Func<UserIdentity, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static Task<bool> IsServiceModeratorAsync(this RequestInfo requestInfo, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 			=> requestInfo != null && requestInfo.Session != null
 				? requestInfo.Session.IsServiceModeratorAsync(requestInfo.ServiceName, getPrivileges, getActions)
 				: Task.FromResult(false);
@@ -547,7 +547,7 @@ namespace net.vieapps.Services
 		/// <param name="user"></param>
 		/// <param name="serviceName"></param>
 		/// <returns></returns>
-		public static string GetPrivilegeRole(this UserIdentity user, string serviceName)
+		public static string GetPrivilegeRole(this IUser user, string serviceName)
 		{
 			var privilege = user != null && user.Privileges != null
 				? user.Privileges.FirstOrDefault(p => p.ServiceName.IsEquals(serviceName) && string.IsNullOrWhiteSpace(p.ObjectName) && string.IsNullOrWhiteSpace(p.ObjectIdentity))
@@ -561,7 +561,7 @@ namespace net.vieapps.Services
 		/// <param name="user"></param>
 		/// <param name="privileges"></param>
 		/// <returns></returns>
-		public static List<Privilege> GetPrivileges(this UserIdentity user, Privileges privileges, string serviceName) => null;
+		public static List<Privilege> GetPrivileges(this IUser user, Privileges privileges, string serviceName) => null;
 
 		/// <summary>
 		/// Gets the default privilege actions
@@ -633,7 +633,7 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		public static async Task<bool> IsAuthorizedAsync(this UserIdentity user, string serviceName, string objectName, string objectIdentity, Components.Security.Action action, Privileges privileges = null, Func<UserIdentity, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static async Task<bool> IsAuthorizedAsync(this IUser user, string serviceName, string objectName, string objectIdentity, Components.Security.Action action, Privileges privileges = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 			=> await Extensions.IsSystemAdministratorAsync(user).ConfigureAwait(false)
 				? true
 				: user != null
@@ -649,7 +649,7 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		public static Task<bool> IsAuthorizedAsync(this RequestInfo requestInfo, Components.Security.Action action, Privileges privileges = null, Func<UserIdentity, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static Task<bool> IsAuthorizedAsync(this RequestInfo requestInfo, Components.Security.Action action, Privileges privileges = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 			=> requestInfo.Session != null && requestInfo.Session.User != null
 				? requestInfo.Session.User.IsAuthorizedAsync(requestInfo.ServiceName, requestInfo.ObjectName, requestInfo.GetObjectIdentity(true), action, privileges, getPrivileges, getActions)
 				: Task.FromResult(false);
@@ -663,7 +663,7 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		public static async Task<bool> IsAuthorizedAsync(this RequestInfo requestInfo, IBusinessEntity entity, Components.Security.Action action, Func<UserIdentity, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static async Task<bool> IsAuthorizedAsync(this RequestInfo requestInfo, IBusinessEntity entity, Components.Security.Action action, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 			=> await requestInfo.IsSystemAdministratorAsync().ConfigureAwait(false)
 				? true
 				: requestInfo != null && requestInfo.Session != null && requestInfo.Session.User != null
@@ -680,7 +680,7 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		public static async Task<bool> CanManageAsync(this UserIdentity user, string serviceName, string objectName, string objectIdentity, Func<UserIdentity, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static async Task<bool> CanManageAsync(this IUser user, string serviceName, string objectName, string objectIdentity, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 			=> await user.IsSystemAdministratorAsync().ConfigureAwait(false) || user.IsAuthorized(serviceName, objectName, objectIdentity, Components.Security.Action.Full, null, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions);
 
 		/// <summary>
@@ -694,7 +694,7 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		public static async Task<bool> CanManageAsync(this UserIdentity user, string serviceName, string systemID, string definitionID, string objectID, Func<UserIdentity, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static async Task<bool> CanManageAsync(this IUser user, string serviceName, string systemID, string definitionID, string objectID, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 		{
 			// check user
 			if (string.IsNullOrWhiteSpace(user?.ID))
@@ -723,7 +723,7 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		public static async Task<bool> CanModerateAsync(this UserIdentity user, string serviceName, string objectName, string objectIdentity, Func<UserIdentity, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static async Task<bool> CanModerateAsync(this IUser user, string serviceName, string objectName, string objectIdentity, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 			=> user != null && await user.CanManageAsync(serviceName, objectName, objectIdentity, getPrivileges, getActions).ConfigureAwait(false)
 				? true
 				: user != null && user.IsAuthorized(serviceName, objectName, objectIdentity, Components.Security.Action.Approve, null, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions);
@@ -739,7 +739,7 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		public static async Task<bool> CanModerateAsync(this UserIdentity user, string serviceName, string systemID, string definitionID, string objectID, Func<UserIdentity, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static async Task<bool> CanModerateAsync(this IUser user, string serviceName, string systemID, string definitionID, string objectID, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 		{
 			// administrator can do
 			if (user != null && await user.CanManageAsync(serviceName, systemID, definitionID, objectID, getPrivileges, getActions).ConfigureAwait(false))
@@ -768,7 +768,7 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		public static async Task<bool> CanEditAsync(this UserIdentity user, string serviceName, string objectName, string objectIdentity, Func<UserIdentity, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static async Task<bool> CanEditAsync(this IUser user, string serviceName, string objectName, string objectIdentity, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 			=> user != null && await user.CanModerateAsync(serviceName, objectName, objectIdentity, getPrivileges, getActions).ConfigureAwait(false)
 				? true
 				: user != null && user.IsAuthorized(serviceName, objectName, objectIdentity, Components.Security.Action.Update, null, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions);
@@ -784,7 +784,7 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		public static async Task<bool> CanEditAsync(this UserIdentity user, string serviceName, string systemID, string definitionID, string objectID, Func<UserIdentity, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static async Task<bool> CanEditAsync(this IUser user, string serviceName, string systemID, string definitionID, string objectID, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 		{
 			// moderator can do
 			if (user != null && await user.CanModerateAsync(serviceName, systemID, definitionID, objectID, getPrivileges, getActions).ConfigureAwait(false))
@@ -813,7 +813,7 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		public static async Task<bool> CanContributeAsync(this UserIdentity user, string serviceName, string objectName, string objectIdentity, Func<UserIdentity, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static async Task<bool> CanContributeAsync(this IUser user, string serviceName, string objectName, string objectIdentity, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 			=> user != null && await user.CanEditAsync(serviceName, objectName, objectIdentity, getPrivileges, getActions).ConfigureAwait(false)
 				? true
 				: user != null && user.IsAuthorized(serviceName, objectName, objectIdentity, Components.Security.Action.Create, null, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions);
@@ -829,7 +829,7 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		public static async Task<bool> CanContributeAsync(this UserIdentity user, string serviceName, string systemID, string definitionID, string objectID, Func<UserIdentity, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static async Task<bool> CanContributeAsync(this IUser user, string serviceName, string systemID, string definitionID, string objectID, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 		{
 			// editor can do
 			if (user != null && await user.CanEditAsync(serviceName, systemID, definitionID, objectID, getPrivileges, getActions).ConfigureAwait(false))
@@ -858,7 +858,7 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		public static async Task<bool> CanViewAsync(this UserIdentity user, string serviceName, string objectName, string objectIdentity, Func<UserIdentity, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static async Task<bool> CanViewAsync(this IUser user, string serviceName, string objectName, string objectIdentity, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 			=> user != null && await user.CanContributeAsync(serviceName, objectName, objectIdentity, getPrivileges, getActions).ConfigureAwait(false)
 				? true
 				: user != null && user.IsAuthorized(serviceName, objectName, objectIdentity, Components.Security.Action.View, null, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions);
@@ -874,7 +874,7 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		public static async Task<bool> CanViewAsync(this UserIdentity user, string serviceName, string systemID, string definitionID, string objectID, Func<UserIdentity, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static async Task<bool> CanViewAsync(this IUser user, string serviceName, string systemID, string definitionID, string objectID, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 		{
 			// contributor can do
 			if (user != null && await user.CanContributeAsync(serviceName, systemID, definitionID, objectID, getPrivileges, getActions).ConfigureAwait(false))
@@ -903,7 +903,7 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		public static async Task<bool> CanDownloadAsync(this UserIdentity user, string serviceName, string objectName, string objectIdentity, Func<UserIdentity, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static async Task<bool> CanDownloadAsync(this IUser user, string serviceName, string objectName, string objectIdentity, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 			=> user != null && await user.CanModerateAsync(serviceName, objectName, objectIdentity, getPrivileges, getActions).ConfigureAwait(false)
 				? true
 				: user != null && user.IsAuthorized(serviceName, objectName, objectIdentity, Components.Security.Action.Download, null, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions);
@@ -919,7 +919,7 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		public static async Task<bool> CanDownloadAsync(this UserIdentity user, string serviceName, string systemID, string definitionID, string objectID, Func<UserIdentity, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static async Task<bool> CanDownloadAsync(this IUser user, string serviceName, string systemID, string definitionID, string objectID, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 		{
 			// moderator can do
 			if (user != null && await user.CanModerateAsync(serviceName, systemID, definitionID, objectID, getPrivileges, getActions).ConfigureAwait(false))

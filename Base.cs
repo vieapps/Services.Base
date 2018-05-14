@@ -1038,7 +1038,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="user"></param>
 		/// <returns></returns>
-		protected virtual string GetPrivilegeRole(UserIdentity user) => user?.GetPrivilegeRole(this.ServiceName);
+		protected virtual string GetPrivilegeRole(IUser user) => user?.GetPrivilegeRole(this.ServiceName);
 
 		/// <summary>
 		/// Gets the default privileges  of the user in this service
@@ -1046,7 +1046,7 @@ namespace net.vieapps.Services
 		/// <param name="user"></param>
 		/// <param name="privileges"></param>
 		/// <returns></returns>
-		protected virtual List<Privilege> GetPrivileges(UserIdentity user, Privileges privileges) => user?.GetPrivileges(privileges, this.ServiceName);
+		protected virtual List<Privilege> GetPrivileges(IUser user, Privileges privileges) => user?.GetPrivileges(privileges, this.ServiceName);
 
 		/// <summary>
 		/// Gets the default privilege actions in this service
@@ -1061,7 +1061,7 @@ namespace net.vieapps.Services
 		/// <param name="user">The user information</param>
 		/// /// <param name="correlationID">The correlation identity</param>
 		/// <returns></returns>
-		public Task<bool> IsSystemAdministratorAsync(UserIdentity user, string correlationID = null)
+		public Task<bool> IsSystemAdministratorAsync(IUser user, string correlationID = null)
 			=> user != null
 				? user.IsSystemAdministratorAsync(correlationID)
 				: Task.FromResult(false);
@@ -1093,7 +1093,7 @@ namespace net.vieapps.Services
 		/// <param name="user">The user information</param>
 		/// /// <param name="serviceName">The name of service</param>
 		/// <returns></returns>
-		public Task<bool> IsServiceAdministratorAsync(UserIdentity user, string serviceName = null)
+		public Task<bool> IsServiceAdministratorAsync(IUser user, string serviceName = null)
 			=> user != null
 				? user.IsServiceAdministratorAsync(serviceName ?? this.ServiceName, this.GetPrivileges, this.GetPrivilegeActions)
 				: Task.FromResult(false);
@@ -1125,7 +1125,7 @@ namespace net.vieapps.Services
 		/// <param name="user">The user information</param>
 		/// /// <param name="serviceName">The name of service</param>
 		/// <returns></returns>
-		public Task<bool> IsServiceModeratorAsync(UserIdentity user, string serviceName = null)
+		public Task<bool> IsServiceModeratorAsync(IUser user, string serviceName = null)
 			=> user != null
 				? user.IsServiceModeratorAsync(serviceName ?? this.ServiceName, this.GetPrivileges, this.GetPrivilegeActions)
 				: Task.FromResult(false);
@@ -1163,7 +1163,7 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		protected virtual Task<bool> IsAuthorizedAsync(UserIdentity user, string serviceName, string objectName, string objectIdentity, Components.Security.Action action, Privileges privileges = null, Func<UserIdentity, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		protected virtual Task<bool> IsAuthorizedAsync(IUser user, string serviceName, string objectName, string objectIdentity, Components.Security.Action action, Privileges privileges = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 			=> user != null
 				? user.IsAuthorizedAsync(serviceName, objectName, objectIdentity, action, privileges, getPrivileges, getActions)
 				: Task.FromResult(false);
@@ -1177,7 +1177,7 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		protected virtual Task<bool> IsAuthorizedAsync(RequestInfo requestInfo, Components.Security.Action action, Privileges privileges = null, Func<UserIdentity, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		protected virtual Task<bool> IsAuthorizedAsync(RequestInfo requestInfo, Components.Security.Action action, Privileges privileges = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 			=> requestInfo != null
 				? requestInfo.IsAuthorizedAsync(action, privileges, getPrivileges, getActions)
 				: Task.FromResult(false);
@@ -1191,7 +1191,7 @@ namespace net.vieapps.Services
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
 		/// <returns></returns>
-		protected virtual Task<bool> IsAuthorizedAsync(RequestInfo requestInfo, IBusinessEntity entity, Components.Security.Action action, Func<UserIdentity, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		protected virtual Task<bool> IsAuthorizedAsync(RequestInfo requestInfo, IBusinessEntity entity, Components.Security.Action action, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
 			=> requestInfo != null
 				? requestInfo.IsAuthorizedAsync(entity, action, getPrivileges, getActions)
 				: Task.FromResult(false);
@@ -1203,7 +1203,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of the service's object</param>
 		/// <param name="objectIdentity">The identity of the service's object</param>
 		/// <returns></returns>
-		public virtual Task<bool> CanManageAsync(UserIdentity user, string objectName, string objectIdentity)
+		public virtual Task<bool> CanManageAsync(IUser user, string objectName, string objectIdentity)
 			=> user != null
 				? user.CanManageAsync(this.ServiceName, objectName, objectIdentity, this.GetPrivileges, this.GetPrivilegeActions)
 				: Task.FromResult(false);
@@ -1216,7 +1216,7 @@ namespace net.vieapps.Services
 		/// <param name="definitionID">The identity of the entity definition</param>
 		/// <param name="objectID">The identity of the business object</param>
 		/// <returns></returns>
-		public virtual Task<bool> CanManageAsync(UserIdentity user, string systemID, string definitionID, string objectID)
+		public virtual Task<bool> CanManageAsync(IUser user, string systemID, string definitionID, string objectID)
 			=> user != null
 				? user.CanManageAsync(this.ServiceName, systemID, definitionID, objectID, this.GetPrivileges, this.GetPrivilegeActions)
 				: Task.FromResult(false);
@@ -1228,7 +1228,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of the service's object</param>
 		/// <param name="objectIdentity">The identity of the service's object</param>
 		/// <returns></returns>
-		public virtual Task<bool> CanModerateAsync(UserIdentity user, string objectName, string objectIdentity)
+		public virtual Task<bool> CanModerateAsync(IUser user, string objectName, string objectIdentity)
 			=> user != null
 				? user.CanModerateAsync(this.ServiceName, objectName, objectIdentity, this.GetPrivileges, this.GetPrivilegeActions)
 				: Task.FromResult(false);
@@ -1241,7 +1241,7 @@ namespace net.vieapps.Services
 		/// <param name="definitionID">The identity of the entity definition</param>
 		/// <param name="objectID">The identity of the business object</param>
 		/// <returns></returns>
-		public virtual Task<bool> CanModerateAsync(UserIdentity user, string systemID, string definitionID, string objectID)
+		public virtual Task<bool> CanModerateAsync(IUser user, string systemID, string definitionID, string objectID)
 			=> user != null
 				? user.CanModerateAsync(this.ServiceName, systemID, definitionID, objectID, this.GetPrivileges, this.GetPrivilegeActions)
 				: Task.FromResult(false);
@@ -1253,7 +1253,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of the service's object</param>
 		/// <param name="objectIdentity">The identity of the service's object</param>
 		/// <returns></returns>
-		public virtual Task<bool> CanEditAsync(UserIdentity user, string objectName, string objectIdentity)
+		public virtual Task<bool> CanEditAsync(IUser user, string objectName, string objectIdentity)
 			=> user != null
 				? user.CanEditAsync(this.ServiceName, objectName, objectIdentity, this.GetPrivileges, this.GetPrivilegeActions)
 				: Task.FromResult(false);
@@ -1266,7 +1266,7 @@ namespace net.vieapps.Services
 		/// <param name="definitionID">The identity of the entity definition</param>
 		/// <param name="objectID">The identity of the business object</param>
 		/// <returns></returns>
-		public virtual Task<bool> CanEditAsync(UserIdentity user, string systemID, string definitionID, string objectID)
+		public virtual Task<bool> CanEditAsync(IUser user, string systemID, string definitionID, string objectID)
 			=> user != null
 				? user.CanEditAsync(this.ServiceName, systemID, definitionID, objectID, this.GetPrivileges, this.GetPrivilegeActions)
 				: Task.FromResult(false);
@@ -1278,7 +1278,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of the service's object</param>
 		/// <param name="objectIdentity">The identity of the service's object</param>
 		/// <returns></returns>
-		public virtual Task<bool> CanContributeAsync(UserIdentity user, string objectName, string objectIdentity)
+		public virtual Task<bool> CanContributeAsync(IUser user, string objectName, string objectIdentity)
 			=> user != null
 				? user.CanContributeAsync(this.ServiceName, objectName, objectIdentity, this.GetPrivileges, this.GetPrivilegeActions)
 				: Task.FromResult(false);
@@ -1291,7 +1291,7 @@ namespace net.vieapps.Services
 		/// <param name="definitionID">The identity of the entity definition</param>
 		/// <param name="objectID">The identity of the business object</param>
 		/// <returns></returns>
-		public virtual  Task<bool> CanContributeAsync(UserIdentity user, string systemID, string definitionID, string objectID)
+		public virtual  Task<bool> CanContributeAsync(IUser user, string systemID, string definitionID, string objectID)
 			=> user != null
 				? user.CanContributeAsync(this.ServiceName, systemID, definitionID, objectID, this.GetPrivileges, this.GetPrivilegeActions)
 				: Task.FromResult(false);
@@ -1303,7 +1303,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of the service's object</param>
 		/// <param name="objectIdentity">The identity of the service's object</param>
 		/// <returns></returns>
-		public virtual Task<bool> CanViewAsync(UserIdentity user, string objectName, string objectIdentity)
+		public virtual Task<bool> CanViewAsync(IUser user, string objectName, string objectIdentity)
 			=> user != null
 				? user.CanViewAsync(this.ServiceName, objectName, objectIdentity, this.GetPrivileges, this.GetPrivilegeActions)
 				: Task.FromResult(false);
@@ -1316,7 +1316,7 @@ namespace net.vieapps.Services
 		/// <param name="definitionID">The identity of the entity definition</param>
 		/// <param name="objectID">The identity of the business object</param>
 		/// <returns></returns>
-		public virtual Task<bool> CanViewAsync(UserIdentity user, string systemID, string definitionID, string objectID)
+		public virtual Task<bool> CanViewAsync(IUser user, string systemID, string definitionID, string objectID)
 			=> user != null
 				? user.CanViewAsync(this.ServiceName, systemID, definitionID, objectID, this.GetPrivileges, this.GetPrivilegeActions)
 				: Task.FromResult(false);
@@ -1328,7 +1328,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of the service's object</param>
 		/// <param name="objectIdentity">The identity of the service's object</param>
 		/// <returns></returns>
-		public virtual Task<bool> CanDownloadAsync(UserIdentity user, string objectName, string objectIdentity)
+		public virtual Task<bool> CanDownloadAsync(IUser user, string objectName, string objectIdentity)
 			=> user != null
 				? user.CanDownloadAsync(this.ServiceName, objectName, objectIdentity, this.GetPrivileges, this.GetPrivilegeActions)
 				: Task.FromResult(false);
@@ -1341,7 +1341,7 @@ namespace net.vieapps.Services
 		/// <param name="definitionID">The identity of the entity definition</param>
 		/// <param name="objectID">The identity of the business object</param>
 		/// <returns></returns>
-		public virtual Task<bool> CanDownloadAsync(UserIdentity user, string systemID, string definitionID, string objectID)
+		public virtual Task<bool> CanDownloadAsync(IUser user, string systemID, string definitionID, string objectID)
 			=> user != null
 				? user.CanDownloadAsync(this.ServiceName, systemID, definitionID, objectID, this.GetPrivileges, this.GetPrivilegeActions)
 				: Task.FromResult(false);

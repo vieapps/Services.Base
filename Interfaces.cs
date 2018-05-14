@@ -45,7 +45,7 @@ namespace net.vieapps.Services
 		/// <param name="objectIdentity">The identity of the service's object</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.{0}.permissions.manage.object")]
-		Task<bool> CanManageAsync(UserIdentity user, string objectName, string objectIdentity);
+		Task<bool> CanManageAsync(IUser user, string objectName, string objectIdentity);
 
 		/// <summary>
 		/// Gets the state that determines the user is able to manage or not
@@ -56,7 +56,7 @@ namespace net.vieapps.Services
 		/// <param name="objectID">The identity of the business object</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.{0}.permissions.manage.definition")]
-		Task<bool> CanManageAsync(UserIdentity user, string systemID, string definitionID, string objectID);
+		Task<bool> CanManageAsync(IUser user, string systemID, string definitionID, string objectID);
 
 		/// <summary>
 		/// Gets the state that determines the user is able to moderate or not
@@ -66,7 +66,7 @@ namespace net.vieapps.Services
 		/// <param name="objectIdentity">The identity of the service's object</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.{0}.permissions.moderate.object")]
-		Task<bool> CanModerateAsync(UserIdentity user, string objectName, string objectIdentity);
+		Task<bool> CanModerateAsync(IUser user, string objectName, string objectIdentity);
 
 		/// <summary>
 		/// Gets the state that determines the user is able to moderate or not
@@ -77,7 +77,7 @@ namespace net.vieapps.Services
 		/// <param name="objectID">The identity of the business object</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.{0}.permissions.moderate.definition")]
-		Task<bool> CanModerateAsync(UserIdentity user, string systemID, string definitionID, string objectID);
+		Task<bool> CanModerateAsync(IUser user, string systemID, string definitionID, string objectID);
 
 		/// <summary>
 		/// Gets the state that determines the user is able to edit or not
@@ -87,7 +87,7 @@ namespace net.vieapps.Services
 		/// <param name="objectIdentity">The identity of the service's object</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.{0}.permissions.edit.object")]
-		Task<bool> CanEditAsync(UserIdentity user, string objectName, string objectIdentity);
+		Task<bool> CanEditAsync(IUser user, string objectName, string objectIdentity);
 
 		/// <summary>
 		/// Gets the state that determines the user is able to edit or not
@@ -98,7 +98,7 @@ namespace net.vieapps.Services
 		/// <param name="objectID">The identity of the business object</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.{0}.permissions.edit.definition")]
-		Task<bool> CanEditAsync(UserIdentity user, string systemID, string definitionID, string objectID);
+		Task<bool> CanEditAsync(IUser user, string systemID, string definitionID, string objectID);
 
 		/// <summary>
 		/// Gets the state that determines the user is able to contribute or not
@@ -108,7 +108,7 @@ namespace net.vieapps.Services
 		/// <param name="objectIdentity">The identity of the service's object</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.{0}.permissions.contribute.object")]
-		Task<bool> CanContributeAsync(UserIdentity user, string objectName, string objectIdentity);
+		Task<bool> CanContributeAsync(IUser user, string objectName, string objectIdentity);
 
 		/// <summary>
 		/// Gets the state that determines the user is able to contribute or not
@@ -119,7 +119,7 @@ namespace net.vieapps.Services
 		/// <param name="objectID">The identity of the business object</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.{0}.permissions.contribute.definition")]
-		Task<bool> CanContributeAsync(UserIdentity user, string systemID, string definitionID, string objectID);
+		Task<bool> CanContributeAsync(IUser user, string systemID, string definitionID, string objectID);
 
 		/// <summary>
 		/// Gets the state that determines the user is able to view or not
@@ -129,7 +129,7 @@ namespace net.vieapps.Services
 		/// <param name="objectIdentity">The identity of the service's object</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.{0}.permissions.view.object")]
-		Task<bool> CanViewAsync(UserIdentity user, string objectName, string objectIdentity);
+		Task<bool> CanViewAsync(IUser user, string objectName, string objectIdentity);
 
 		/// <summary>
 		/// Gets the state that determines the user is able to view or not
@@ -140,7 +140,7 @@ namespace net.vieapps.Services
 		/// <param name="objectID">The identity of the business object</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.{0}.permissions.view.definition")]
-		Task<bool> CanViewAsync(UserIdentity user, string systemID, string definitionID, string objectID);
+		Task<bool> CanViewAsync(IUser user, string systemID, string definitionID, string objectID);
 
 		/// <summary>
 		/// Gets the state that determines the user is able to download or not
@@ -150,7 +150,7 @@ namespace net.vieapps.Services
 		/// <param name="objectIdentity">The identity of the service's object</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.{0}.permissions.download.object")]
-		Task<bool> CanDownloadAsync(UserIdentity user, string objectName, string objectIdentity);
+		Task<bool> CanDownloadAsync(IUser user, string objectName, string objectIdentity);
 
 		/// <summary>
 		/// Gets the state that determines the user is able to download the attachment files or not
@@ -161,7 +161,7 @@ namespace net.vieapps.Services
 		/// <param name="objectID">The identity of the business object</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.{0}.permissions.download.definition")]
-		Task<bool> CanDownloadAsync(UserIdentity user, string systemID, string definitionID, string objectID);
+		Task<bool> CanDownloadAsync(IUser user, string systemID, string definitionID, string objectID);
 	}
 
 	//  --------------------------------------------------------------------------------------------
