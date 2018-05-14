@@ -212,7 +212,7 @@ namespace net.vieapps.Services
 		#region Get exception details of WAMP
 		static JObject GetJsonException(JObject exception)
 		{
-			var json = new JObject()
+			var json = new JObject
 			{
 				{ "Message", exception["Message"] },
 				{ "Type", exception["ClassName"] },
@@ -251,7 +251,7 @@ namespace net.vieapps.Services
 					message = (exception.Arguments[0] as JValue).Value.ToString();
 					var start = message.IndexOf("'");
 					var end = message.IndexOf("'", start + 1);
-					message = $"The requested service is unavailable [{message.Substring(start + 1, end - start - 1).Replace("'", "")}]";
+					message = $"The requested service ({message.Substring(start + 1, end - start - 1).Replace("'", "")}) is unavailable";
 				}
 				else
 					message = "The requested service is unavailable";
@@ -264,7 +264,7 @@ namespace net.vieapps.Services
 			// cannot serialize
 			else if (exception.ErrorUri.Equals("wamp.error.invalid_argument"))
 			{
-				message = "Cannot serialize one of argument objects (or child object)";
+				message = "Cannot serialize or deserialize one of argument objects (or child object)";
 				if (exception.Arguments != null && exception.Arguments.Length > 0 && exception.Arguments[0] != null && exception.Arguments[0] is JValue)
 					message += $" => {(exception.Arguments[0] as JValue).Value}";
 				type = "SerializationException";
@@ -295,7 +295,7 @@ namespace net.vieapps.Services
 
 				message = jsonException != null
 					? (jsonException["Message"] as JValue).Value.ToString()
-					: $"Error occurred while processing with the service [net.vieapps.services.{(requestInfo != null ? requestInfo.ServiceName.ToLower() : "unknown")}]";
+					: $"Error occurred at \"net.vieapps.services.{(requestInfo != null ? requestInfo.ServiceName.ToLower() : "unknown")}\"";
 
 				type = jsonException != null
 					? (jsonException["Type"] as JValue).Value.ToString().ToArray('.').Last()

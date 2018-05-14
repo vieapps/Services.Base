@@ -251,14 +251,5 @@ namespace net.vieapps.Services
 				return uri.ToLower();
 			}
 		}
-
-		/// <summary>
-		/// Gets the JSON
-		/// </summary>
-		/// <returns></returns>
-		public JToken ToJson()
-		{
-			return (this as object).ToJson(json => json["Session"]["User"] = this.Session.User.ToJson());
-		}
 	}
 }

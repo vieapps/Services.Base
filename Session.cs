@@ -32,7 +32,7 @@ namespace net.vieapps.Services
 			this.AppAgent = session?.AppAgent ?? "";
 			this.AppOrigin = session?.AppOrigin ?? "";
 			this.AppMode = session?.AppMode ?? "Client";
-			this.User = session?.User ?? new User();
+			this.User = session?.User ?? new User("", session?.SessionID ?? "", new List<string>(), new List<Privilege>());
 			this.Verification = session != null ? session.Verification : false;
 		}
 
