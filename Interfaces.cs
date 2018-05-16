@@ -177,11 +177,6 @@ namespace net.vieapps.Services
 		string ServiceName { get; }
 
 		/// <summary>
-		/// Gets or Sets the value indicating weather current service component is running in the user interactive mode
-		/// </summary>
-		bool IsUserInteractive { get; set; }
-
-		/// <summary>
 		/// Starts the service
 		/// </summary>
 		/// <param name="args">The starting arguments</param>
@@ -193,15 +188,6 @@ namespace net.vieapps.Services
 		/// Stops the service
 		/// </summary>
 		void Stop();
-
-		/// <summary>
-		/// Writes a log message to the terminator or the standard output stream
-		/// </summary>
-		/// <param name="correlationID">The string that presents correlation identity</param>
-		/// <param name="message">The log message</param>
-		/// <param name="exception">The exception</param>
-		/// <param name="updateCentralizedLogs">true to update the log message into centralized logs of the API Gateway</param>
-		void WriteLog(string correlationID, string message, Exception exception = null, bool updateCentralizedLogs = true);
 	}
 
 	//  --------------------------------------------------------------------------------------------
@@ -302,28 +288,6 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.logs.multiple")]
 		Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, string stack = null, CancellationToken cancellationToken = default(CancellationToken));
-
-		/// <summary>
-		/// Writes the debug log into centralized log storage of all services
-		/// </summary>
-		/// <param name="correlationID">The identity of correlation</param>
-		/// <param name="serviceName">The name of service</param>
-		/// <param name="logs">The log messages</param>
-		/// <param name="cancellationToken">The cancellation token</param>
-		/// <returns></returns>
-		[WampProcedure("net.vieapps.services.logs.debug.single")]
-		Task WriteDebugLogsAsync(string correlationID, string serviceName, string logs, CancellationToken cancellationToken = default(CancellationToken));
-
-		/// <summary>
-		/// Writes the debug log into centralized log storage of all services
-		/// </summary>
-		/// <param name="correlationID">The identity of correlation</param>
-		/// <param name="serviceName">The name of service</param>
-		/// <param name="logs">The collection of log messages</param>
-		/// <param name="cancellationToken">The cancellation token</param>
-		/// <returns></returns>
-		[WampProcedure("net.vieapps.services.logs.debug.multiple")]
-		Task WriteDebugLogsAsync(string correlationID, string serviceName, List<string> logs, CancellationToken cancellationToken = default(CancellationToken));
 	}
 
 	//  --------------------------------------------------------------------------------------------

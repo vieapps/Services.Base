@@ -430,13 +430,13 @@ namespace net.vieapps.Services
 						ServiceName = "users",
 						ObjectName = "account",
 						Verb = "GET",
-						Extra = new Dictionary<string, string>()
+						Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 						{
 							{ "IsSystemAdministrator", "" }
 						},
 						CorrelationID = correlationID ?? UtilityService.NewUUID
 					}.CallServiceAsync().ConfigureAwait(false);
-					return user.ID.IsEquals((result["ID"] as JValue)?.Value as string) && (result["IsSystemAdministrator"] as JValue)?.Value.CastAs<bool>() == true;
+					return user.ID.IsEquals(result.Get<string>("ID")) && result.Get<bool>("IsSystemAdministrator") == true;
 				}
 				catch
 				{
@@ -936,6 +936,41 @@ namespace net.vieapps.Services
 			return @object != null && @object is IBusinessEntity
 				? user.IsAuthorized(serviceName, @object.GetType().GetTypeName(true), objectID, Components.Security.Action.Download, (@object as IBusinessEntity).WorkingPrivileges, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions)
 				: false;
+		}
+		#endregion
+
+		#region Exceptions
+		/// <summary>
+		/// Gets the stack trace of this error exception
+		/// </summary>
+		/// <param name="exception"></param>
+		/// <returns></returns>
+		public static string GetStack(this Exception exception)
+		{
+			var stack = "";
+			if (exception != null && exception is WampException)
+			{
+				var details = (exception as WampException).GetDetails();
+				stack = details.Item4?.Replace("\\r", "\r")?.Replace("\\n", "\n")?.Replace(@"\\", @"\");
+				if (details.Item6 != null)
+					stack = details.Item6.ToString(Formatting.Indented).Replace("\\r", "\r").Replace("\\n", "\n").Replace(@"\\", @"\");
+			}
+			else if (exception != null)
+			{
+				stack = exception.StackTrace;
+				var inner = exception.InnerException;
+				var counter = 0;
+				while (inner != null)
+				{
+					counter++;
+					stack += "\r\n" + $"--- Inner ({counter}): ---------------------- " + "\r\n"
+						+ "> Message: " + inner.Message + "\r\n"
+						+ "> Type: " + inner.GetType().ToString() + "\r\n"
+						+ inner.StackTrace;
+					inner = inner.InnerException;
+				}
+			}
+			return stack;
 		}
 		#endregion
 

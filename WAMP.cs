@@ -337,7 +337,7 @@ namespace net.vieapps.Services
 					WAMPConnections._Services.TryAdd(name, service);
 				}
 			}
-			return service;
+			return service ?? throw new ServiceNotFoundException($"The service \"net.vieapps.services.{name?.ToLower()}\" is not found");
 		}
 
 		/// <summary>

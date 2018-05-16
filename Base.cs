@@ -17,6 +17,7 @@ using WampSharp.V2.Client;
 using WampSharp.V2.Realm;
 using WampSharp.Core.Listener;
 
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using Microsoft.Extensions.Logging;
@@ -56,249 +57,24 @@ namespace net.vieapps.Services
 		protected virtual Task ProcessInterCommunicateMessageAsync(CommunicateMessage message, CancellationToken cancellationToken = default(CancellationToken)) => Task.CompletedTask;
 
 		#region Attributes & Properties
-		IWampChannel _incommingChannel = null, _outgoingChannel = null;
-		long _incommingChannelSessionID = 0, _outgoingChannelSessionID = 0;
-		bool _channelsAreClosedBySystem = false;
-
 		SystemEx.IAsyncDisposable _instance = null;
 		IDisposable _communicator = null;
 		IRTUService _rtuService = null;
 		ILoggingService _loggingService = null;
 		IMessagingService _messagingService = null;
-		ConcurrentDictionary<string, IService> _businessServices = new ConcurrentDictionary<string, IService>(StringComparer.OrdinalIgnoreCase);
 
-		internal protected CancellationTokenSource CancellationTokenSource { get; private set; } = new CancellationTokenSource();
+		internal protected CancellationTokenSource CancellationTokenSource { get; } = new CancellationTokenSource();
 		internal protected List<IDisposable> Timers { get; private set; } = new List<IDisposable>();
 
-		ILogger _logger;
-
 		/// <summary>
-		/// Gets the logger
+		/// Gets the full URI of this service
 		/// </summary>
-		public ILogger Logger
-		{
-			get
-			{
-				return this._logger
-					?? (this._logger = new ServiceCollection()
-						.AddLogging(builder =>
-						{
-#if DEBUG
-							builder.SetMinimumLevel(LogLevel.Debug);
-#else
-							builder.SetMinimumLevel(LogLevel.Information);
-#endif
-							builder.AddConsole();
-						})
-						.BuildServiceProvider()
-						.GetService<ILoggerFactory>()
-						.CreateLogger(this.GetType()));
-			}
-		}
+		public string ServiceURI => "net.vieapps.services." + (this.ServiceName ?? "unknown").Trim().ToLower();
 
 		/// <summary>
-		/// Gets the full URI
-		/// </summary>
-		public string ServiceURI
-		{
-			get
-			{
-				return "net.vieapps.services." + (this.ServiceName ?? "unknown").Trim().ToLower();
-			}
-		}
-
-		/// <summary>
-		/// Gets or sets the value indicating weather current service component is running under user interactive mode or not
-		/// </summary>
-		public bool IsUserInteractive { get; set; } = false;
-
-		/// <summary>
-		/// Gets or sets the single instance of current play service component
+		/// Gets or sets the single instance of current playing service component
 		/// </summary>
 		public static ServiceBase ServiceComponent { get; set; }
-		#endregion
-
-		#region Open/Close channels
-		/// <summary>
-		/// Gets the information of WAMP router from configuration file
-		/// </summary>
-		/// <returns></returns>
-		protected virtual Tuple<string, string, bool> GetRouterInfo()
-		{
-			return new Tuple<string, string, bool>(
-				UtilityService.GetAppSetting("Router:Address", "ws://127.0.0.1:16429/"),
-				UtilityService.GetAppSetting("Router:Realm", "VIEAppsRealm"),
-				"json".IsEquals(UtilityService.GetAppSetting("Router:ChannelsMode", "MsgPack"))
-			);
-		}
-
-		/// <summary>
-		/// Opens the incoming channel
-		/// </summary>
-		/// <param name="onConnectionEstablished"></param>
-		/// <param name="onConnectionBroken"></param>
-		/// <param name="onConnectionError"></param>
-		/// <returns></returns>
-		protected async Task OpenIncomingChannelAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null)
-		{
-			if (this._incommingChannel != null)
-				return;
-
-			var info = this.GetRouterInfo();
-			var address = info.Item1;
-			var realm = info.Item2;
-			var useJsonChannel = info.Item3;
-
-			this._incommingChannel = useJsonChannel
-				? new DefaultWampChannelFactory().CreateJsonChannel(address, realm)
-				: new DefaultWampChannelFactory().CreateMsgpackChannel(address, realm);
-
-			this._incommingChannel.RealmProxy.Monitor.ConnectionEstablished += (sender, args) =>
-			{
-				this._incommingChannelSessionID = args.SessionId;
-			};
-
-			if (onConnectionEstablished != null)
-				this._incommingChannel.RealmProxy.Monitor.ConnectionEstablished += new EventHandler<WampSessionCreatedEventArgs>(onConnectionEstablished);
-
-			if (onConnectionBroken != null)
-				this._incommingChannel.RealmProxy.Monitor.ConnectionBroken += new EventHandler<WampSessionCloseEventArgs>(onConnectionBroken);
-			else
-				this._incommingChannel.RealmProxy.Monitor.ConnectionBroken += (sender, args) =>
-				{
-					if (!this._channelsAreClosedBySystem && !args.CloseType.Equals(SessionCloseType.Disconnection))
-						this.ReOpenIncomingChannel(
-							123,
-							(cn) => this.WriteLog(UtilityService.NewUUID, this.ServiceName, null, "Re-connect the incomming connection successful"),
-							(ex) => this.WriteLog(UtilityService.NewUUID, this.ServiceName, null, "Cannot re-connect the incomming connection", ex)
-						);
-				};
-
-			if (onConnectionError != null)
-				this._incommingChannel.RealmProxy.Monitor.ConnectionError += new EventHandler<WampConnectionErrorEventArgs>(onConnectionError);
-
-			await this._incommingChannel.Open().ConfigureAwait(false);
-		}
-
-		/// <summary>
-		/// Closes the incoming channels
-		/// </summary>
-		protected void CloseIncomingChannel()
-		{
-			if (this._incommingChannel != null)
-			{
-				this._incommingChannel.Close($"The incoming channel is closed when stop the service [{this.ServiceURI}]", new GoodbyeDetails());
-				this._incommingChannel = null;
-			}
-		}
-
-		/// <summary>
-		/// Reopens the incoming channel
-		/// </summary>
-		/// <param name="delay"></param>
-		/// <param name="onSuccess"></param>
-		/// <param name="onError"></param>
-		protected void ReOpenIncomingChannel(int delay = 0, Action<IWampChannel> onSuccess = null, Action<Exception> onError = null)
-		{
-			if (this._incommingChannel != null)
-				new WampChannelReconnector(this._incommingChannel, async () =>
-				{
-					try
-					{
-						await Task.Delay(delay > 0 ? delay : 0).ConfigureAwait(false);
-						await this._incommingChannel.Open().ConfigureAwait(false);
-						onSuccess?.Invoke(this._incommingChannel);
-					}
-					catch (Exception ex)
-					{
-						onError?.Invoke(ex);
-					}
-				}).Start();
-		}
-
-		/// <summary>
-		/// Opens the outgoing channel
-		/// </summary>
-		/// <param name="onConnectionEstablished"></param>
-		/// <param name="onConnectionBroken"></param>
-		/// <param name="onConnectionError"></param>
-		/// <returns></returns>
-		protected async Task OpenOutgoingChannelAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null)
-		{
-			if (this._outgoingChannel != null)
-				return;
-
-			var info = this.GetRouterInfo();
-			var address = info.Item1;
-			var realm = info.Item2;
-			var useJsonChannel = info.Item3;
-
-			this._outgoingChannel = useJsonChannel
-				? new DefaultWampChannelFactory().CreateJsonChannel(address, realm)
-				: new DefaultWampChannelFactory().CreateMsgpackChannel(address, realm);
-
-			this._outgoingChannel.RealmProxy.Monitor.ConnectionEstablished += (sender, args) =>
-			{
-				this._outgoingChannelSessionID = args.SessionId;
-			};
-
-			if (onConnectionEstablished != null)
-				this._outgoingChannel.RealmProxy.Monitor.ConnectionEstablished += new EventHandler<WampSessionCreatedEventArgs>(onConnectionEstablished);
-
-			if (onConnectionBroken != null)
-				this._outgoingChannel.RealmProxy.Monitor.ConnectionBroken += new EventHandler<WampSessionCloseEventArgs>(onConnectionBroken);
-			else
-				this._outgoingChannel.RealmProxy.Monitor.ConnectionBroken += (sender, args) =>
-				{
-					if (!this._channelsAreClosedBySystem && !args.CloseType.Equals(SessionCloseType.Disconnection))
-						this.ReOpenOutgoingChannel(
-							234,
-							(cn) => this.WriteLog(UtilityService.NewUUID, this.ServiceName, null, "Re-connect the outgoing connection successful"),
-							(ex) => this.WriteLog(UtilityService.NewUUID, this.ServiceName, null, "Cannot re-connect the outgoing connection", ex)
-						);
-				};
-
-			if (onConnectionError != null)
-				this._outgoingChannel.RealmProxy.Monitor.ConnectionError += new EventHandler<WampConnectionErrorEventArgs>(onConnectionError);
-
-			await this._outgoingChannel.Open().ConfigureAwait(false);
-		}
-
-		/// <summary>
-		/// Close the outgoing channel
-		/// </summary>
-		protected void CloseOutgoingChannel()
-		{
-			if (this._outgoingChannel != null)
-			{
-				this._outgoingChannel.Close($"The outgoing channel is closed when stop the service [{this.ServiceURI}]", new GoodbyeDetails());
-				this._outgoingChannel = null;
-			}
-		}
-
-		/// <summary>
-		/// Reopens the outgoing channel
-		/// </summary>
-		/// <param name="delay"></param>
-		/// <param name="onSuccess"></param>
-		/// <param name="onError"></param>
-		protected void ReOpenOutgoingChannel(int delay = 0, Action<IWampChannel> onSuccess = null, Action<Exception> onError = null)
-		{
-			if (this._outgoingChannel != null)
-				new WampChannelReconnector(this._outgoingChannel, async () =>
-				{
-					try
-					{
-						await Task.Delay(delay > 0 ? delay : 0).ConfigureAwait(false);
-						await this._outgoingChannel.Open().ConfigureAwait(false);
-						onSuccess?.Invoke(this._outgoingChannel);
-					}
-					catch (Exception ex)
-					{
-						onError?.Invoke(ex);
-					}
-				}).Start();
-		}
 		#endregion
 
 		#region Register the service
@@ -308,31 +84,25 @@ namespace net.vieapps.Services
 		/// <param name="onSuccess"></param>
 		/// <param name="onError"></param>
 		/// <returns></returns>
-		protected async Task RegisterServiceAsync(Func<ServiceBase, Task> onSuccess = null, Func<Exception, Task> onError = null)
+		protected async Task RegisterServiceAsync(Func<ServiceBase, Task> onSuccess = null, Action<Exception> onError = null)
 		{
-			await this.OpenIncomingChannelAsync().ConfigureAwait(false);
+			await WAMPConnections.OpenIncomingChannelAsync().ConfigureAwait(false);
 			try
 			{
 				// register the service
 				var name = this.ServiceName.Trim().ToLower();
-				this._instance = await this._incommingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(name)).ConfigureAwait(false);
+				this._instance = await WAMPConnections.IncommingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(name)).ConfigureAwait(false);
 
 				// register the handler of inter-communicate messages
 				this._communicator?.Dispose();
-				this._communicator = this._incommingChannel.RealmProxy.Services
+				this._communicator = WAMPConnections.IncommingChannel.RealmProxy.Services
 					.GetSubject<CommunicateMessage>($"net.vieapps.rtu.communicate.messages.{name}")
 					.Subscribe(
 						async (message) =>
 						{
 							await this.ProcessInterCommunicateMessageAsync(message).ConfigureAwait(false);
 						},
-						async (exception) =>
-						{
-							await Task.WhenAll(
-								this.WriteLogAsync(UtilityService.NewUUID, this.ServiceName, null, "Error occurred while fetching inter-communicate message", exception),
-								this.WriteDebugLogsAsync(UtilityService.NewUUID, "Error occurred while fetching inter-communicate message", exception)
-							).ConfigureAwait(false);
-						}
+						exception => this.WriteLogs(UtilityService.NewUUID, "Error occurred while fetching inter-communicate message", exception)
 					);
 
 				// callback when done
@@ -341,8 +111,7 @@ namespace net.vieapps.Services
 			}
 			catch (Exception ex)
 			{
-				if (onError != null)
-					await onError(ex).ConfigureAwait(false);
+				onError?.Invoke(ex);
 			}
 		}
 		#endregion
@@ -352,8 +121,18 @@ namespace net.vieapps.Services
 		{
 			if (this._rtuService == null)
 			{
-				await this.OpenOutgoingChannelAsync().ConfigureAwait(false);
-				this._rtuService = this._outgoingChannel.RealmProxy.Services.GetCalleeProxy<IRTUService>(ProxyInterceptor.Create());
+				await WAMPConnections.OpenOutgoingChannelAsync().ConfigureAwait(false);
+				this._rtuService = WAMPConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IRTUService>(ProxyInterceptor.Create());
+			}
+		}
+
+		IRTUService RTUService
+		{
+			get
+			{
+				if (this._rtuService == null)
+					Task.WaitAll(new[] { this.InitializeRTUServiceAsync() }, 1234);
+				return this._rtuService;
 			}
 		}
 
@@ -363,11 +142,8 @@ namespace net.vieapps.Services
 		/// <param name="message">The message</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected async Task SendUpdateMessageAsync(UpdateMessage message, CancellationToken cancellationToken = default(CancellationToken))
-		{
-			await this.InitializeRTUServiceAsync().ConfigureAwait(false);
-			await this._rtuService.SendUpdateMessageAsync(message, cancellationToken).ConfigureAwait(false);
-		}
+		protected Task SendUpdateMessageAsync(UpdateMessage message, CancellationToken cancellationToken = default(CancellationToken))
+			=> this.RTUService.SendUpdateMessageAsync(message, cancellationToken);
 
 		/// <summary>
 		/// Sends updating messages to client
@@ -375,11 +151,8 @@ namespace net.vieapps.Services
 		/// <param name="messages">The messages</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected async Task SendUpdateMessagesAsync(List<UpdateMessage> messages, CancellationToken cancellationToken = default(CancellationToken))
-		{
-			await this.InitializeRTUServiceAsync().ConfigureAwait(false);
-			await messages.ForEachAsync((message, token) => this._rtuService.SendUpdateMessageAsync(message, token), cancellationToken).ConfigureAwait(false);
-		}
+		protected Task SendUpdateMessagesAsync(List<UpdateMessage> messages, CancellationToken cancellationToken = default(CancellationToken))
+			=> messages.ForEachAsync((message, token) => this.RTUService.SendUpdateMessageAsync(message, token), cancellationToken);
 
 		/// <summary>
 		/// Sends updating messages to client
@@ -389,11 +162,8 @@ namespace net.vieapps.Services
 		/// <param name="excludedDeviceID">The string that presents identity of a device to be excluded</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected async Task SendUpdateMessagesAsync(List<BaseMessage> messages, string deviceID, string excludedDeviceID = null, CancellationToken cancellationToken = default(CancellationToken))
-		{
-			await this.InitializeRTUServiceAsync().ConfigureAwait(false);
-			await this._rtuService.SendUpdateMessagesAsync(messages, deviceID, excludedDeviceID, cancellationToken).ConfigureAwait(false);
-		}
+		protected Task SendUpdateMessagesAsync(List<BaseMessage> messages, string deviceID, string excludedDeviceID = null, CancellationToken cancellationToken = default(CancellationToken))
+			=> this.RTUService.SendUpdateMessagesAsync(messages, deviceID, excludedDeviceID, cancellationToken);
 
 		/// <summary>
 		/// Send a message for updating data of other service
@@ -402,11 +172,8 @@ namespace net.vieapps.Services
 		/// <param name="message">The message</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected async Task SendInterCommunicateMessageAsync(string serviceName, BaseMessage message, CancellationToken cancellationToken = default(CancellationToken))
-		{
-			await this.InitializeRTUServiceAsync().ConfigureAwait(false);
-			await this._rtuService.SendInterCommunicateMessageAsync(serviceName, message, cancellationToken).ConfigureAwait(false);
-		}
+		protected Task SendInterCommunicateMessageAsync(string serviceName, BaseMessage message, CancellationToken cancellationToken = default(CancellationToken))
+			=> this.RTUService.SendInterCommunicateMessageAsync(serviceName, message, cancellationToken);
 
 		/// <summary>
 		/// Send a message for updating data of other service
@@ -415,11 +182,8 @@ namespace net.vieapps.Services
 		/// <param name="messages">The collection of messages</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected async Task SendInterCommunicateMessagesAsync(string serviceName, List<BaseMessage> messages, CancellationToken cancellationToken = default(CancellationToken))
-		{
-			await this.InitializeRTUServiceAsync().ConfigureAwait(false);
-			await this._rtuService.SendInterCommunicateMessagesAsync(serviceName, messages, cancellationToken).ConfigureAwait(false);
-		}
+		protected Task SendInterCommunicateMessagesAsync(string serviceName, List<BaseMessage> messages, CancellationToken cancellationToken = default(CancellationToken))
+			=> this.RTUService.SendInterCommunicateMessagesAsync(serviceName, messages, cancellationToken);
 		#endregion
 
 		#region Send email & web hook messages
@@ -427,8 +191,18 @@ namespace net.vieapps.Services
 		{
 			if (this._messagingService == null)
 			{
-				await this.OpenOutgoingChannelAsync().ConfigureAwait(false);
-				this._messagingService = this._outgoingChannel.RealmProxy.Services.GetCalleeProxy<IMessagingService>(ProxyInterceptor.Create());
+				await WAMPConnections.OpenOutgoingChannelAsync().ConfigureAwait(false);
+				this._messagingService = WAMPConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IMessagingService>(ProxyInterceptor.Create());
+			}
+		}
+
+		IMessagingService MessagingService
+		{
+			get
+			{
+				if (this._messagingService == null)
+					Task.WaitAll(new[] { this.InitializeMessagingServiceAsync() }, 1234);
+				return this._messagingService;
 			}
 		}
 
@@ -438,15 +212,8 @@ namespace net.vieapps.Services
 		/// <param name="message">The email message for sending</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected async Task SendEmailAsync(EmailMessage message, CancellationToken cancellationToken = default(CancellationToken))
-		{
-			try
-			{
-				await this.InitializeMessagingServiceAsync().ConfigureAwait(false);
-				await this._messagingService.SendEmailAsync(message, cancellationToken).ConfigureAwait(false);
-			}
-			catch { }
-		}
+		protected Task SendEmailAsync(EmailMessage message, CancellationToken cancellationToken = default(CancellationToken))
+			=> this.MessagingService.SendEmailAsync(message, cancellationToken);
 
 		/// <summary>
 		/// Sends an email message
@@ -466,8 +233,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
 		protected Task SendEmailAsync(string from, string replyTo, string to, string cc, string bcc, string subject, string body, string smtpServer, int smtpServerPort, bool smtpServerEnableSsl, string smtpUsername, string smtpPassword, CancellationToken cancellationToken = default(CancellationToken))
-		{
-			return this.SendEmailAsync(new EmailMessage()
+			=> this.SendEmailAsync(new EmailMessage
 			{
 				From = from,
 				ReplyTo = replyTo,
@@ -482,7 +248,6 @@ namespace net.vieapps.Services
 				SmtpPassword = smtpPassword,
 				SmtpServerEnableSsl = smtpServerEnableSsl
 			}, cancellationToken);
-		}
 
 		/// <summary>
 		/// Sends an email message
@@ -499,9 +264,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
 		protected Task SendEmailAsync(string from, string to, string subject, string body, string smtpServer, int smtpServerPort, bool smtpServerEnableSsl, string smtpUsername, string smtpPassword, CancellationToken cancellationToken = default(CancellationToken))
-		{
-			return this.SendEmailAsync(from, null, to, null, null, subject, body, smtpServer, smtpServerPort, smtpServerEnableSsl, smtpUsername, smtpPassword, cancellationToken);
-		}
+			=> this.SendEmailAsync(from, null, to, null, null, subject, body, smtpServer, smtpServerPort, smtpServerEnableSsl, smtpUsername, smtpPassword, cancellationToken);
 
 		/// <summary>
 		/// Sends an email message
@@ -512,9 +275,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
 		protected Task SendEmailAsync(string to, string subject, string body, CancellationToken cancellationToken = default(CancellationToken))
-		{
-			return this.SendEmailAsync(null, to, subject, body, null, 0, false, null, null, cancellationToken);
-		}
+			=> this.SendEmailAsync(null, to, subject, body, null, 0, false, null, null, cancellationToken);
 
 		/// <summary>
 		/// Sends a web hook message
@@ -522,445 +283,267 @@ namespace net.vieapps.Services
 		/// <param name="message"></param>
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		protected async Task SendWebHookAsync(WebHookMessage message, CancellationToken cancellationToken = default(CancellationToken))
-		{
-			try
-			{
-				await this.InitializeMessagingServiceAsync().ConfigureAwait(false);
-				await this._messagingService.SendWebHookAsync(message, cancellationToken).ConfigureAwait(false);
-			}
-			catch { }
-		}
+		protected Task SendWebHookAsync(WebHookMessage message, CancellationToken cancellationToken = default(CancellationToken))
+			=> this.MessagingService.SendWebHookAsync(message, cancellationToken);
 		#endregion
 
-		#region Working with logs (settings)
-#if DEBUG || DEBUGLOGS
-		string _IsDebugLogEnabled = "true", _IsInfoLogEnabled = "true";
-#else
-		string _IsDebugLogEnabled = null, _IsInfoLogEnabled = null;
-#endif
+		#region Working with logs
+		/// <summary>
+		/// Gets or sets the local logger
+		/// </summary>
+		public ILogger Logger { get; set; }
+
+		ConcurrentQueue<Tuple<string, string, string, List<string>, string>> Logs { get; } = new ConcurrentQueue<Tuple<string, string, string, List<string>, string>>();
+		string _isDebugResultsEnabled = null, _isDebugStacksEnabled = null;
 
 		/// <summary>
-		/// Gets the state to write debug log from app settings (parameter named 'vieapps:Logs:Debug')
+		/// Gets the state to write debug log (from app settings - parameter named 'vieapps:Logs:Debug')
 		/// </summary>
-		protected bool IsDebugLogEnabled
-		{
-			get
-			{
-				return "true".IsEquals(this._IsDebugLogEnabled ?? (this._IsDebugLogEnabled = UtilityService.GetAppSetting("Logs:Debug", "false")));
-			}
-		}
+		protected bool IsDebugLogEnabled => this.Logger != null && this.Logger.IsEnabled(LogLevel.Debug);
 
 		/// <summary>
-		/// Gets the state to write information log from app settings (parameter named 'vieapps:Logs:Info')
+		/// Gets the state to write debug result into log (from app settings - parameter named 'vieapps:Logs:ShowResults')
 		/// </summary>
-		protected bool IsInfoLogEnabled
-		{
-			get
-			{
-				return this.IsDebugLogEnabled || "true".IsEquals(this._IsInfoLogEnabled ?? (this._IsInfoLogEnabled = UtilityService.GetAppSetting("Logs:Info", "true")));
-			}
-		}
-		#endregion
+		protected bool IsDebugResultsEnabled => "true".IsEquals(this._isDebugResultsEnabled ?? (this._isDebugResultsEnabled = UtilityService.GetAppSetting("Logs:ShowResults", "false")));
 
-		#region Working with logs (multiple)
+		/// <summary>
+		/// Gets the state to write error stack to client (from app settings - parameter named 'vieapps:Logs:ShowStacks')
+		/// </summary>
+		protected bool IsDebugStacksEnabled => "true".IsEquals(this._isDebugStacksEnabled ?? (this._isDebugStacksEnabled = UtilityService.GetAppSetting("Logs:ShowStacks", "false")));
+
 		async Task InitializeLoggingServiceAsync()
 		{
 			if (this._loggingService == null)
 			{
-				await this.OpenOutgoingChannelAsync().ConfigureAwait(false);
-				this._loggingService = this._outgoingChannel.RealmProxy.Services.GetCalleeProxy<ILoggingService>(ProxyInterceptor.Create());
+				await WAMPConnections.OpenOutgoingChannelAsync().ConfigureAwait(false);
+				this._loggingService = WAMPConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<ILoggingService>(ProxyInterceptor.Create());
+			}
+		}
+
+		ILoggingService LoggingService
+		{
+			get
+			{
+				if (this._loggingService == null)
+					Task.WaitAll(new[] { this.InitializeLoggingServiceAsync() }, 1234);
+				return this._loggingService;
 			}
 		}
 
 		/// <summary>
-		/// Writes the log into centralized log storage of all services
+		/// Writes the logs (to centerlized logging system and local logs)
 		/// </summary>
-		/// <param name="correlationID">The identity of correlation</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="logger">The local logger</param>
+		/// <param name="logs">The logs</param>
+		/// <param name="exception">The exception</param>
 		/// <param name="serviceName">The name of service</param>
-		/// <param name="objectName">The name of serivice's object</param>
-		/// <param name="logs">The collection of log messages</param>
-		/// <param name="stack">The stack (usually is Exception.StackTrace)</param>
-		/// <param name="cancellationToken">The cancellation token</param>
+		/// <param name="objectName">The name of object</param>
+		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
-		protected async Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, string stack, CancellationToken cancellationToken = default(CancellationToken))
+		protected async Task WriteLogsAsync(string correlationID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
 		{
+			// prepare
+			correlationID = correlationID ?? UtilityService.NewUUID;
+
+			// write to local logs
+			if (exception == null)
+				logs?.ForEach(message => logger.Log(mode, $"{message} [{correlationID}]"));
+			else
+			{
+				logs?.ForEach(message => logger.Log(LogLevel.Error, $"{message} [{correlationID}]"));
+				logger.Log(LogLevel.Error, $"{exception.Message} [{correlationID}]", exception);
+			}
+
+			// write to centerlized logs
+			logs = logs ?? new List<string>();
+			if (exception != null && exception is WampException)
+			{
+				var details = (exception as WampException).GetDetails();
+				logs.Add($"> Message: {details.Item2}");
+				logs.Add($"> Type: {details.Item3}");
+			}
+			else if (exception != null)
+			{
+				logs.Add($"> Message: {exception.Message}");
+				logs.Add($"> Type: {exception.GetType().ToString()}");
+			}
+
+			Tuple<string, string, string, List<string>, string> log = null;
 			try
 			{
 				await this.InitializeLoggingServiceAsync().ConfigureAwait(false);
-				await this._loggingService.WriteLogsAsync(correlationID, serviceName, objectName, logs, stack, cancellationToken).ConfigureAwait(false);
+				while (this.Logs.TryDequeue(out log))
+					await this.LoggingService.WriteLogsAsync(log.Item1, log.Item2, log.Item3, log.Item4, log.Item5, this.CancellationTokenSource.Token).ConfigureAwait(false);
+				await this.LoggingService.WriteLogsAsync(correlationID, serviceName ?? (this.ServiceName ?? "APIGateway"), objectName, logs, exception.GetStack(), this.CancellationTokenSource.Token).ConfigureAwait(false);
 			}
-			catch { }
-		}
-
-		/// <summary>
-		/// Writes the log into centralized log storage of all services
-		/// </summary>
-		/// <param name="correlationID">The identity of correlation</param>
-		/// <param name="serviceName">The name of service</param>
-		/// <param name="objectName">The name of serivice's object</param>
-		/// <param name="logs">The collection of log messages</param>
-		/// <param name="stack">The stack (usually is Exception.StackTrace)</param>
-		/// <returns></returns>
-		protected void WriteLogs(string correlationID, string serviceName, string objectName, List<string> logs, string stack)
-		{
-			Task.Run(async () =>
+			catch
 			{
-				await this.WriteLogsAsync(correlationID, serviceName, objectName, logs, stack, this.CancellationTokenSource.Token).ConfigureAwait(false);
-			}).ConfigureAwait(false);
-		}
-
-		/// <summary>
-		/// Writes the log into centralized log storage of all services
-		/// </summary>
-		/// <param name="correlationID">The identity of correlation</param>
-		/// <param name="serviceName">The name of service</param>
-		/// <param name="objectName">The name of serivice's object</param>
-		/// <param name="logs">The collection of log messages</param>
-		/// <param name="exception">The exception</param>
-		/// <param name="cancellationToken">The cancellation token</param>
-		/// <returns></returns>
-		protected Task WriteLogsAsync(string correlationID, string serviceName, string objectName, List<string> logs, Exception exception = null, CancellationToken cancellationToken = default(CancellationToken))
-		{
-			var stack = "";
-			if (exception != null)
-			{
-				if (exception is WampException)
-				{
-					var details = (exception as WampException).GetDetails();
-					logs = logs ?? new List<string>();
-					logs.Add($"> Message: {details.Item2}");
-					logs.Add($"> Type: {details.Item3}");
-					logs.Add($"> Stack: {details.Item4}");
-					if (details.Item6 != null)
-						logs.Add($"> Inners: {details.Item6.ToString(Newtonsoft.Json.Formatting.None)}");
-				}
-				else
-				{
-					logs = logs ?? new List<string>();
-					logs.Add($"> Message: {exception.Message}");
-					logs.Add($"> Type: {exception.GetType().ToString()}");
-					stack = exception.StackTrace
-						+ (exception is RepositoryOperationException
-							? "\r\n" + (exception as RepositoryOperationException).Info
-							: "");
-					var inner = exception.InnerException;
-					var counter = 0;
-					while (inner != null)
-					{
-						counter++;
-						stack += "\r\n" + $"--- Inner ({counter}): ---------------------- " + "\r\n"
-							+ "> Message: " + inner.Message + "\r\n"
-							+ "> Type: " + inner.GetType().ToString() + "\r\n"
-							+ inner.StackTrace;
-						inner = inner.InnerException;
-					}
-				}
-			}
-
-			return this.WriteLogsAsync(correlationID, serviceName, objectName, logs, stack, cancellationToken);
-		}
-
-		/// <summary>
-		/// Writes the log into centralized log storage of all services
-		/// </summary>
-		/// <param name="correlationID">The identity of correlation</param>
-		/// <param name="serviceName">The name of service</param>
-		/// <param name="objectName">The name of serivice's object</param>
-		/// <param name="logs">The collection of log messages</param>
-		/// <param name="exception">The exception</param>
-		protected void WriteLogs(string correlationID, string serviceName, string objectName, List<string> logs, Exception exception = null)
-		{
-			Task.Run(async () =>
-			{
-				await this.WriteLogsAsync(correlationID, serviceName, objectName, logs, exception, this.CancellationTokenSource.Token).ConfigureAwait(false);
-			}).ConfigureAwait(false);
-		}
-
-		/// <summary>
-		/// Writes a log message to the terminator or the standard output stream
-		/// </summary>
-		/// <param name="correlationID">The string that presents correlation identity</param>
-		/// <param name="logs">The log messages</param>
-		/// <param name="exception">The exception</param>
-		/// <param name="updateCentralizedLogs">true to update the log message into centralized logs of the API Gateway</param>
-		public virtual async Task WriteLogsAsync(string correlationID, List<string> logs, Exception exception = null, bool updateCentralizedLogs = true)
-		{
-			// update the log message into centralized logs of the API Gateway
-			if (updateCentralizedLogs)
-				await this.WriteLogsAsync(correlationID ?? UtilityService.NewUUID, this.ServiceName, null, logs, exception, this.CancellationTokenSource.Token).ConfigureAwait(false);
-
-			// write to the terminator or the standard output stream
-			if (this.IsUserInteractive)
-			{
-				if (exception == null)
-					logs?.ForEach(log => this.Logger.LogInformation(log));
-				else
-				{
-					logs?.ForEach(log => this.Logger.LogError(log));
-					this.Logger.LogError(exception, exception.Message);
-				}
+				if (log != null)
+					this.Logs.Enqueue(log);
+				this.Logs.Enqueue(new Tuple<string, string, string, List<string>, string>(correlationID, serviceName ?? (this.ServiceName ?? "APIGateway"), objectName, logs, exception.GetStack()));
 			}
 		}
 
 		/// <summary>
-		/// Writes a log message to the terminator or the standard output stream
+		/// Writes the logs into centerlized logging system
 		/// </summary>
-		/// <param name="correlationID">The string that presents correlation identity</param>
-		/// <param name="logs">The log messages</param>
-		/// <param name="exception">The exception</param>
-		/// <param name="updateCentralizedLogs">true to update the log message into centralized logs of the API Gateway</param>
-		public virtual void WriteLogs(string correlationID, List<string> logs, Exception exception = null, bool updateCentralizedLogs = true)
-		{
-			Task.Run(async () =>
-			{
-				await this.WriteLogsAsync(correlationID, logs, exception, updateCentralizedLogs).ConfigureAwait(false);
-			}).ConfigureAwait(false);
-		}
-
-		/// <summary>
-		/// Writes the log into centralized log storage of all services
-		/// </summary>
-		/// <param name="requestInfo">The request information</param>
-		/// <param name="logs">The collection of log messages</param>
-		/// <param name="exception">The exception</param>
-		/// <param name="cancellationToken">The cancellation token</param>
-		/// <returns></returns>
-		protected Task WriteLogsAsync(RequestInfo requestInfo, List<string> logs, Exception exception = null, CancellationToken cancellationToken = default(CancellationToken))
-		{
-			return this.WriteLogsAsync(requestInfo.CorrelationID, requestInfo.ServiceName, requestInfo.ObjectName, logs, exception, cancellationToken);
-		}
-
-		/// <summary>
-		/// Writes the log into centralized log storage of all services
-		/// </summary>
-		/// <param name="requestInfo">The request information</param>
-		/// <param name="logs">The collection of log messages</param>
-		/// <param name="exception">The exception</param>
-		protected void WriteLogs(RequestInfo requestInfo, List<string> logs, Exception exception = null)
-		{
-			Task.Run(async () =>
-			{
-				await this.WriteLogsAsync(requestInfo, logs, exception, this.CancellationTokenSource.Token).ConfigureAwait(false);
-			}).ConfigureAwait(false);
-		}
-		#endregion
-
-		#region Working with logs (single)
-		/// <summary>
-		/// Writes the log into centralized log storage of all services
-		/// </summary>
-		/// <param name="correlationID">The identity of correlation</param>
-		/// <param name="serviceName">The name of service</param>
-		/// <param name="objectName">The name of serivice's object</param>
-		/// <param name="log">The log message</param>
-		/// <param name="stack">The stack (usually is Exception.StackTrace)</param>
-		/// <param name="cancellationToken">The cancellation token</param>
-		/// <returns></returns>
-		protected Task WriteLogAsync(string correlationID, string serviceName, string objectName, string log, string stack, CancellationToken cancellationToken = default(CancellationToken))
-		{
-			return this.WriteLogsAsync(correlationID, serviceName, objectName, !string.IsNullOrWhiteSpace(log) ? new List<string>() { log } : null, stack, cancellationToken);
-		}
-
-		/// <summary>
-		/// Writes the log into centralized log storage of all services
-		/// </summary>
-		/// <param name="correlationID">The identity of correlation</param>
-		/// <param name="serviceName">The name of service</param>
-		/// <param name="objectName">The name of serivice's object</param>
-		/// <param name="log">The log message</param>
-		/// <param name="stack">The stack (usually is Exception.StackTrace)</param>
-		/// <returns></returns>
-		protected void WriteLog(string correlationID, string serviceName, string objectName, string log, string stack)
-		{
-			Task.Run(async () =>
-			{
-				await this.WriteLogAsync(correlationID, serviceName, objectName, log, stack, this.CancellationTokenSource.Token).ConfigureAwait(false);
-			}).ConfigureAwait(false);
-		}
-
-		/// <summary>
-		/// Writes the log into centralized log storage of all services
-		/// </summary>
-		/// <param name="correlationID">The identity of correlation</param>
-		/// <param name="serviceName">The name of service</param>
-		/// <param name="objectName">The name of serivice's object</param>
-		/// <param name="log">The log message</param>
-		/// <param name="exception">The exception</param>
-		/// <param name="cancellationToken">The cancellation token</param>
-		/// <returns></returns>
-		protected Task WriteLogAsync(string correlationID, string serviceName, string objectName, string log, Exception exception = null, CancellationToken cancellationToken = default(CancellationToken))
-		{
-			return this.WriteLogsAsync(correlationID, serviceName, objectName, new List<string>() { string.IsNullOrWhiteSpace(log) ? exception?.Message ?? "" : log }, exception, cancellationToken);
-		}
-
-		/// <summary>
-		/// Writes the log into centralized log storage of all services
-		/// </summary>
-		/// <param name="correlationID">The identity of correlation</param>
-		/// <param name="serviceName">The name of service</param>
-		/// <param name="objectName">The name of serivice's object</param>
-		/// <param name="log">The log message</param>
-		/// <param name="exception">The exception</param>
-		protected void WriteLog(string correlationID, string serviceName, string objectName, string log, Exception exception = null)
-		{
-			Task.Run(async () =>
-			{
-				await this.WriteLogAsync(correlationID, serviceName, objectName, log, exception, this.CancellationTokenSource.Token).ConfigureAwait(false);
-			}).ConfigureAwait(false);
-		}
-
-		/// <summary>
-		/// Writes a log message to the terminator or the standard output stream
-		/// </summary>
-		/// <param name="correlationID">The string that presents correlation identity</param>
-		/// <param name="log">The log message</param>
-		/// <param name="exception">The exception</param>
-		/// <param name="updateCentralizedLogs">true to update the log message into centralized logs of the API Gateway</param>
-		public virtual Task WriteLogAsync(string correlationID, string log, Exception exception = null, bool updateCentralizedLogs = true)
-		{
-			return this.WriteLogsAsync(correlationID, new List<string>() { string.IsNullOrWhiteSpace(log) ? exception?.Message ?? "" : log }, exception, updateCentralizedLogs);
-		}
-
-		/// <summary>
-		/// Writes a log message to the terminator or the standard output stream
-		/// </summary>
-		/// <param name="correlationID">The string that presents correlation identity</param>
-		/// <param name="log">The log message</param>
-		/// <param name="exception">The exception</param>
-		/// <param name="updateCentralizedLogs">true to update the log message into centralized logs of the API Gateway</param>
-		public virtual void WriteLog(string correlationID, string log, Exception exception = null, bool updateCentralizedLogs = true)
-		{
-			Task.Run(async () =>
-			{
-				await this.WriteLogAsync(correlationID, log, exception, updateCentralizedLogs).ConfigureAwait(false);
-			}).ConfigureAwait(false);
-		}
-
-		/// <summary>
-		/// Writes the log into centralized log storage of all services
-		/// </summary>
-		/// <param name="requestInfo">The request information</param>
-		/// <param name="log">The collection of log messages</param>
-		/// <param name="exception">The exception</param>
-		/// <param name="cancellationToken">The cancellation token</param>
-		/// <returns></returns>
-		protected Task WriteLogAsync(RequestInfo requestInfo, string log, Exception exception = null, CancellationToken cancellationToken = default(CancellationToken))
-		{
-			return this.WriteLogAsync(requestInfo.CorrelationID, requestInfo.ServiceName, requestInfo.ObjectName, log, exception, cancellationToken);
-		}
-
-		/// <summary>
-		/// Writes the log into centralized log storage of all services
-		/// </summary>
-		/// <param name="requestInfo">The request information</param>
-		/// <param name="log">The collection of log messages</param>
-		/// <param name="exception">The exception</param>
-		protected void WriteLog(RequestInfo requestInfo, string log, Exception exception = null)
-		{
-			Task.Run(async () =>
-			{
-				await this.WriteLogAsync(requestInfo, log, exception, this.CancellationTokenSource.Token).ConfigureAwait(false);
-			}).ConfigureAwait(false);
-		}
-		#endregion
-
-		#region Working with logs (debug)
-		/// <summary>
-		/// Writes the debug log into centralized log storage of all services
-		/// </summary>
-		/// <param name="correlationID">The identity of correlation</param>
-		/// <param name="logs">The collection of log messages</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="logger">The local logger</param>
+		/// <param name="log">The logs</param>
 		/// <param name="exception">The error exception</param>
-		/// <param name="cancellationToken">The cancellation token</param>
+		/// <param name="serviceName">The name of service</param>
+		/// <param name="objectName">The name of object</param>
 		/// <returns></returns>
-		protected async Task WriteDebugLogsAsync(string correlationID, List<string> logs, Exception exception = null, CancellationToken cancellationToken = default(CancellationToken))
-		{
-			try
-			{
-				if (exception != null)
-				{
-					logs = logs ?? new List<string>();
-					logs.Add($"> Message: {exception.Message}");
-					logs.Add($"> Type: {exception.GetType()}");
-					logs.Add($"> Stack: {exception.StackTrace}");
-
-					var inner = exception.InnerException;
-					var counter = 1;
-					while (inner != null)
-					{
-						logs.Add($"--- Inner ({counter}) ----------------");
-						logs.Add($"> Message: {inner.Message}");
-						logs.Add($"> Type: {inner.GetType()}");
-						logs.Add($"> Stack: {inner.StackTrace}");
-						inner = inner.InnerException;
-						counter++;
-					}
-				}
-
-				await this.InitializeLoggingServiceAsync().ConfigureAwait(false);
-				await this._loggingService.WriteDebugLogsAsync(correlationID, this.ServiceName, logs, cancellationToken).ConfigureAwait(false);
-			}
-			catch { }
-		}
+		protected Task WriteLogsAsync(string correlationID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null)
+			=> this.WriteLogsAsync(correlationID, logger, !string.IsNullOrWhiteSpace(log) ? new List<string>() { log } : null, exception, serviceName, objectName);
 
 		/// <summary>
-		/// Writes the debug log into centralized log storage of all services
+		/// Writes the logs (to centerlized logging system and local logs)
 		/// </summary>
-		/// <param name="correlationID">The identity of correlation</param>
-		/// <param name="logs">The collection of log messages</param>
-		/// <param name="exception">The error exception</param>
-		protected void WriteDebugLogs(string correlationID, List<string> logs, Exception exception = null)
-		{
-			Task.Run(async () =>
-			{
-				await this.WriteDebugLogsAsync(correlationID, logs, exception, this.CancellationTokenSource.Token).ConfigureAwait(false);
-			}).ConfigureAwait(false);
-		}
-
-		/// <summary>
-		/// Writes the debug log into centralized log storage of all services
-		/// </summary>
-		/// <param name="correlationID">The identity of correlation</param>
-		/// <param name="logs">The log messages</param>
-		/// <param name="exception">The error exception</param>
-		/// <param name="cancellationToken">The cancellation token</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="logs">The logs</param>
+		/// <param name="exception">The exception</param>
+		/// <param name="serviceName">The name of service</param>
+		/// <param name="objectName">The name of object</param>
+		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
-		protected Task WriteDebugLogsAsync(string correlationID, string logs, Exception exception = null, CancellationToken cancellationToken = default(CancellationToken))
-		{
-			return this.WriteDebugLogsAsync(correlationID, new List<string>() { logs }, exception, cancellationToken);
-		}
+		protected Task WriteLogsAsync(string correlationID, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+			=> this.WriteLogsAsync(correlationID, this.Logger, logs, exception, serviceName, objectName, mode);
 
 		/// <summary>
-		/// Writes the debug log into centralized log storage of all services
+		/// Writes the logs into centerlized logging system
 		/// </summary>
-		/// <param name="correlationID">The identity of correlation</param>
-		/// <param name="logs">The log messages</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="log">The logs</param>
 		/// <param name="exception">The error exception</param>
-		protected void WriteDebugLogs(string correlationID, string logs, Exception exception = null)
-		{
-			Task.Run(async () =>
-			{
-				await this.WriteDebugLogsAsync(correlationID, logs, exception, this.CancellationTokenSource.Token).ConfigureAwait(false);
-			}).ConfigureAwait(false);
-		}
+		/// <param name="serviceName">The name of service</param>
+		/// <param name="objectName">The name of object</param>
+		/// <returns></returns>
+		protected Task WriteLogsAsync(string correlationID, string log, Exception exception = null, string serviceName = null, string objectName = null)
+			=> this.WriteLogsAsync(correlationID, !string.IsNullOrWhiteSpace(log) ? new List<string>() { log } : null, exception, serviceName, objectName);
+
+		/// <summary>
+		/// Writes the logs (to centerlized logging system and local logs)
+		/// </summary>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="logger">The local logger</param>
+		/// <param name="logs">The logs</param>
+		/// <param name="exception">The exception</param>
+		/// <param name="serviceName">The name of service</param>
+		/// <param name="objectName">The name of object</param>
+		/// <param name="mode">The logging mode</param>
+		protected void WriteLogs(string correlationID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+			=> Task.Run(() => this.WriteLogsAsync(correlationID, logger, logs, exception, serviceName, objectName, mode)).ConfigureAwait(false);
+
+		/// <summary>
+		/// Writes the logs into centerlized logging system
+		/// </summary>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="logger">The local logger</param>
+		/// <param name="log">The logs</param>
+		/// <param name="exception">The error exception</param>
+		/// <param name="serviceName">The name of service</param>
+		/// <param name="objectName">The name of object</param>
+		protected void WriteLogs(string correlationID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null)
+			=> this.WriteLogs(correlationID, logger, !string.IsNullOrWhiteSpace(log) ? new List<string>() { log } : null, exception, serviceName, objectName);
+
+		/// <summary>
+		/// Writes the logs (to centerlized logging system and local logs)
+		/// </summary>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="logs">The logs</param>
+		/// <param name="exception">The exception</param>
+		/// <param name="serviceName">The name of service</param>
+		/// <param name="objectName">The name of object</param>
+		/// <param name="mode">The logging mode</param>
+		protected void WriteLogs(string correlationID, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+			=> this.WriteLogs(correlationID, this.Logger, logs, exception, serviceName, objectName, mode);
+
+		/// <summary>
+		/// Writes the logs into centerlized logging system
+		/// </summary>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="log">The logs</param>
+		/// <param name="exception">The error exception</param>
+		/// <param name="serviceName">The name of service</param>
+		/// <param name="objectName">The name of object</param>
+		protected void WriteLogs(string correlationID, string log, Exception exception = null, string serviceName = null, string objectName = null)
+			=> this.WriteLogs(correlationID, !string.IsNullOrWhiteSpace(log) ? new List<string>() { log } : null, exception, serviceName, objectName);
 		#endregion
 
 		#region Call services
 		/// <summary>
-		/// Gets a service by name
+		/// Gets a business service
 		/// </summary>
 		/// <param name="name">The string that presents name of a service</param>
 		/// <returns></returns>
 		protected Task<IService> GetServiceAsync(string name) => WAMPConnections.GetServiceAsync(name);
 
 		/// <summary>
-		/// Calls a service to process a request
+		/// Calls a business service
 		/// </summary>
 		/// <param name="requestInfo">The requesting information</param>
 		/// <param name="cancellationToken">The cancellation token</param>
-		/// <returns></returns>
-		protected Task<JObject> CallServiceAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken)) => requestInfo.CallServiceAsync(cancellationToken);
+		/// <param name="onStart">The action to run when start</param>
+		/// <param name="onSuccess">The action to run when success</param>
+		/// <param name="onError">The action to run when got an error</param>
+		/// <returns>A <see cref="JObject">JSON</see> object that presents the results of the business service</returns>
+		protected async Task<JObject> CallServiceAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken), Action<RequestInfo> onStart = null, Action<RequestInfo, JObject> onSuccess = null, Action<RequestInfo, Exception> onError = null)
+		{
+			var stopwatch = Stopwatch.StartNew();
+			try
+			{
+				onStart?.Invoke(requestInfo);
+				if (this.IsDebugResultsEnabled)
+					await this.WriteLogsAsync(requestInfo.CorrelationID, $"Begin process ({requestInfo.Verb} /{requestInfo.ServiceName?.ToLower()}/{requestInfo.ObjectName?.ToLower()}/{requestInfo.GetObjectIdentity()?.ToLower()}) - {requestInfo.Session.AppName} ({requestInfo.Session.AppPlatform}) @ {requestInfo.Session.IP}", null, requestInfo.ServiceName, requestInfo.ObjectName);
+
+				var json = await requestInfo.CallServiceAsync(cancellationToken).ConfigureAwait(false);
+				onSuccess?.Invoke(requestInfo, json);
+
+				if (this.IsDebugResultsEnabled)
+					await this.WriteLogsAsync(requestInfo.CorrelationID, new List<string>
+					{
+						$"Request:\r\n{requestInfo.ToJson().ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}",
+						$"Response:\r\n{json?.ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}"
+					}, null, requestInfo.ServiceName, requestInfo.ObjectName).ConfigureAwait(false);
+
+				return json;
+			}
+			catch (WampSessionNotEstablishedException)
+			{
+				await Task.Delay(567, cancellationToken).ConfigureAwait(false);
+				try
+				{
+					var json = await requestInfo.CallServiceAsync(cancellationToken).ConfigureAwait(false);
+					onSuccess?.Invoke(requestInfo, json);
+
+					if (this.IsDebugResultsEnabled)
+						await this.WriteLogsAsync(requestInfo.CorrelationID, new List<string>
+						{
+							$"Request (re-call):\r\n{requestInfo.ToJson().ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}",
+							$"Response (re-call):\r\n{json?.ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}"
+						}, null, requestInfo.ServiceName, requestInfo.ObjectName).ConfigureAwait(false);
+
+					return json;
+				}
+				catch (Exception)
+				{
+					throw;
+				}
+			}
+			catch (Exception ex)
+			{
+				onError?.Invoke(requestInfo, ex);
+				throw ex;
+			}
+			finally
+			{
+				stopwatch.Stop();
+				if (this.IsDebugResultsEnabled)
+					await this.WriteLogsAsync(requestInfo.CorrelationID, $"End process ({requestInfo.Verb} /{requestInfo.ServiceName?.ToLower()}/{requestInfo.ObjectName?.ToLower()}/{requestInfo.GetObjectIdentity()?.ToLower()}) - {requestInfo.Session.AppName} ({requestInfo.Session.AppPlatform}) @ {requestInfo.Session.IP} - Execution times: {stopwatch.GetElapsedTimes()}", null, requestInfo.ServiceName, requestInfo.ObjectName).ConfigureAwait(false);
+			}
+		}
 		#endregion
 
 		#region Working sessions
@@ -973,27 +556,20 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected async Task<List<Tuple<string, string, string, bool>>> GetSessionsAsync(RequestInfo requestInfo, string userID = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
-			var result = await this.CallServiceAsync(new RequestInfo()
+			var result = await this.CallServiceAsync(new RequestInfo
 			{
 				Session = requestInfo.Session,
 				ServiceName = "users",
 				ObjectName = "account",
 				Verb = "HEAD",
-				Query = new Dictionary<string, string>()
+				Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 				{
 					{ "object-identity", userID ?? requestInfo.Session.User.ID }
 				},
 				CorrelationID = requestInfo.CorrelationID
 			}, cancellationToken).ConfigureAwait(false);
 
-			return (result["Sessions"] as JArray).ToList(info =>
-				new Tuple<string, string, string, bool>(
-					(info["SessionID"] as JValue).Value as string,
-					(info["DeviceID"] as JValue).Value as string,
-					(info["AppInfo"] as JValue).Value as string,
-					(info["IsOnline"] as JValue).Value.CastAs<bool>()
-				)
-			);
+			return (result["Sessions"] as JArray).ToList(info => new Tuple<string, string, string, bool>(info.Get<string>("SessionID"), info.Get<string>("DeviceID"), info.Get<string>("AppInfo"), info.Get<bool>("IsOnline")));
 		}
 		#endregion
 
@@ -1291,7 +867,7 @@ namespace net.vieapps.Services
 		/// <param name="definitionID">The identity of the entity definition</param>
 		/// <param name="objectID">The identity of the business object</param>
 		/// <returns></returns>
-		public virtual  Task<bool> CanContributeAsync(IUser user, string systemID, string definitionID, string objectID)
+		public virtual Task<bool> CanContributeAsync(IUser user, string systemID, string definitionID, string objectID)
 			=> user != null
 				? user.CanContributeAsync(this.ServiceName, systemID, definitionID, objectID, this.GetPrivileges, this.GetPrivilegeActions)
 				: Task.FromResult(false);
@@ -1366,10 +942,7 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Stops all timers
 		/// </summary>
-		protected void StopTimers()
-		{
-			this.Timers.ForEach(timer => timer.Dispose());
-		}
+		protected void StopTimers() => this.Timers.ForEach(timer => timer.Dispose());
 		#endregion
 
 		#region Working with cache
@@ -1382,12 +955,10 @@ namespace net.vieapps.Services
 		/// <param name="pageNumber">The page number</param>
 		/// <returns></returns>
 		protected string GetCacheKey<T>(IFilterBy<T> filter, SortBy<T> sort, int pageNumber = 0) where T : class
-		{
-			return typeof(T).GetTypeName(true) + "#"
+			=> typeof(T).GetTypeName(true) + "#"
 				+ (filter != null ? $"{filter.GetMD5()}:" : "")
 				+ (sort != null ? $"{sort.GetMD5()}:" : "")
 				+ (pageNumber > 0 ? $"{pageNumber}" : "");
-		}
 
 		List<string> GetRelatedCacheKeys<T>(IFilterBy<T> filter, SortBy<T> sort) where T : class
 		{
@@ -1410,9 +981,7 @@ namespace net.vieapps.Services
 		/// <param name="filter">The filtering expression</param>
 		/// <param name="sort">The sorting expression</param>
 		protected void ClearRelatedCache<T>(Cache cache, IFilterBy<T> filter, SortBy<T> sort) where T : class
-		{
-			cache?.Remove(this.GetRelatedCacheKeys(filter, sort));
-		}
+			=> cache?.Remove(this.GetRelatedCacheKeys(filter, sort));
 
 		/// <summary>
 		/// Clears the related data from the cache storage
@@ -1422,11 +991,9 @@ namespace net.vieapps.Services
 		/// <param name="filter">The filtering expression</param>
 		/// <param name="sort">The sorting expression</param>
 		protected Task ClearRelatedCacheAsync<T>(Cache cache, IFilterBy<T> filter, SortBy<T> sort) where T : class
-		{
-			return cache != null
+			=> cache != null
 				? cache.RemoveAsync(this.GetRelatedCacheKeys(filter, sort))
 				: Task.CompletedTask;
-		}
 		#endregion
 
 		#region Get runtime exception
@@ -1434,25 +1001,27 @@ namespace net.vieapps.Services
 		/// Gets the runtime exception to throw to caller
 		/// </summary>
 		/// <param name="requestInfo">The request information</param>
-		/// <param name="message">The message</param>
 		/// <param name="exception">The exception</param>
-		/// <param name="writeLogs">true to write into centralized logs</param>
+		/// <param name="message">The message</param>
 		/// <returns></returns>
-		public WampException GetRuntimeException(RequestInfo requestInfo, string message, Exception exception, bool writeLogs = true)
+		public WampException GetRuntimeException(RequestInfo requestInfo, Exception exception, string message = null)
 		{
-			if (writeLogs)
-				this.WriteLog(requestInfo, message, exception);
-
+			// normalize exception
 			exception = exception != null && exception is RepositoryOperationException
 				? exception.InnerException
 				: exception;
 
+			// prepare message
 			message = string.IsNullOrWhiteSpace(message)
 				? exception != null
 					? exception.Message
 					: $"Error occurred while processing with the service [net.vieapps.services.{requestInfo.ServiceName.ToLower().Trim()}]"
 				: message;
 
+			// write into logs
+			this.WriteLogs(requestInfo.CorrelationID, message, exception, requestInfo.ServiceName, requestInfo.ObjectName);
+
+			// return the exception
 			if (exception is WampException)
 				return exception as WampException;
 
@@ -1465,7 +1034,7 @@ namespace net.vieapps.Services
 					}
 					: null;
 
-				var inner = exception ?.InnerException;
+				var inner = exception?.InnerException;
 				var counter = 0;
 				while (inner != null)
 				{
@@ -1476,18 +1045,6 @@ namespace net.vieapps.Services
 
 				return new WampRpcRuntimeException(details, new Dictionary<string, object>(), new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase) { { "RequestInfo", requestInfo.ToJson() } }, message, exception);
 			}
-		}
-
-		/// <summary>
-		/// Gets the runtime exception to throw to caller
-		/// </summary>
-		/// <param name="requestInfo">The request information</param>
-		/// <param name="exception">The exception</param>
-		/// <param name="writeLogs">true to write into centralized logs</param>
-		/// <returns></returns>
-		public WampException GetRuntimeException(RequestInfo requestInfo, Exception exception, bool writeLogs = true)
-		{
-			return this.GetRuntimeException(requestInfo, null, exception, writeLogs);
 		}
 		#endregion
 
@@ -1502,17 +1059,16 @@ namespace net.vieapps.Services
 		{
 			// prepare
 			var correlationID = UtilityService.NewUUID;
-			async Task continuation()
+
+			// action to run when start success
+			async Task continueAsync()
 			{
 				// initialize repository
 				if (initializeRepository)
 					try
 					{
 						await Task.Delay(UtilityService.GetRandomNumber(345, 678)).ConfigureAwait(false);
-						await Task.WhenAll(
-							this.WriteLogAsync(correlationID, "Initializing the repository"),
-							this.WriteDebugLogsAsync(correlationID, "Initializing the repository")
-						).ConfigureAwait(false);
+						this.Logger.LogInformation("Initializing the repository");
 						RepositoryStarter.Initialize(
 							new List<Assembly>() { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
 								.Where(n => !n.Name.IsStartsWith("mscorlib") && !n.Name.IsStartsWith("System") && !n.Name.IsStartsWith("Microsoft") && !n.Name.IsEquals("NETStandard")
@@ -1523,18 +1079,16 @@ namespace net.vieapps.Services
 							),
 							(log, ex) =>
 							{
-								this.WriteLog(correlationID, log, ex);
 								if (ex != null)
-									this.WriteDebugLogs(correlationID, log, ex);
+									this.Logger.LogError(log, ex);
+								else
+									this.Logger.LogInformation(log);
 							}
 						);
 					}
 					catch (Exception ex)
 					{
-						await Task.WhenAll(
-							this.WriteLogAsync(correlationID, "Error occurred while initializing the repository", ex),
-							this.WriteDebugLogsAsync(correlationID, "Error occurred while initializing the repository", ex)
-						).ConfigureAwait(false);
+						this.Logger.LogError($"Error occurred while initializing the repository: {ex.Message}", ex);
 					}
 
 				// run the next action
@@ -1545,55 +1099,33 @@ namespace net.vieapps.Services
 					}
 					catch (Exception ex)
 					{
-						await Task.WhenAll(
-							this.WriteLogAsync(correlationID, "Error occurred while running the next action", ex),
-							this.WriteDebugLogsAsync(correlationID, "Error occurred while running the next action", ex)
-						).ConfigureAwait(false);
+						this.Logger.LogError($"Cannot invoke the next action: {ex.Message}", ex);
 					}
 			}
 
-			// start the service
-			Task.Run(async () =>
+			// action to start the service
+			async Task startAsync()
 			{
 				try
 				{
 					await this.StartAsync(
 						async (service) =>
 						{
-							await Task.WhenAll(
-								this.WriteLogAsync(correlationID, $"The service is registered - PID: {Process.GetCurrentProcess().Id}"),
-								this.WriteDebugLogsAsync(correlationID, $"The service is registered - PID: {Process.GetCurrentProcess().Id}")
-							).ConfigureAwait(false);
-							await continuation().ConfigureAwait(false);
+							this.Logger.LogInformation($"The service is re-registered - PID: {Process.GetCurrentProcess().Id}");
+							await continueAsync().ConfigureAwait(false);
 						},
-						async (exception) =>
-						{
-							await Task.WhenAll(
-								this.WriteLogAsync(correlationID, "Error occurred while registering the service", exception),
-								this.WriteDebugLogsAsync(correlationID, "Error occurred while registering the service", exception)
-							).ConfigureAwait(false);
-						}
+						exception => this.Logger.LogError($"Cannot register: {exception.Message}", exception)
 					).ConfigureAwait(false);
 				}
 				catch (Exception ex)
 				{
-					await Task.WhenAll(
-						this.WriteLogAsync(correlationID, "Error occurred while starting the service", ex),
-						this.WriteDebugLogsAsync(correlationID, "Error occurred while starting the service", ex)
-					).ConfigureAwait(false);
-
 					if (ex is ArgumentException && ex.Message.IsContains("Value does not fall within the expected range"))
 					{
-						await Task.WhenAll(
-							this.WriteLogAsync(correlationID, "Got a problem while connecting to WAMP router. Try to re-connect after few times..."),
-							this.WriteDebugLogsAsync(correlationID, "Got a problem while connecting to WAMP router. Try to re-connect after few times...")
-						).ConfigureAwait(false);
+						this.Logger.LogError($"Got a problem while connecting to WAMP router ({ex.Message}). Try to re-connect after few times...", ex);
 						await Task.Delay(UtilityService.GetRandomNumber(456, 789)).ConfigureAwait(false);
 
-						this._incommingChannel?.Close();
-						this._incommingChannel = null;
-						this._outgoingChannel?.Close();
-						this._outgoingChannel = null;
+						WAMPConnections.IncommingChannel?.Close();
+						WAMPConnections.OutgoingChannel?.Close();
 
 						this._loggingService = null;
 						this._rtuService = null;
@@ -1602,23 +1134,19 @@ namespace net.vieapps.Services
 						await this.StartAsync(
 							async (service) =>
 							{
-								await Task.WhenAll(
-									this.WriteLogAsync(correlationID, $"The service is re-registered - PID: {Process.GetCurrentProcess().Id}"),
-									this.WriteDebugLogsAsync(correlationID, $"The service is re-registered - PID: {Process.GetCurrentProcess().Id}")
-								).ConfigureAwait(false);
-								await continuation().ConfigureAwait(false);
+								this.Logger.LogInformation($"The service is re-registered - PID: {Process.GetCurrentProcess().Id}");
+								await continueAsync().ConfigureAwait(false);
 							},
-							async (exception) =>
-							{
-								await Task.WhenAll(
-									this.WriteLogAsync(correlationID, "Error occurred while registering the service", exception),
-									this.WriteDebugLogsAsync(correlationID, "Error occurred while registering the service", exception)
-								).ConfigureAwait(false);
-							}
+							exception => this.Logger.LogError($"Cannot register: {exception.Message}", exception)
 						).ConfigureAwait(false);
 					}
+					else
+						this.Logger.LogError($"Cannot start: {ex.Message}", ex);
 				}
-			}).ConfigureAwait(false);
+			}
+
+			// start the service
+			Task.Run(() => startAsync()).ConfigureAwait(false);
 		}
 
 		/// <summary>
@@ -1633,15 +1161,32 @@ namespace net.vieapps.Services
 		/// <param name="onIncomingConnectionError"></param>
 		/// <param name="onOutgoingConnectionError"></param>
 		/// <returns></returns>
-		protected virtual async Task StartAsync(Func<ServiceBase, Task> onRegisterSuccess = null, Func<Exception, Task> onRegisterError = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
+		protected virtual async Task StartAsync(Func<ServiceBase, Task> onRegisterSuccess = null, Action<Exception> onRegisterError = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
 		{
-			await this.OpenOutgoingChannelAsync(onOutgoingConnectionEstablished, onOutgoingConnectionBroken, onOutgoingConnectionError).ConfigureAwait(false);
+			await WAMPConnections.OpenOutgoingChannelAsync(
+				onOutgoingConnectionEstablished,
+				onOutgoingConnectionBroken ?? ((sender, args) =>
+				{
+					if (!WAMPConnections.ChannelsAreClosedBySystem && !args.CloseType.Equals(SessionCloseType.Disconnection) && WAMPConnections.OutgoingChannel != null)
+						WAMPConnections.OutgoingChannel.ReOpen(wampChannel => this.Logger?.LogInformation("Re-open the outgoging channel successful"), ex => this.Logger?.LogError("Error occurred while re-opening the outgoging channel", ex));
+				}),
+				onOutgoingConnectionError
+			).ConfigureAwait(false);
 			await Task.WhenAll(
 				this.InitializeLoggingServiceAsync(),
 				this.InitializeRTUServiceAsync(),
 				this.InitializeMessagingServiceAsync()
 			).ConfigureAwait(false);
-			await this.OpenIncomingChannelAsync(onIncomingConnectionEstablished, onIncomingConnectionBroken, onIncomingConnectionError).ConfigureAwait(false);
+
+			await WAMPConnections.OpenIncomingChannelAsync(
+				onIncomingConnectionEstablished,
+				onIncomingConnectionBroken ?? ((sender, args) =>
+				{
+					if (!WAMPConnections.ChannelsAreClosedBySystem && !args.CloseType.Equals(SessionCloseType.Disconnection) && WAMPConnections.IncommingChannel != null)
+						WAMPConnections.IncommingChannel.ReOpen(wampChannel => this.Logger?.LogInformation("Re-open the incomming channel successful"), ex => this.Logger?.LogError("Error occurred while re-opening the incomming channel", ex));
+				}),
+				onIncomingConnectionError
+			).ConfigureAwait(false);
 			await this.RegisterServiceAsync(onRegisterSuccess, onRegisterError).ConfigureAwait(false);
 		}
 
@@ -1670,12 +1215,7 @@ namespace net.vieapps.Services
 						this._instance = null;
 					}
 				})
-				.ContinueWith(task =>
-				{
-					this._channelsAreClosedBySystem = true;
-					this.CloseIncomingChannel();
-					this.CloseOutgoingChannel();
-				})
+				.ContinueWith(task => WAMPConnections.CloseChannels())
 			}, TimeSpan.FromSeconds(13));
 		}
 
