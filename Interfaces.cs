@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 using WampSharp.V2.Rpc;
 using Newtonsoft.Json.Linq;
 
+using Microsoft.Extensions.Logging;
+
 using net.vieapps.Components.Security;
 using net.vieapps.Components.Utility;
 #endregion
@@ -175,6 +177,11 @@ namespace net.vieapps.Services
 		/// Gets the name of the service (for working with related URI)
 		/// </summary>
 		string ServiceName { get; }
+
+		/// <summary>
+		/// Gets or sets the local logger
+		/// </summary>
+		ILogger Logger { get; set; }
 
 		/// <summary>
 		/// Starts the service

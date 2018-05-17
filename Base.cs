@@ -64,6 +64,7 @@ namespace net.vieapps.Services
 		IMessagingService _messagingService = null;
 
 		internal protected CancellationTokenSource CancellationTokenSource { get; } = new CancellationTokenSource();
+
 		internal protected List<IDisposable> Timers { get; private set; } = new List<IDisposable>();
 
 		/// <summary>
