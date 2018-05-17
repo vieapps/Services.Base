@@ -397,7 +397,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <returns></returns>
 		protected Task WriteLogsAsync(string correlationID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null)
-			=> this.WriteLogsAsync(correlationID, logger, !string.IsNullOrWhiteSpace(log) ? new List<string>() { log } : null, exception, serviceName, objectName);
+			=> this.WriteLogsAsync(correlationID, logger, !string.IsNullOrWhiteSpace(log) ? new List<string> { log } : null, exception, serviceName, objectName);
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -422,7 +422,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <returns></returns>
 		protected Task WriteLogsAsync(string correlationID, string log, Exception exception = null, string serviceName = null, string objectName = null)
-			=> this.WriteLogsAsync(correlationID, !string.IsNullOrWhiteSpace(log) ? new List<string>() { log } : null, exception, serviceName, objectName);
+			=> this.WriteLogsAsync(correlationID, !string.IsNullOrWhiteSpace(log) ? new List<string> { log } : null, exception, serviceName, objectName);
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -447,7 +447,7 @@ namespace net.vieapps.Services
 		/// <param name="serviceName">The name of service</param>
 		/// <param name="objectName">The name of object</param>
 		protected void WriteLogs(string correlationID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null)
-			=> this.WriteLogs(correlationID, logger, !string.IsNullOrWhiteSpace(log) ? new List<string>() { log } : null, exception, serviceName, objectName);
+			=> this.WriteLogs(correlationID, logger, !string.IsNullOrWhiteSpace(log) ? new List<string> { log } : null, exception, serviceName, objectName);
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -470,7 +470,7 @@ namespace net.vieapps.Services
 		/// <param name="serviceName">The name of service</param>
 		/// <param name="objectName">The name of object</param>
 		protected void WriteLogs(string correlationID, string log, Exception exception = null, string serviceName = null, string objectName = null)
-			=> this.WriteLogs(correlationID, !string.IsNullOrWhiteSpace(log) ? new List<string>() { log } : null, exception, serviceName, objectName);
+			=> this.WriteLogs(correlationID, !string.IsNullOrWhiteSpace(log) ? new List<string> { log } : null, exception, serviceName, objectName);
 		#endregion
 
 		#region Call services
@@ -1003,9 +1003,10 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="requestInfo">The request information</param>
 		/// <param name="exception">The exception</param>
+		/// <param name="stopwatch">The stop watch</param>
 		/// <param name="message">The message</param>
 		/// <returns></returns>
-		public WampException GetRuntimeException(RequestInfo requestInfo, Exception exception, string message = null)
+		public WampException GetRuntimeException(RequestInfo requestInfo, Exception exception, Stopwatch stopwatch = null, string message = null)
 		{
 			// normalize exception
 			exception = exception != null && exception is RepositoryOperationException
@@ -1016,11 +1017,12 @@ namespace net.vieapps.Services
 			message = string.IsNullOrWhiteSpace(message)
 				? exception != null
 					? exception.Message
-					: $"Error occurred while processing with the service [net.vieapps.services.{requestInfo.ServiceName.ToLower().Trim()}]"
+					: $"Error occurred while processing"
 				: message;
 
 			// write into logs
-			this.WriteLogs(requestInfo.CorrelationID, message, exception, requestInfo.ServiceName, requestInfo.ObjectName);
+			stopwatch?.Stop();
+			this.WriteLogs(requestInfo.CorrelationID, new List<string> { $"Error response: {message}{(stopwatch == null ? "" : $" - Execution times: {stopwatch.GetElapsedTimes()}")}", $"Request: {requestInfo.ToJson().ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}" }, exception, requestInfo.ServiceName, requestInfo.ObjectName);
 
 			// return the exception
 			if (exception is WampException)
@@ -1029,7 +1031,7 @@ namespace net.vieapps.Services
 			else
 			{
 				var details = exception != null
-					? new Dictionary<string, object>()
+					? new Dictionary<string, object>
 					{
 						{ "0", exception.StackTrace }
 					}
@@ -1044,7 +1046,16 @@ namespace net.vieapps.Services
 					inner = inner.InnerException;
 				}
 
-				return new WampRpcRuntimeException(details, new Dictionary<string, object>(), new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase) { { "RequestInfo", requestInfo.ToJson() } }, message, exception);
+				return new WampRpcRuntimeException(
+					details, 
+					new Dictionary<string, object>(),
+					new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+					{
+						{ "RequestInfo", requestInfo.ToJson() }
+					},
+					message,
+					exception
+				);
 			}
 		}
 		#endregion
@@ -1055,12 +1066,9 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="args">The starting arguments</param>
 		/// <param name="initializeRepository">true to initialize the repository of the service</param>
-		/// <param name="next">The next action to run</param>
-		public virtual void Start(string[] args = null, bool initializeRepository = true, Func<IService, Task> next = null)
+		/// <param name="nextAsync">The next action to run</param>
+		public virtual void Start(string[] args = null, bool initializeRepository = true, Func<IService, Task> nextAsync = null)
 		{
-			// prepare
-			var correlationID = UtilityService.NewUUID;
-
 			// action to run when start success
 			async Task continueAsync()
 			{
@@ -1093,10 +1101,10 @@ namespace net.vieapps.Services
 					}
 
 				// run the next action
-				if (next != null)
+				if (nextAsync != null)
 					try
 					{
-						await next(this).ConfigureAwait(false);
+						await nextAsync(this).ConfigureAwait(false);
 					}
 					catch (Exception ex)
 					{
@@ -1112,37 +1120,35 @@ namespace net.vieapps.Services
 					await this.StartAsync(
 						async (service) =>
 						{
-							this.Logger.LogInformation($"The service is re-registered - PID: {Process.GetCurrentProcess().Id}");
+							this.Logger.LogInformation($"The service is registered - PID: {Process.GetCurrentProcess().Id}");
 							await continueAsync().ConfigureAwait(false);
 						},
-						exception => this.Logger.LogError($"Cannot register: {exception.Message}", exception)
+						exception => this.Logger.LogError($"Cannot register the service: {exception.Message}", exception)
 					).ConfigureAwait(false);
 				}
 				catch (Exception ex)
 				{
 					if (ex is ArgumentException && ex.Message.IsContains("Value does not fall within the expected range"))
 					{
-						this.Logger.LogError($"Got a problem while connecting to WAMP router ({ex.Message}). Try to re-connect after few times...", ex);
-						await Task.Delay(UtilityService.GetRandomNumber(456, 789)).ConfigureAwait(false);
+						this.Logger.LogError($"Got a problem while attempting to connect to WAMP router, try to re-connect... ({ex.Message})", ex);
 
-						WAMPConnections.IncommingChannel?.Close();
-						WAMPConnections.OutgoingChannel?.Close();
-
+						WAMPConnections.CloseChannels();
 						this._loggingService = null;
 						this._rtuService = null;
 						this._messagingService = null;
 
+						await Task.Delay(UtilityService.GetRandomNumber(456, 789)).ConfigureAwait(false);
 						await this.StartAsync(
 							async (service) =>
 							{
-								this.Logger.LogInformation($"The service is re-registered - PID: {Process.GetCurrentProcess().Id}");
+								this.Logger.LogInformation($"The service is re-registered successful - PID: {Process.GetCurrentProcess().Id}");
 								await continueAsync().ConfigureAwait(false);
 							},
-							exception => this.Logger.LogError($"Cannot register: {exception.Message}", exception)
+							exception => this.Logger.LogError($"Cannot re-register the service: {exception.Message}", exception)
 						).ConfigureAwait(false);
 					}
 					else
-						this.Logger.LogError($"Cannot start: {ex.Message}", ex);
+						this.Logger.LogError($"Cannot start that service: {ex.Message}", ex);
 				}
 			}
 
@@ -1164,30 +1170,48 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected virtual async Task StartAsync(Func<ServiceBase, Task> onRegisterSuccess = null, Action<Exception> onRegisterError = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
 		{
+			// open outgoing channel & initialize helper services
 			await WAMPConnections.OpenOutgoingChannelAsync(
 				onOutgoingConnectionEstablished,
-				onOutgoingConnectionBroken ?? ((sender, args) =>
+				onOutgoingConnectionBroken ?? ((sender, arguments) =>
 				{
-					if (!WAMPConnections.ChannelsAreClosedBySystem && !args.CloseType.Equals(SessionCloseType.Disconnection) && WAMPConnections.OutgoingChannel != null)
-						WAMPConnections.OutgoingChannel.ReOpen(wampChannel => this.Logger?.LogInformation("Re-open the outgoging channel successful"), ex => this.Logger?.LogError("Error occurred while re-opening the outgoging channel", ex));
+					if (arguments.CloseType.Equals(SessionCloseType.Disconnection))
+						this.Logger?.LogInformation($"The outgoging channel is broken because the router is not found or the router is refused - Session ID: {arguments.SessionId} - Reason: {(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)} - {arguments.CloseType}");
+					else
+					{
+						if (WAMPConnections.ChannelsAreClosedBySystem)
+							this.Logger?.LogInformation($"The outgoging channel is closed - Session ID: {arguments.SessionId} - Reason: {(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)} - {arguments.CloseType}");
+						else if (WAMPConnections.OutgoingChannel != null)
+							WAMPConnections.OutgoingChannel.ReOpenChannel(wampChannel => this.Logger?.LogInformation("Re-open the outgoging channel successful"), ex => this.Logger?.LogError("Error occurred while re-opening the outgoging channel", ex), this.CancellationTokenSource.Token);
+					}
 				}),
 				onOutgoingConnectionError
 			).ConfigureAwait(false);
+
 			await Task.WhenAll(
 				this.InitializeLoggingServiceAsync(),
 				this.InitializeRTUServiceAsync(),
 				this.InitializeMessagingServiceAsync()
 			).ConfigureAwait(false);
 
+			// open outgoing channel & register this service
 			await WAMPConnections.OpenIncomingChannelAsync(
 				onIncomingConnectionEstablished,
-				onIncomingConnectionBroken ?? ((sender, args) =>
+				onIncomingConnectionBroken ?? ((sender, arguments) =>
 				{
-					if (!WAMPConnections.ChannelsAreClosedBySystem && !args.CloseType.Equals(SessionCloseType.Disconnection) && WAMPConnections.IncommingChannel != null)
-						WAMPConnections.IncommingChannel.ReOpen(wampChannel => this.Logger?.LogInformation("Re-open the incomming channel successful"), ex => this.Logger?.LogError("Error occurred while re-opening the incomming channel", ex));
+					if (arguments.CloseType.Equals(SessionCloseType.Disconnection))
+						this.Logger?.LogInformation($"The incoming channel is broken because the router is not found or the router is refused - Session ID: {arguments.SessionId} - Reason: {(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)} - {arguments.CloseType}");
+					else
+					{
+						if (WAMPConnections.ChannelsAreClosedBySystem)
+							this.Logger?.LogInformation($"The incoming channel is closed - Session ID: {arguments.SessionId} - Reason: {(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)} - {arguments.CloseType}");
+						else if (WAMPConnections.IncommingChannel != null)
+							WAMPConnections.IncommingChannel.ReOpenChannel(wampChannel => this.Logger?.LogInformation("Re-open the incomming channel successful"), ex => this.Logger?.LogError("Error occurred while re-opening the incomming channel", ex), this.CancellationTokenSource.Token);
+					}
 				}),
 				onIncomingConnectionError
 			).ConfigureAwait(false);
+
 			await this.RegisterServiceAsync(onRegisterSuccess, onRegisterError).ConfigureAwait(false);
 		}
 
@@ -1196,9 +1220,6 @@ namespace net.vieapps.Services
 		/// </summary>
 		public void Stop()
 		{
-			this.CancellationTokenSource.Cancel();
-			this.CancellationTokenSource.Dispose();
-
 			this.StopTimers();
 			this._communicator?.Dispose();
 
@@ -1216,8 +1237,10 @@ namespace net.vieapps.Services
 						this._instance = null;
 					}
 				})
-				.ContinueWith(task => WAMPConnections.CloseChannels())
+				.ContinueWith(task => WAMPConnections.CloseChannels(), TaskContinuationOptions.OnlyOnRanToCompletion)
 			}, TimeSpan.FromSeconds(13));
+
+			this.CancellationTokenSource.Cancel();
 		}
 
 		bool _isDisposed = false;
@@ -1228,6 +1251,7 @@ namespace net.vieapps.Services
 			{
 				this._isDisposed = true;
 				this.Stop();
+				this.CancellationTokenSource.Dispose();
 				GC.SuppressFinalize(this);
 			}
 		}

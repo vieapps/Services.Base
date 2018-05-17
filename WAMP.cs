@@ -35,48 +35,45 @@ namespace net.vieapps.Services
 	{
 
 		#region Properties
-		static IWampChannel _IncommingChannel = null, _OutgoingChannel = null;
-		static long _IncommingChannelSessionID = 0, _OutgoingChannelSessionID = 0;
-		static bool _ChannelsAreClosedBySystem = false;
-
 		/// <summary>
 		/// Gets the incomming channel of the WAMP router
 		/// </summary>
-		public static IWampChannel IncommingChannel => WAMPConnections._IncommingChannel;
+		public static IWampChannel IncommingChannel { get; internal set; }
 
 		/// <summary>
 		/// Gets the session's identity of the incomming channel of the WAMP router
 		/// </summary>
-		public static long IncommingChannelSessionID => WAMPConnections._IncommingChannelSessionID;
+		public static long IncommingChannelSessionID { get; internal set; }
 
 		/// <summary>
 		/// Gets the outgoing channel of the WAMP router
 		/// </summary>
-		public static IWampChannel OutgoingChannel => WAMPConnections._OutgoingChannel;
+		public static IWampChannel OutgoingChannel { get; internal set; }
 
 		/// <summary>
 		/// Gets the session's identity of the outgoing channel of the WAMP router
 		/// </summary>
-		public static long OutgoingChannelSessionID => WAMPConnections._OutgoingChannelSessionID;
+		public static long OutgoingChannelSessionID { get; internal set; }
 
 		/// <summary>
 		/// Gets the state that determines that the WAMP channels are closed by the system
 		/// </summary>
-		public static bool ChannelsAreClosedBySystem => WAMPConnections._ChannelsAreClosedBySystem;
+		public static bool ChannelsAreClosedBySystem { get; internal set; }
 
 		/// <summary>
 		/// Gets information of WAMP router
 		/// </summary>
 		/// <returns></returns>
 		public static Tuple<string, string, bool> GetRouterInfo()
-			=> new Tuple<string, string, bool>(
+			=> new Tuple<string, string, bool>
+			(
 				UtilityService.GetAppSetting("Router:Address", "ws://127.0.0.1:16429/"),
 				UtilityService.GetAppSetting("Router:Realm", "VIEAppsRealm"),
 				"json".IsEquals(UtilityService.GetAppSetting("Router:ChannelsMode", "MsgPack"))
 			);
 		#endregion
 
-		#region Incomming
+		#region Open
 		/// <summary>
 		/// Opens the incomming channel of the WAMP router
 		/// </summary>
@@ -86,7 +83,7 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static async Task OpenIncomingChannelAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null)
 		{
-			if (WAMPConnections._IncommingChannel != null)
+			if (WAMPConnections.IncommingChannel != null)
 				return;
 
 			var info = WAMPConnections.GetRouterInfo();
@@ -94,42 +91,28 @@ namespace net.vieapps.Services
 			var realm = info.Item2;
 			var useJsonChannel = info.Item3;
 
-			WAMPConnections._IncommingChannel = useJsonChannel
+			WAMPConnections.IncommingChannel = useJsonChannel
 				? new DefaultWampChannelFactory().CreateJsonChannel(address, realm)
 				: new DefaultWampChannelFactory().CreateMsgpackChannel(address, realm);
 
-			WAMPConnections._IncommingChannel.RealmProxy.Monitor.ConnectionEstablished += (sender, args) => WAMPConnections._IncommingChannelSessionID = args.SessionId;
+			WAMPConnections.IncommingChannel.RealmProxy.Monitor.ConnectionEstablished += (sender, args) =>
+			{
+				WAMPConnections.IncommingChannelSessionID = args.SessionId;
+				WAMPConnections.ChannelsAreClosedBySystem = false;
+			};
 
 			if (onConnectionEstablished != null)
-				WAMPConnections._IncommingChannel.RealmProxy.Monitor.ConnectionEstablished += new EventHandler<WampSessionCreatedEventArgs>(onConnectionEstablished);
+				WAMPConnections.IncommingChannel.RealmProxy.Monitor.ConnectionEstablished += new EventHandler<WampSessionCreatedEventArgs>(onConnectionEstablished);
 
 			if (onConnectionBroken != null)
-				WAMPConnections._IncommingChannel.RealmProxy.Monitor.ConnectionBroken += new EventHandler<WampSessionCloseEventArgs>(onConnectionBroken);
+				WAMPConnections.IncommingChannel.RealmProxy.Monitor.ConnectionBroken += new EventHandler<WampSessionCloseEventArgs>(onConnectionBroken);
 
 			if (onConnectionError != null)
-				WAMPConnections._IncommingChannel.RealmProxy.Monitor.ConnectionError += new EventHandler<WampConnectionErrorEventArgs>(onConnectionError);
+				WAMPConnections.IncommingChannel.RealmProxy.Monitor.ConnectionError += new EventHandler<WampConnectionErrorEventArgs>(onConnectionError);
 
-			await WAMPConnections._IncommingChannel.Open().ConfigureAwait(false);
+			await WAMPConnections.IncommingChannel.Open().ConfigureAwait(false);
 		}
 
-		/// <summary>
-		/// Closes the incomming channel of the WAMP router
-		/// </summary>
-		/// <param name="message">The message to send to WAMP router before closing the channel</param>
-		public static void CloseIncomingChannel(string message = null)
-		{
-			if (WAMPConnections._IncommingChannel != null)
-				try
-				{
-					WAMPConnections._IncommingChannel.Close(message ?? "The incoming channel is closed", new GoodbyeDetails());
-					WAMPConnections._IncommingChannel = null;
-					WAMPConnections._IncommingChannelSessionID = 0;
-				}
-				catch { }
-		}
-		#endregion
-
-		#region Outgoing
 		/// <summary>
 		/// Opens the outgoging channel of the WAMP router
 		/// </summary>
@@ -139,7 +122,7 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static async Task OpenOutgoingChannelAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null)
 		{
-			if (WAMPConnections._OutgoingChannel != null)
+			if (WAMPConnections.OutgoingChannel != null)
 				return;
 
 			var info = WAMPConnections.GetRouterInfo();
@@ -147,22 +130,73 @@ namespace net.vieapps.Services
 			var realm = info.Item2;
 			var useJsonChannel = info.Item3;
 
-			WAMPConnections._OutgoingChannel = useJsonChannel
+			WAMPConnections.OutgoingChannel = useJsonChannel
 				? new DefaultWampChannelFactory().CreateJsonChannel(address, realm)
 				: new DefaultWampChannelFactory().CreateMsgpackChannel(address, realm);
 
-			WAMPConnections._OutgoingChannel.RealmProxy.Monitor.ConnectionEstablished += (sender, args) => WAMPConnections._OutgoingChannelSessionID = args.SessionId;
+			WAMPConnections.OutgoingChannel.RealmProxy.Monitor.ConnectionEstablished += (sender, args) =>
+			{
+				WAMPConnections.OutgoingChannelSessionID = args.SessionId;
+				WAMPConnections.ChannelsAreClosedBySystem = false;
+			};
 
 			if (onConnectionEstablished != null)
-				WAMPConnections._OutgoingChannel.RealmProxy.Monitor.ConnectionEstablished += new EventHandler<WampSessionCreatedEventArgs>(onConnectionEstablished);
+				WAMPConnections.OutgoingChannel.RealmProxy.Monitor.ConnectionEstablished += new EventHandler<WampSessionCreatedEventArgs>(onConnectionEstablished);
 
 			if (onConnectionBroken != null)
-				WAMPConnections._OutgoingChannel.RealmProxy.Monitor.ConnectionBroken += new EventHandler<WampSessionCloseEventArgs>(onConnectionBroken);
+				WAMPConnections.OutgoingChannel.RealmProxy.Monitor.ConnectionBroken += new EventHandler<WampSessionCloseEventArgs>(onConnectionBroken);
 
 			if (onConnectionError != null)
-				WAMPConnections._OutgoingChannel.RealmProxy.Monitor.ConnectionError += new EventHandler<WampConnectionErrorEventArgs>(onConnectionError);
+				WAMPConnections.OutgoingChannel.RealmProxy.Monitor.ConnectionError += new EventHandler<WampConnectionErrorEventArgs>(onConnectionError);
 
-			await WAMPConnections._OutgoingChannel.Open().ConfigureAwait(false);
+			await WAMPConnections.OutgoingChannel.Open().ConfigureAwait(false);
+		}
+		#endregion
+
+		#region Re-open
+		static void ReOpenChannel(this IWampChannel wampChannel, Action<IWampChannel> onSuccess, Action<Exception> onError, CancellationToken cancellationToken, int attempts, int minDelay = 234, int maxDelay = 567)
+			=> new WampChannelReconnector(wampChannel, async () =>
+			{
+				try
+				{
+					await Task.Delay(UtilityService.GetRandomNumber(minDelay, maxDelay), cancellationToken).ConfigureAwait(false);
+					await wampChannel.Open().WithCancellationToken(cancellationToken).ConfigureAwait(false);
+					onSuccess?.Invoke(wampChannel);
+				}
+				catch (OperationCanceledException)
+				{
+					return;
+				}
+				catch (Exception ex)
+				{
+					if (attempts < 13)
+					{
+						var reopen = Task.Run(() => wampChannel.ReOpenChannel(onSuccess, onError, cancellationToken, attempts + 1, minDelay + ((attempts + 1) * 13), maxDelay + ((attempts + 1) * 13))).ConfigureAwait(false);
+					}
+					else
+						onError?.Invoke(ex);
+				}
+			}).Start();
+
+		public static void ReOpenChannel(this IWampChannel wampChannel, Action<IWampChannel> onSuccess = null, Action<Exception> onError = null, CancellationToken cancellationToken = default(CancellationToken))
+			=> wampChannel.ReOpenChannel(onSuccess, onError, cancellationToken, 0);
+		#endregion
+
+		#region Close
+		/// <summary>
+		/// Closes the incomming channel of the WAMP router
+		/// </summary>
+		/// <param name="message">The message to send to WAMP router before closing the channel</param>
+		public static void CloseIncomingChannel(string message = null)
+		{
+			if (WAMPConnections.IncommingChannel != null)
+				try
+				{
+					WAMPConnections.IncommingChannel.Close(message ?? "Disconnected", new GoodbyeDetails());
+					WAMPConnections.IncommingChannel = null;
+					WAMPConnections.IncommingChannelSessionID = 0;
+				}
+				catch { }
 		}
 
 		/// <summary>
@@ -171,39 +205,22 @@ namespace net.vieapps.Services
 		/// <param name="message">The message to send to WAMP router before closing the channel</param>
 		public static void CloseOutgoingChannel(string message = null)
 		{
-			if (WAMPConnections._OutgoingChannel != null)
+			if (WAMPConnections.OutgoingChannel != null)
 				try
 				{
-					WAMPConnections._OutgoingChannel.Close(message ?? "The outgoing channel is closed", new GoodbyeDetails());
-					WAMPConnections._OutgoingChannel = null;
-					WAMPConnections._OutgoingChannelSessionID = 0;
+					WAMPConnections.OutgoingChannel.Close(message ?? "Disconnected", new GoodbyeDetails());
+					WAMPConnections.OutgoingChannel = null;
+					WAMPConnections.OutgoingChannelSessionID = 0;
 				}
 				catch { }
 		}
-		#endregion
-
-		#region Re-open & Close
-		public static void ReOpen(this IWampChannel wampChannel, Action<IWampChannel> onSuccess = null, Action<Exception> onError = null)
-			=> new WampChannelReconnector(wampChannel, async () =>
-			{
-				try
-				{
-					await Task.Delay(234).ConfigureAwait(false);
-					await wampChannel.Open().ConfigureAwait(false);
-					onSuccess?.Invoke(wampChannel);
-				}
-				catch (Exception ex)
-				{
-					onError?.Invoke(ex);
-				}
-			}).Start();
 
 		/// <summary>
 		/// Closes all WAMP channels
 		/// </summary>
 		public static void CloseChannels()
 		{
-			WAMPConnections._ChannelsAreClosedBySystem = true;
+			WAMPConnections.ChannelsAreClosedBySystem = true;
 			WAMPConnections.CloseIncomingChannel();
 			WAMPConnections.CloseOutgoingChannel();
 		}
@@ -333,7 +350,7 @@ namespace net.vieapps.Services
 				await WAMPConnections.OpenOutgoingChannelAsync().ConfigureAwait(false);
 				if (!WAMPConnections._Services.TryGetValue(name, out service))
 				{
-					service = WAMPConnections._OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IService>(ProxyInterceptor.Create(name));
+					service = WAMPConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IService>(ProxyInterceptor.Create(name));
 					WAMPConnections._Services.TryAdd(name, service);
 				}
 			}
