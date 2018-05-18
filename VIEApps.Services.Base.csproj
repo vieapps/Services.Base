@@ -9,10 +9,10 @@
 		<Company>VIEApps.net</Company>
 		<Product>VIEApps NGX</Product>
 		<Copyright>© 2018 VIEApps.net</Copyright>
-		<Version>10.1.4.1803</Version>
-		<AssemblyVersion>10.1.4.1803</AssemblyVersion>
-		<FileVersion>10.1.4.1803</FileVersion>
-		<InformationalVersion>v10.1.netstandard-2+rev:2018.03.15-owc</InformationalVersion>
+		<Version>10.2.0.1806</Version>
+		<AssemblyVersion>10.2.0.1806</AssemblyVersion>
+		<FileVersion>10.2.0.1806</FileVersion>
+		<InformationalVersion>v10.2.netstandard-2+rev:2018.06.01</InformationalVersion>
 		<GeneratePackageOnBuild>false</GeneratePackageOnBuild>
 		<PackageId>VIEApps.Services.Base</PackageId>
 		<PackageTags>services;microservices;vieapps;vieapps.components;vieapps.services;vieapps.microservices</PackageTags>
@@ -42,7 +42,7 @@
 		<PackageReference Include="Serilog.Extensions.Logging.File" Version="1.1.0" />
 		<PackageReference Include="System.Reactive" Version="3.1.1" />
 		<PackageReference Include="VIEApps.Components.Repository" Version="10.2.2.1806" />
-		<PackageReference Include="WampSharp.Default.Client" Version="18.3.2" />
+		<PackageReference Include="WampSharp.Default.Client" Version="18.5.1" />
 	</ItemGroup>
 
 </Project>

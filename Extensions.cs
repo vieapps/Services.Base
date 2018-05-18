@@ -568,7 +568,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="role"></param>
 		/// <returns></returns>
-		public static List<string> GetPrivilegeActions(PrivilegeRole role)
+		public static List<string> GetPrivilegeActions(this PrivilegeRole role)
 		{
 			var actions = new List<Components.Security.Action>();
 			switch (role)
@@ -971,6 +971,112 @@ namespace net.vieapps.Services
 				}
 			}
 			return stack;
+		}
+
+		/// <summary>
+		/// Gets the details of a WAMP exception
+		/// </summary>
+		/// <param name="exception"></param>
+		/// <param name="requestInfo"></param>
+		/// <returns></returns>
+		public static Tuple<int, string, string, string, Exception, JObject> GetDetails(this WampException exception, RequestInfo requestInfo = null)
+		{
+			var code = 500;
+			var message = "";
+			var type = "";
+			var stack = "";
+			Exception inner = null;
+			JObject jsonException = null;
+
+			// unavailable
+			if (exception.ErrorUri.Equals("wamp.error.no_such_procedure") || exception.ErrorUri.Equals("wamp.error.callee_unregistered"))
+			{
+				if (exception.Arguments != null && exception.Arguments.Length > 0 && exception.Arguments[0] != null && exception.Arguments[0] is JValue)
+				{
+					message = (exception.Arguments[0] as JValue).Value.ToString();
+					var start = message.IndexOf("'");
+					var end = message.IndexOf("'", start + 1);
+					message = $"The requested service ({message.Substring(start + 1, end - start - 1).Replace("'", "")}) is unavailable";
+				}
+				else
+					message = "The requested service is unavailable";
+
+				type = "ServiceUnavailableException";
+				stack = exception.StackTrace;
+				code = 503;
+			}
+
+			// cannot serialize
+			else if (exception.ErrorUri.Equals("wamp.error.invalid_argument"))
+			{
+				message = "Cannot serialize or deserialize one of argument objects (or child object)";
+				if (exception.Arguments != null && exception.Arguments.Length > 0 && exception.Arguments[0] != null && exception.Arguments[0] is JValue)
+					message += $" => {(exception.Arguments[0] as JValue).Value}";
+				type = "SerializationException";
+				stack = exception.StackTrace;
+			}
+
+			// runtime error
+			else if (exception.ErrorUri.Equals("wamp.error.runtime_error"))
+			{
+				if (exception.Arguments != null && exception.Arguments.Length > 0 && exception.Arguments[0] != null && exception.Arguments[0] is JObject)
+					foreach (var info in exception.Arguments[0] as JObject)
+					{
+						if (info.Value != null && info.Value is JValue && (info.Value as JValue).Value != null)
+							stack += (stack.Equals("") ? "" : "\r\n" + $"----- Inner ({info.Key}) --------------------" + "\r\n")
+								+ (info.Value as JValue).Value.ToString();
+					}
+
+				if (requestInfo == null && exception.Arguments != null && exception.Arguments.Length > 2 && exception.Arguments[2] != null && exception.Arguments[2] is JObject)
+				{
+					var info = (exception.Arguments[2] as JObject).First;
+					if (info != null && info is JProperty && (info as JProperty).Name.Equals("RequestInfo") && (info as JProperty).Value != null && (info as JProperty).Value is JObject)
+						requestInfo = ((info as JProperty).Value as JToken).FromJson<RequestInfo>();
+				}
+
+				jsonException = exception.Arguments != null && exception.Arguments.Length > 4 && exception.Arguments[4] != null && exception.Arguments[4] is JObject
+					? Extensions.GetJsonException(exception.Arguments[4] as JObject)
+					: null;
+
+				message = jsonException != null
+					? (jsonException["Message"] as JValue).Value.ToString()
+					: $"Error occurred at \"net.vieapps.services.{(requestInfo != null ? requestInfo.ServiceName.ToLower() : "unknown")}\"";
+
+				type = jsonException != null
+					? (jsonException["Type"] as JValue).Value.ToString().ToArray('.').Last()
+					: "ServiceOperationException";
+
+				inner = exception;
+			}
+
+			// unknown
+			else
+			{
+				message = exception.Message;
+				type = exception.GetType().GetTypeName(true);
+				stack = exception.StackTrace;
+				inner = exception.InnerException;
+			}
+
+			return new Tuple<int, string, string, string, Exception, JObject>(code, message, type, stack, inner, jsonException);
+		}
+
+		static JObject GetJsonException(JObject exception)
+		{
+			var json = new JObject
+			{
+				{ "Message", exception["Message"] },
+				{ "Type", exception["ClassName"] },
+				{ "Method", exception["ExceptionMethod"] },
+				{ "Source", exception["Source"] },
+				{ "Stack", exception["StackTraceString"] },
+			};
+
+			var inner = exception["InnerException"];
+			if (inner != null && inner is JObject)
+				json.Add(new JProperty("InnerException", Extensions.GetJsonException(inner as JObject)));
+
+			return json;
 		}
 		#endregion
 
