@@ -67,7 +67,7 @@ namespace net.vieapps.Services
 		public static Tuple<string, string, bool> GetRouterInfo()
 			=> new Tuple<string, string, bool>
 			(
-				UtilityService.GetAppSetting("Router:Address", "ws://127.0.0.1:16429/"),
+				UtilityService.GetAppSetting("Router:Uri", "ws://127.0.0.1:16429/"),
 				UtilityService.GetAppSetting("Router:Realm", "VIEAppsRealm"),
 				"json".IsEquals(UtilityService.GetAppSetting("Router:ChannelsMode", "MsgPack"))
 			);

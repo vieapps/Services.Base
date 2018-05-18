@@ -95,53 +95,25 @@ namespace net.vieapps.Services
 		/// Gets the request body in JSON
 		/// </summary>
 		/// <returns></returns>
-		public JToken GetBodyJson()
-		{
-			return string.IsNullOrWhiteSpace(this.Body)
-				? new JObject()
-				: this.Body.StartsWith("[")
-					? JArray.Parse(this.Body) as JToken
-					: JObject.Parse(this.Body) as JToken;
-		}
+		public JToken GetBodyJson() => string.IsNullOrWhiteSpace(this.Body) ? new JObject() : this.Body.ToJson();
 
 		/// <summary>
 		/// Gets the request body in dynamic object (Expando)
 		/// </summary>
 		/// <returns></returns>
-		public ExpandoObject GetBodyExpando()
-		{
-			return string.IsNullOrWhiteSpace(this.Body)
-				? new ExpandoObject()
-				: this.Body.ToExpandoObject();
-		}
+		public ExpandoObject GetBodyExpando() => string.IsNullOrWhiteSpace(this.Body) ? new ExpandoObject() : this.Body.ToExpandoObject();
 
 		/// <summary>
 		/// Gets the value of the 'x-request' parameter of the query (in Base64Url) and converts to JSON
 		/// </summary>
 		/// <returns></returns>
-		public JToken GetRequestJson()
-		{
-			var request = this.Query.ContainsKey("x-request")
-				? this.Query["x-request"].Url64Decode()
-				: "";
-			return request.StartsWith("[")
-				? JArray.Parse(request) as JToken
-				: JObject.Parse(request) as JToken;
-		}
+		public JToken GetRequestJson() => (this.Query.ContainsKey("x-request") ? this.Query["x-request"].Url64Decode() : "{}").ToJson();
 
 		/// <summary>
 		/// Gets the value of the 'x-request' parameter of the query (in Base64Url) and converts to Expando
 		/// </summary>
 		/// <returns></returns>
-		public ExpandoObject GetRequestExpando()
-		{
-			var request = this.Query.ContainsKey("x-request")
-				? this.Query["x-request"].Url64Decode()
-				: "";
-			return string.IsNullOrWhiteSpace(request)
-				? new ExpandoObject()
-				: request.ToExpandoObject();
-		}
+		public ExpandoObject GetRequestExpando() => this.Query.ContainsKey("x-request") ? this.Query["x-request"].Url64Decode().ToExpandoObject() : new ExpandoObject();
 		#endregion
 
 		#region Methods: get parameters
@@ -150,67 +122,39 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="name">The string that presents name of parameter want to get</param>
 		/// <returns></returns>
-		public string GetHeaderParameter(string name)
-		{
-			return this.Header != null && !string.IsNullOrWhiteSpace(name) && this.Header.ContainsKey(name.ToLower())
-				? this.Header[name.ToLower()]
-				: null;
-		}
+		public string GetHeaderParameter(string name) => this.Header != null && !string.IsNullOrWhiteSpace(name) && this.Header.ContainsKey(name.ToLower()) ? this.Header[name.ToLower()] : null;
 
 		/// <summary>
 		/// Gets the parameter from the query
 		/// </summary>
 		/// <param name="name">The string that presents name of parameter want to get</param>
 		/// <returns></returns>
-		public string GetQueryParameter(string name)
-		{
-			return this.Query != null && !string.IsNullOrWhiteSpace(name) && this.Query.ContainsKey(name.ToLower())
-				? this.Query[name.ToLower()]
-				: null;
-		}
+		public string GetQueryParameter(string name) => this.Query != null && !string.IsNullOrWhiteSpace(name) && this.Query.ContainsKey(name.ToLower()) ? this.Query[name.ToLower()] : null;
 
 		/// <summary>
 		/// Gets the parameter with two steps: first from header, then second step is from query if header has no value
 		/// </summary>
 		/// <param name="name">The string that presents name of parameter want to get</param>
 		/// <returns></returns>
-		public string GetParameter(string name)
-		{
-			return this.GetHeaderParameter(name) ?? this.GetQueryParameter(name);
-		}
+		public string GetParameter(string name) => this.GetHeaderParameter(name) ?? this.GetQueryParameter(name);
 
 		/// <summary>
 		/// Gets the identity of the device that send this request
 		/// </summary>
 		/// <returns></returns>
-		public string GetDeviceID()
-		{
-			return this.Session != null && !string.IsNullOrWhiteSpace(this.Session.DeviceID)
-				? this.Session.DeviceID
-				: this.GetParameter("x-device-id");
-		}
+		public string GetDeviceID() => this.Session != null && !string.IsNullOrWhiteSpace(this.Session.DeviceID) ? this.Session.DeviceID : this.GetParameter("x-device-id");
 
 		/// <summary>
 		/// Gets the name of the app that send this request
 		/// </summary>
 		/// <returns></returns>
-		public string GetAppName()
-		{
-			return this.Session != null && !string.IsNullOrWhiteSpace(this.Session.AppName)
-				? this.Session.AppName
-				: this.GetParameter("x-app-name");
-		}
+		public string GetAppName() => this.Session != null && !string.IsNullOrWhiteSpace(this.Session.AppName) ? this.Session.AppName : this.GetParameter("x-app-name");
 
 		/// <summary>
 		/// Gets the platform of the app that send this request
 		/// </summary>
 		/// <returns></returns>
-		public string GetAppPlatform()
-		{
-			return this.Session != null && !string.IsNullOrWhiteSpace(this.Session.AppPlatform)
-				? this.Session.AppPlatform
-				: this.GetParameter("x-app-platform");
-		}
+		public string GetAppPlatform() => this.Session != null && !string.IsNullOrWhiteSpace(this.Session.AppPlatform) ? this.Session.AppPlatform : this.GetParameter("x-app-platform");
 
 		/// <summary>
 		/// Gets the object identity (from the parameter named 'object-identity' of the query)

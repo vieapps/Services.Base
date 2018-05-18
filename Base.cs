@@ -1079,7 +1079,7 @@ namespace net.vieapps.Services
 						await Task.Delay(UtilityService.GetRandomNumber(345, 678)).ConfigureAwait(false);
 						this.Logger.LogInformation("Initializing the repository");
 						RepositoryStarter.Initialize(
-							new List<Assembly>() { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
+							new List<Assembly> { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
 								.Where(n => !n.Name.IsStartsWith("mscorlib") && !n.Name.IsStartsWith("System") && !n.Name.IsStartsWith("Microsoft") && !n.Name.IsEquals("NETStandard")
 									&& !n.Name.IsStartsWith("Newtonsoft") && !n.Name.IsStartsWith("WampSharp") && !n.Name.IsStartsWith("Castle.") && !n.Name.IsStartsWith("StackExchange.")
 									&& !n.Name.IsStartsWith("MongoDB") && !n.Name.IsStartsWith("MySql") && !n.Name.IsStartsWith("Oracle") && !n.Name.IsStartsWith("Npgsql")
@@ -1120,7 +1120,9 @@ namespace net.vieapps.Services
 					await this.StartAsync(
 						async (service) =>
 						{
-							this.Logger.LogInformation($"The service is registered - PID: {Process.GetCurrentProcess().Id}");
+							this.Logger.LogInformation($"The service is registered - PID: {Process.GetCurrentProcess().Id} - URI: {this.ServiceURI}");
+							this.Logger.LogInformation($"Incomming channel to WAMP router is established - Session ID: {WAMPConnections.IncommingChannelSessionID}");
+							this.Logger.LogInformation($"Outgoing channel to WAMP router is established - Session ID: {WAMPConnections.OutgoingChannelSessionID}");
 							await continueAsync().ConfigureAwait(false);
 						},
 						exception => this.Logger.LogError($"Cannot register the service: {exception.Message}", exception)
@@ -1170,6 +1172,9 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected virtual async Task StartAsync(Func<ServiceBase, Task> onRegisterSuccess = null, Action<Exception> onRegisterError = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
 		{
+			var routerInfo = WAMPConnections.GetRouterInfo();
+			this.Logger?.LogInformation($"Attempting to connect to WAMP router [{routerInfo.Item1}{(routerInfo.Item1.EndsWith("/") ? "" : "/")}{routerInfo.Item2}]");
+
 			// open outgoing channel & initialize helper services
 			await WAMPConnections.OpenOutgoingChannelAsync(
 				onOutgoingConnectionEstablished,
@@ -1223,22 +1228,20 @@ namespace net.vieapps.Services
 			this.StopTimers();
 			this._communicator?.Dispose();
 
-			Task.WaitAll(new[]
+			Task.Run(async () =>
 			{
-				Task.Run(async () =>
+				if (this._instance != null)
 				{
-					if (this._instance != null)
+					try
 					{
-						try
-						{
-							await this._instance.DisposeAsync().ConfigureAwait(false);
-						}
-						catch { }
-						this._instance = null;
+						await this._instance.DisposeAsync().ConfigureAwait(false);
 					}
-				})
-				.ContinueWith(task => WAMPConnections.CloseChannels(), TaskContinuationOptions.OnlyOnRanToCompletion)
-			}, TimeSpan.FromSeconds(13));
+					catch { }
+					this._instance = null;
+				}
+			})
+			.ContinueWith(task => WAMPConnections.CloseChannels(), TaskContinuationOptions.OnlyOnRanToCompletion)
+			.Wait(3456);
 
 			this.CancellationTokenSource.Cancel();
 		}
