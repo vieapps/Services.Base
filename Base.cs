@@ -630,7 +630,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="role"></param>
 		/// <returns></returns>
-		protected virtual List<string> GetPrivilegeActions(PrivilegeRole role) => Extensions.GetPrivilegeActions(role);
+		protected virtual List<string> GetPrivilegeActions(PrivilegeRole role) => role.GetPrivilegeActions();
 
 		/// <summary>
 		/// Gets the state that determines the user is system administrator or not
@@ -1047,7 +1047,7 @@ namespace net.vieapps.Services
 				}
 
 				return new WampRpcRuntimeException(
-					details, 
+					details,
 					new Dictionary<string, object>(),
 					new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
 					{
@@ -1061,103 +1061,6 @@ namespace net.vieapps.Services
 		#endregion
 
 		#region Start & Stop
-		/// <summary>
-		/// Starts the service
-		/// </summary>
-		/// <param name="args">The starting arguments</param>
-		/// <param name="initializeRepository">true to initialize the repository of the service</param>
-		/// <param name="nextAsync">The next action to run</param>
-		public virtual void Start(string[] args = null, bool initializeRepository = true, Func<IService, Task> nextAsync = null)
-		{
-			// action to run when start success
-			async Task continueAsync()
-			{
-				// initialize repository
-				if (initializeRepository)
-					try
-					{
-						await Task.Delay(UtilityService.GetRandomNumber(345, 678)).ConfigureAwait(false);
-						this.Logger.LogInformation("Initializing the repository");
-						RepositoryStarter.Initialize(
-							new List<Assembly> { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
-								.Where(n => !n.Name.IsStartsWith("mscorlib") && !n.Name.IsStartsWith("System") && !n.Name.IsStartsWith("Microsoft") && !n.Name.IsEquals("NETStandard")
-									&& !n.Name.IsStartsWith("Newtonsoft") && !n.Name.IsStartsWith("WampSharp") && !n.Name.IsStartsWith("Castle.") && !n.Name.IsStartsWith("StackExchange.")
-									&& !n.Name.IsStartsWith("MongoDB") && !n.Name.IsStartsWith("MySql") && !n.Name.IsStartsWith("Oracle") && !n.Name.IsStartsWith("Npgsql")
-									&& !n.Name.IsStartsWith("VIEApps.Components.") && !n.Name.IsStartsWith("VIEApps.Services.Base") && !n.Name.IsStartsWith("VIEApps.Services.APIGateway"))
-								.Select(n => Assembly.Load(n))
-							),
-							(log, ex) =>
-							{
-								if (ex != null)
-									this.Logger.LogError(log, ex);
-								else
-									this.Logger.LogInformation(log);
-							}
-						);
-					}
-					catch (Exception ex)
-					{
-						this.Logger.LogError($"Error occurred while initializing the repository: {ex.Message}", ex);
-					}
-
-				// run the next action
-				if (nextAsync != null)
-					try
-					{
-						await nextAsync(this).ConfigureAwait(false);
-					}
-					catch (Exception ex)
-					{
-						this.Logger.LogError($"Cannot invoke the next action: {ex.Message}", ex);
-					}
-			}
-
-			// action to start the service
-			async Task startAsync()
-			{
-				try
-				{
-					await this.StartAsync(
-						async (service) =>
-						{
-							this.Logger.LogInformation($"The service is registered - PID: {Process.GetCurrentProcess().Id} - URI: {this.ServiceURI}");
-							this.Logger.LogInformation($"Incomming channel to WAMP router is established - Session ID: {WAMPConnections.IncommingChannelSessionID}");
-							this.Logger.LogInformation($"Outgoing channel to WAMP router is established - Session ID: {WAMPConnections.OutgoingChannelSessionID}");
-							await continueAsync().ConfigureAwait(false);
-						},
-						exception => this.Logger.LogError($"Cannot register the service: {exception.Message}", exception)
-					).ConfigureAwait(false);
-				}
-				catch (Exception ex)
-				{
-					if (ex is ArgumentException && ex.Message.IsContains("Value does not fall within the expected range"))
-					{
-						this.Logger.LogError($"Got a problem while attempting to connect to WAMP router, try to re-connect... ({ex.Message})", ex);
-
-						WAMPConnections.CloseChannels();
-						this._loggingService = null;
-						this._rtuService = null;
-						this._messagingService = null;
-
-						await Task.Delay(UtilityService.GetRandomNumber(456, 789)).ConfigureAwait(false);
-						await this.StartAsync(
-							async (service) =>
-							{
-								this.Logger.LogInformation($"The service is re-registered successful - PID: {Process.GetCurrentProcess().Id}");
-								await continueAsync().ConfigureAwait(false);
-							},
-							exception => this.Logger.LogError($"Cannot re-register the service: {exception.Message}", exception)
-						).ConfigureAwait(false);
-					}
-					else
-						this.Logger.LogError($"Cannot start that service: {ex.Message}", ex);
-				}
-			}
-
-			// start the service
-			Task.Run(() => startAsync()).ConfigureAwait(false);
-		}
-
 		/// <summary>
 		/// Starts the service (the short way - open channels and register service)
 		/// </summary>
@@ -1221,38 +1124,138 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
+		/// Starts the service
+		/// </summary>
+		/// <param name="args">The starting arguments</param>
+		/// <param name="initializeRepository">true to initialize the repository of the service</param>
+		/// <param name="nextAsync">The next action to run</param>
+		public virtual void Start(string[] args = null, bool initializeRepository = true, Func<IService, Task> nextAsync = null)
+		{
+			// action to run when start success
+			async Task continueAsync()
+			{
+				this.Logger?.LogInformation($"Incomming channel to WAMP router is established - Session ID: {WAMPConnections.IncommingChannelSessionID}");
+				this.Logger?.LogInformation($"Outgoing channel to WAMP router is established - Session ID: {WAMPConnections.OutgoingChannelSessionID}");
+
+				// initialize repository
+				if (initializeRepository)
+					try
+					{
+						await Task.Delay(UtilityService.GetRandomNumber(345, 678)).ConfigureAwait(false);
+						this.Logger?.LogInformation("Initializing the repository");
+						RepositoryStarter.Initialize(
+							new List<Assembly> { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
+								.Where(n => !n.Name.IsStartsWith("mscorlib") && !n.Name.IsStartsWith("System") && !n.Name.IsStartsWith("Microsoft") && !n.Name.IsEquals("NETStandard")
+									&& !n.Name.IsStartsWith("Newtonsoft") && !n.Name.IsStartsWith("WampSharp") && !n.Name.IsStartsWith("Castle.") && !n.Name.IsStartsWith("StackExchange.")
+									&& !n.Name.IsStartsWith("MongoDB") && !n.Name.IsStartsWith("MySql") && !n.Name.IsStartsWith("Oracle") && !n.Name.IsStartsWith("Npgsql")
+									&& !n.Name.IsStartsWith("VIEApps.Components.") && !n.Name.IsStartsWith("VIEApps.Services.Base") && !n.Name.IsStartsWith("VIEApps.Services.APIGateway"))
+								.Select(n => Assembly.Load(n))
+							),
+							(log, ex) =>
+							{
+								if (ex != null)
+									this.Logger?.LogError(log, ex);
+								else
+									this.Logger?.LogInformation(log);
+							}
+						);
+					}
+					catch (Exception ex)
+					{
+						this.Logger?.LogError($"Error occurred while initializing the repository: {ex.Message}", ex);
+					}
+
+				// run the next action
+				if (nextAsync != null)
+					try
+					{
+						await nextAsync(this).ConfigureAwait(false);
+					}
+					catch (Exception ex)
+					{
+						this.Logger?.LogError($"Cannot invoke the next action: {ex.Message}", ex);
+					}
+			}
+
+			// action to start the service
+			async Task startAsync()
+			{
+				try
+				{
+					await this.StartAsync(
+						async (service) =>
+						{
+							this.Logger?.LogInformation($"Successfully registered the service");
+							await continueAsync().ConfigureAwait(false);
+						},
+						exception => this.Logger?.LogError($"Cannot register the service: {exception.Message}", exception)
+					).ConfigureAwait(false);
+				}
+				catch (Exception ex)
+				{
+					if (ex is ArgumentException && ex.Message.IsContains("Value does not fall within the expected range"))
+					{
+						this.Logger?.LogError($"Got a problem while attempting to connect to WAMP router, try to re-connect... ({ex.Message})", ex);
+
+						WAMPConnections.CloseChannels();
+						this._loggingService = null;
+						this._rtuService = null;
+						this._messagingService = null;
+
+						await Task.Delay(UtilityService.GetRandomNumber(456, 789)).ConfigureAwait(false);
+						await this.StartAsync(
+							async (service) =>
+							{
+								this.Logger?.LogInformation($"Successfully re-registered the service");
+								await continueAsync().ConfigureAwait(false);
+							},
+							exception => this.Logger?.LogError($"Cannot re-register the service: {exception.Message}", exception)
+						).ConfigureAwait(false);
+					}
+					else
+						this.Logger?.LogError($"Cannot start that service: {ex.Message}", ex);
+				}
+			}
+
+			// start the service
+			Task.Run(() => startAsync()).ConfigureAwait(false);
+		}
+
+		/// <summary>
 		/// Stops this service (close channels and clean-up)
 		/// </summary>
 		public void Stop()
 		{
-			this.StopTimers();
-			this._communicator?.Dispose();
-
 			Task.Run(async () =>
 			{
+				this.StopTimers();
+				this._communicator?.Dispose();
 				if (this._instance != null)
-				{
 					try
 					{
 						await this._instance.DisposeAsync().ConfigureAwait(false);
 					}
-					catch { }
-					this._instance = null;
-				}
+					catch (Exception ex)
+					{
+						this.Logger?.LogError($"Failure dispose service: {ex.Message}", ex);
+					}
+					finally
+					{
+						this._instance = null;
+					}
 			})
 			.ContinueWith(task => WAMPConnections.CloseChannels(), TaskContinuationOptions.OnlyOnRanToCompletion)
+			.ContinueWith(task => this.CancellationTokenSource.Cancel(), TaskContinuationOptions.OnlyOnRanToCompletion)
 			.Wait(3456);
-
-			this.CancellationTokenSource.Cancel();
 		}
 
-		bool _isDisposed = false;
+		bool _disposed = false;
 
 		public virtual void Dispose()
 		{
-			if (!this._isDisposed)
+			if (!this._disposed)
 			{
-				this._isDisposed = true;
+				this._disposed = true;
 				this.Stop();
 				this.CancellationTokenSource.Dispose();
 				GC.SuppressFinalize(this);

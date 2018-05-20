@@ -21,9 +21,7 @@ namespace net.vieapps.Services
 		/// <param name="name">The string that presents name of the service (for registering with right URI)</param>
 		/// <param name="options">The options for registering (default is round robin)</param>
 		public RegistrationInterceptor(string name = null, RegisterOptions options = null) : base(options ?? new RegisterOptions() { Invoke = WampInvokePolicy.Roundrobin })
-		{
-			this._name = name;
-		}
+			=> this._name = name;
 
 		public override string GetProcedureUri(MethodInfo method)
 			=> string.IsNullOrWhiteSpace(this._name)
@@ -35,7 +33,8 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="name">The string that presents name of service (for marking URI)</param>
 		/// <returns></returns>
-		public static RegistrationInterceptor Create(string name = null) => new RegistrationInterceptor(name);
+		public static RegistrationInterceptor Create(string name = null)
+			=> new RegistrationInterceptor(name);
 	}
 
 	//  --------------------------------------------------------------------------------------------
@@ -53,9 +52,7 @@ namespace net.vieapps.Services
 		/// <param name="name">The string that presents name of the service (for registering with right URI)</param>
 		/// <param name="options">The options for calling</param>
 		public ProxyInterceptor(string name = null, CallOptions options = null) : base(options ?? new CallOptions())
-		{
-			this._name = name;
-		}
+			=> this._name = name;
 
 		public override string GetProcedureUri(MethodInfo method)
 			=> string.IsNullOrWhiteSpace(this._name)
@@ -67,6 +64,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="name">The string that presents name of service (for marking URI)</param>
 		/// <returns></returns>
-		public static CachedCalleeProxyInterceptor Create(string name = null) => new CachedCalleeProxyInterceptor(new ProxyInterceptor(name));
+		public static CachedCalleeProxyInterceptor Create(string name = null)
+			=> new CachedCalleeProxyInterceptor(new ProxyInterceptor(name));
 	}
 }

@@ -414,9 +414,10 @@ namespace net.vieapps.Services
 		/// Gets the state that determines the user is system administrator or not
 		/// </summary>
 		/// <param name="user">The user information</param>
-		/// /// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static async Task<bool> IsSystemAdministratorAsync(this IUser user, string correlationID = null)
+		public static async Task<bool> IsSystemAdministratorAsync(this IUser user, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			if (user == null || !user.IsAuthenticated)
 				return false;
@@ -435,7 +436,7 @@ namespace net.vieapps.Services
 							{ "IsSystemAdministrator", "" }
 						},
 						CorrelationID = correlationID ?? UtilityService.NewUUID
-					}.CallServiceAsync().ConfigureAwait(false);
+					}.CallServiceAsync(cancellationToken).ConfigureAwait(false);
 					return user.ID.IsEquals(result.Get<string>("ID")) && result.Get<bool>("IsSystemAdministrator") == true;
 				}
 				catch
@@ -448,47 +449,53 @@ namespace net.vieapps.Services
 		/// Gets the state that determines the user is system administrator or not
 		/// </summary>
 		/// <param name="session">The session information</param>
-		/// /// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static Task<bool> IsSystemAdministratorAsync(this Session session, string correlationID = null)
+		public static Task<bool> IsSystemAdministratorAsync(this Session session, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
 			=> session != null && session.User != null
-				? session.User.IsSystemAdministratorAsync(correlationID)
+				? session.User.IsSystemAdministratorAsync(correlationID, cancellationToken)
 				: Task.FromResult(false);
 
 		/// <summary>
 		/// Gets the state that determines the user is system administrator or not
 		/// </summary>
 		/// <param name="requestInfo">The requesting information that contains user information</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static Task<bool> IsSystemAdministratorAsync(this RequestInfo requestInfo)
+		public static Task<bool> IsSystemAdministratorAsync(this RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken))
 			=> requestInfo != null && requestInfo.Session != null
-				? requestInfo.Session.IsSystemAdministratorAsync(requestInfo?.CorrelationID)
+				? requestInfo.Session.IsSystemAdministratorAsync(requestInfo?.CorrelationID, cancellationToken)
 				: Task.FromResult(false);
 
 		/// <summary>
 		/// Gets the state that determines the user is service administrator or not
 		/// </summary>
 		/// <param name="user">The user information</param>
-		/// /// <param name="serviceName">The name of service</param>
+		/// <param name="serviceName">The name of service</param>
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static async Task<bool> IsServiceAdministratorAsync(this IUser user, string serviceName = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static async Task<bool> IsServiceAdministratorAsync(this IUser user, string serviceName = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
 			=> user != null && user.IsAuthenticated
-				? await user.IsSystemAdministratorAsync().ConfigureAwait(false) || user.IsAuthorized(serviceName, null, null, Components.Security.Action.Full, null, getPrivileges, getActions)
+				? await user.IsSystemAdministratorAsync(correlationID, cancellationToken).ConfigureAwait(false) || user.IsAuthorized(serviceName, null, null, Components.Security.Action.Full, null, getPrivileges, getActions)
 				: false;
 
 		/// <summary>
 		/// Gets the state that determines the user is service administrator or not
 		/// </summary>
 		/// <param name="session">The session information</param>
-		/// /// <param name="serviceName">The name of service</param>
+		/// <param name="serviceName">The name of service</param>
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static Task<bool> IsServiceAdministratorAsync(this Session session, string serviceName = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static Task<bool> IsServiceAdministratorAsync(this Session session, string serviceName = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
 			=> session != null && session.User != null
-				? session.User.IsServiceAdministratorAsync(serviceName, getPrivileges, getActions)
+				? session.User.IsServiceAdministratorAsync(serviceName, getPrivileges, getActions, correlationID, cancellationToken)
 				: Task.FromResult(false);
 
 		/// <summary>
@@ -497,36 +504,42 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo">The requesting information that contains user information and related service</param>
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static Task<bool> IsServiceAdministratorAsync(this RequestInfo requestInfo, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static Task<bool> IsServiceAdministratorAsync(this RequestInfo requestInfo, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
 			=> requestInfo != null && requestInfo.Session != null
-				? requestInfo.Session.IsServiceAdministratorAsync(requestInfo.ServiceName, getPrivileges, getActions)
+				? requestInfo.Session.IsServiceAdministratorAsync(requestInfo.ServiceName, getPrivileges, getActions, correlationID, cancellationToken)
 				: Task.FromResult(false);
 
 		/// <summary>
 		/// Gets the state that determines the user is service administrator or not
 		/// </summary>
 		/// <param name="user">The user information</param>
-		/// /// <param name="serviceName">The name of service</param>
+		/// <param name="serviceName">The name of service</param>
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static async Task<bool> IsServiceModeratorAsync(this IUser user, string serviceName = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static async Task<bool> IsServiceModeratorAsync(this IUser user, string serviceName = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
 			=> user != null && user.IsAuthenticated
-				? await user.IsServiceAdministratorAsync(serviceName).ConfigureAwait(false) || user.IsAuthorized(serviceName, null, null, Components.Security.Action.Approve, null, getPrivileges, getActions)
+				? await user.IsServiceAdministratorAsync(serviceName, getPrivileges, getActions, correlationID, cancellationToken).ConfigureAwait(false) || user.IsAuthorized(serviceName, null, null, Components.Security.Action.Approve, null, getPrivileges, getActions)
 				: false;
 
 		/// <summary>
 		/// Gets the state that determines the user is service administrator or not
 		/// </summary>
 		/// <param name="session">The session information</param>
-		/// /// <param name="serviceName">The name of service</param>
+		/// <param name="serviceName">The name of service</param>
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static Task<bool> IsServiceModeratorAsync(this Session session, string serviceName = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static Task<bool> IsServiceModeratorAsync(this Session session, string serviceName = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
 			=> session != null && session.User != null
-				? session.User.IsServiceModeratorAsync(serviceName, getPrivileges, getActions)
+				? session.User.IsServiceModeratorAsync(serviceName, getPrivileges, getActions, correlationID, cancellationToken)
 				: Task.FromResult(false);
 
 		/// <summary>
@@ -535,10 +548,12 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo">The requesting information that contains user information and related service</param>
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static Task<bool> IsServiceModeratorAsync(this RequestInfo requestInfo, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static Task<bool> IsServiceModeratorAsync(this RequestInfo requestInfo, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
 			=> requestInfo != null && requestInfo.Session != null
-				? requestInfo.Session.IsServiceModeratorAsync(requestInfo.ServiceName, getPrivileges, getActions)
+				? requestInfo.Session.IsServiceModeratorAsync(requestInfo.ServiceName, getPrivileges, getActions, correlationID, cancellationToken)
 				: Task.FromResult(false);
 
 		/// <summary>
@@ -632,9 +647,11 @@ namespace net.vieapps.Services
 		/// <param name="privileges">The working privileges of the object (entity)</param>
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static async Task<bool> IsAuthorizedAsync(this IUser user, string serviceName, string objectName, string objectIdentity, Components.Security.Action action, Privileges privileges = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
-			=> await Extensions.IsSystemAdministratorAsync(user).ConfigureAwait(false)
+		public static async Task<bool> IsAuthorizedAsync(this IUser user, string serviceName, string objectName, string objectIdentity, Components.Security.Action action, Privileges privileges = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
+			=> await user.IsSystemAdministratorAsync(correlationID, cancellationToken).ConfigureAwait(false)
 				? true
 				: user != null
 					? user.IsAuthorized(serviceName, objectName, objectIdentity, action, privileges, getPrivileges, getActions)
@@ -648,10 +665,11 @@ namespace net.vieapps.Services
 		/// <param name="privileges">The working privileges of the object (entity)</param>
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static Task<bool> IsAuthorizedAsync(this RequestInfo requestInfo, Components.Security.Action action, Privileges privileges = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static Task<bool> IsAuthorizedAsync(this RequestInfo requestInfo, Components.Security.Action action, Privileges privileges = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, CancellationToken cancellationToken = default(CancellationToken))
 			=> requestInfo.Session != null && requestInfo.Session.User != null
-				? requestInfo.Session.User.IsAuthorizedAsync(requestInfo.ServiceName, requestInfo.ObjectName, requestInfo.GetObjectIdentity(true), action, privileges, getPrivileges, getActions)
+				? requestInfo.Session.User.IsAuthorizedAsync(requestInfo.ServiceName, requestInfo.ObjectName, requestInfo.GetObjectIdentity(true), action, privileges, getPrivileges, getActions, requestInfo.CorrelationID, cancellationToken)
 				: Task.FromResult(false);
 
 		/// <summary>
@@ -662,9 +680,10 @@ namespace net.vieapps.Services
 		/// <param name="action">The action to perform on the object of this service</param>
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static async Task<bool> IsAuthorizedAsync(this RequestInfo requestInfo, IBusinessEntity entity, Components.Security.Action action, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
-			=> await requestInfo.IsSystemAdministratorAsync().ConfigureAwait(false)
+		public static async Task<bool> IsAuthorizedAsync(this RequestInfo requestInfo, IBusinessEntity entity, Components.Security.Action action, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, CancellationToken cancellationToken = default(CancellationToken))
+			=> await requestInfo.IsSystemAdministratorAsync(cancellationToken).ConfigureAwait(false)
 				? true
 				: requestInfo != null && requestInfo.Session != null && requestInfo.Session.User != null
 					? requestInfo.Session.User.IsAuthorized(requestInfo.ServiceName, requestInfo.ObjectName, entity?.ID, action, entity?.WorkingPrivileges, getPrivileges, getActions)
@@ -679,9 +698,11 @@ namespace net.vieapps.Services
 		/// <param name="objectIdentity">The identity of the service's object</param>
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static async Task<bool> CanManageAsync(this IUser user, string serviceName, string objectName, string objectIdentity, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
-			=> await user.IsSystemAdministratorAsync().ConfigureAwait(false) || user.IsAuthorized(serviceName, objectName, objectIdentity, Components.Security.Action.Full, null, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions);
+		public static async Task<bool> CanManageAsync(this IUser user, string serviceName, string objectName, string objectIdentity, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
+			=> await user.IsSystemAdministratorAsync(correlationID, cancellationToken).ConfigureAwait(false) || user.IsAuthorized(serviceName, objectName, objectIdentity, Components.Security.Action.Full, null, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions);
 
 		/// <summary>
 		/// Gets the state that determines the user is able to manage or not
@@ -693,19 +714,21 @@ namespace net.vieapps.Services
 		/// <param name="objectID">The identity of the business object</param>
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static async Task<bool> CanManageAsync(this IUser user, string serviceName, string systemID, string definitionID, string objectID, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static async Task<bool> CanManageAsync(this IUser user, string serviceName, string systemID, string definitionID, string objectID, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			// check user
 			if (string.IsNullOrWhiteSpace(user?.ID))
 				return false;
 
 			// system administrator can do anything
-			if (await user.IsSystemAdministratorAsync().ConfigureAwait(false))
+			if (await user.IsSystemAdministratorAsync(correlationID, cancellationToken).ConfigureAwait(false))
 				return true;
 
 			// get the business object
-			var @object = await RepositoryMediator.GetAsync(definitionID, objectID).ConfigureAwait(false);
+			var @object = await RepositoryMediator.GetAsync(definitionID, objectID, cancellationToken).ConfigureAwait(false);
 
 			// get the permissions state
 			return @object != null && @object is IBusinessEntity
@@ -722,9 +745,11 @@ namespace net.vieapps.Services
 		/// <param name="objectIdentity">The identity of the service's object</param>
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static async Task<bool> CanModerateAsync(this IUser user, string serviceName, string objectName, string objectIdentity, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
-			=> user != null && await user.CanManageAsync(serviceName, objectName, objectIdentity, getPrivileges, getActions).ConfigureAwait(false)
+		public static async Task<bool> CanModerateAsync(this IUser user, string serviceName, string objectName, string objectIdentity, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
+			=> user != null && await user.CanManageAsync(serviceName, objectName, objectIdentity, getPrivileges, getActions, correlationID, cancellationToken).ConfigureAwait(false)
 				? true
 				: user != null && user.IsAuthorized(serviceName, objectName, objectIdentity, Components.Security.Action.Approve, null, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions);
 
@@ -738,11 +763,13 @@ namespace net.vieapps.Services
 		/// <param name="objectID">The identity of the business object</param>
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static async Task<bool> CanModerateAsync(this IUser user, string serviceName, string systemID, string definitionID, string objectID, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static async Task<bool> CanModerateAsync(this IUser user, string serviceName, string systemID, string definitionID, string objectID, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			// administrator can do
-			if (user != null && await user.CanManageAsync(serviceName, systemID, definitionID, objectID, getPrivileges, getActions).ConfigureAwait(false))
+			if (user != null && await user.CanManageAsync(serviceName, systemID, definitionID, objectID, getPrivileges, getActions, correlationID, cancellationToken).ConfigureAwait(false))
 				return true;
 
 			// check user
@@ -750,7 +777,7 @@ namespace net.vieapps.Services
 				return false;
 
 			// get the business object
-			var @object = await RepositoryMediator.GetAsync(definitionID, objectID).ConfigureAwait(false);
+			var @object = await RepositoryMediator.GetAsync(definitionID, objectID, cancellationToken).ConfigureAwait(false);
 
 			// get the permissions state
 			return @object != null && @object is IBusinessEntity
@@ -767,9 +794,11 @@ namespace net.vieapps.Services
 		/// <param name="objectIdentity">The identity of the service's object</param>
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static async Task<bool> CanEditAsync(this IUser user, string serviceName, string objectName, string objectIdentity, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
-			=> user != null && await user.CanModerateAsync(serviceName, objectName, objectIdentity, getPrivileges, getActions).ConfigureAwait(false)
+		public static async Task<bool> CanEditAsync(this IUser user, string serviceName, string objectName, string objectIdentity, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
+			=> user != null && await user.CanModerateAsync(serviceName, objectName, objectIdentity, getPrivileges, getActions, correlationID, cancellationToken).ConfigureAwait(false)
 				? true
 				: user != null && user.IsAuthorized(serviceName, objectName, objectIdentity, Components.Security.Action.Update, null, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions);
 
@@ -783,11 +812,13 @@ namespace net.vieapps.Services
 		/// <param name="objectID">The identity of the business object</param>
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static async Task<bool> CanEditAsync(this IUser user, string serviceName, string systemID, string definitionID, string objectID, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static async Task<bool> CanEditAsync(this IUser user, string serviceName, string systemID, string definitionID, string objectID, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			// moderator can do
-			if (user != null && await user.CanModerateAsync(serviceName, systemID, definitionID, objectID, getPrivileges, getActions).ConfigureAwait(false))
+			if (user != null && await user.CanModerateAsync(serviceName, systemID, definitionID, objectID, getPrivileges, getActions, correlationID, cancellationToken).ConfigureAwait(false))
 				return true;
 
 			// check user
@@ -795,7 +826,7 @@ namespace net.vieapps.Services
 				return false;
 
 			// get the business object
-			var @object = await RepositoryMediator.GetAsync(definitionID, objectID).ConfigureAwait(false);
+			var @object = await RepositoryMediator.GetAsync(definitionID, objectID, cancellationToken).ConfigureAwait(false);
 
 			// get the permissions state
 			return @object != null && @object is IBusinessEntity
@@ -812,9 +843,11 @@ namespace net.vieapps.Services
 		/// <param name="objectIdentity">The identity of the service's object</param>
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static async Task<bool> CanContributeAsync(this IUser user, string serviceName, string objectName, string objectIdentity, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
-			=> user != null && await user.CanEditAsync(serviceName, objectName, objectIdentity, getPrivileges, getActions).ConfigureAwait(false)
+		public static async Task<bool> CanContributeAsync(this IUser user, string serviceName, string objectName, string objectIdentity, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
+			=> user != null && await user.CanEditAsync(serviceName, objectName, objectIdentity, getPrivileges, getActions, correlationID, cancellationToken).ConfigureAwait(false)
 				? true
 				: user != null && user.IsAuthorized(serviceName, objectName, objectIdentity, Components.Security.Action.Create, null, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions);
 
@@ -828,11 +861,13 @@ namespace net.vieapps.Services
 		/// <param name="objectID">The identity of the business object</param>
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static async Task<bool> CanContributeAsync(this IUser user, string serviceName, string systemID, string definitionID, string objectID, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static async Task<bool> CanContributeAsync(this IUser user, string serviceName, string systemID, string definitionID, string objectID, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			// editor can do
-			if (user != null && await user.CanEditAsync(serviceName, systemID, definitionID, objectID, getPrivileges, getActions).ConfigureAwait(false))
+			if (user != null && await user.CanEditAsync(serviceName, systemID, definitionID, objectID, getPrivileges, getActions, correlationID, cancellationToken).ConfigureAwait(false))
 				return true;
 
 			// check user
@@ -840,7 +875,7 @@ namespace net.vieapps.Services
 				return false;
 
 			// get the business object
-			var @object = await RepositoryMediator.GetAsync(definitionID, objectID).ConfigureAwait(false);
+			var @object = await RepositoryMediator.GetAsync(definitionID, objectID, cancellationToken).ConfigureAwait(false);
 
 			// get the permissions state
 			return @object != null && @object is IBusinessEntity
@@ -857,9 +892,11 @@ namespace net.vieapps.Services
 		/// <param name="objectIdentity">The identity of the service's object</param>
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static async Task<bool> CanViewAsync(this IUser user, string serviceName, string objectName, string objectIdentity, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
-			=> user != null && await user.CanContributeAsync(serviceName, objectName, objectIdentity, getPrivileges, getActions).ConfigureAwait(false)
+		public static async Task<bool> CanViewAsync(this IUser user, string serviceName, string objectName, string objectIdentity, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
+			=> user != null && await user.CanContributeAsync(serviceName, objectName, objectIdentity, getPrivileges, getActions, correlationID, cancellationToken).ConfigureAwait(false)
 				? true
 				: user != null && user.IsAuthorized(serviceName, objectName, objectIdentity, Components.Security.Action.View, null, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions);
 
@@ -873,8 +910,10 @@ namespace net.vieapps.Services
 		/// <param name="objectID">The identity of the business object</param>
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static async Task<bool> CanViewAsync(this IUser user, string serviceName, string systemID, string definitionID, string objectID, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static async Task<bool> CanViewAsync(this IUser user, string serviceName, string systemID, string definitionID, string objectID, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			// contributor can do
 			if (user != null && await user.CanContributeAsync(serviceName, systemID, definitionID, objectID, getPrivileges, getActions).ConfigureAwait(false))
@@ -885,7 +924,7 @@ namespace net.vieapps.Services
 				return false;
 
 			// get the business object
-			var @object = await RepositoryMediator.GetAsync(definitionID, objectID).ConfigureAwait(false);
+			var @object = await RepositoryMediator.GetAsync(definitionID, objectID, cancellationToken).ConfigureAwait(false);
 
 			// get the permissions state
 			return @object != null && @object is IBusinessEntity
@@ -902,9 +941,11 @@ namespace net.vieapps.Services
 		/// <param name="objectIdentity">The identity of the service's object</param>
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static async Task<bool> CanDownloadAsync(this IUser user, string serviceName, string objectName, string objectIdentity, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
-			=> user != null && await user.CanModerateAsync(serviceName, objectName, objectIdentity, getPrivileges, getActions).ConfigureAwait(false)
+		public static async Task<bool> CanDownloadAsync(this IUser user, string serviceName, string objectName, string objectIdentity, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
+			=> user != null && await user.CanModerateAsync(serviceName, objectName, objectIdentity, getPrivileges, getActions, correlationID, cancellationToken).ConfigureAwait(false)
 				? true
 				: user != null && user.IsAuthorized(serviceName, objectName, objectIdentity, Components.Security.Action.Download, null, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions);
 
@@ -918,11 +959,13 @@ namespace net.vieapps.Services
 		/// <param name="objectID">The identity of the business object</param>
 		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
 		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static async Task<bool> CanDownloadAsync(this IUser user, string serviceName, string systemID, string definitionID, string objectID, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
+		public static async Task<bool> CanDownloadAsync(this IUser user, string serviceName, string systemID, string definitionID, string objectID, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			// moderator can do
-			if (user != null && await user.CanModerateAsync(serviceName, systemID, definitionID, objectID, getPrivileges, getActions).ConfigureAwait(false))
+			if (user != null && await user.CanModerateAsync(serviceName, systemID, definitionID, objectID, getPrivileges, getActions, correlationID, cancellationToken).ConfigureAwait(false))
 				return true;
 
 			// check user
@@ -930,7 +973,7 @@ namespace net.vieapps.Services
 				return false;
 
 			// get the business object
-			var @object = await RepositoryMediator.GetAsync(definitionID, objectID).ConfigureAwait(false);
+			var @object = await RepositoryMediator.GetAsync(definitionID, objectID, cancellationToken).ConfigureAwait(false);
 
 			// get the permissions state
 			return @object != null && @object is IBusinessEntity

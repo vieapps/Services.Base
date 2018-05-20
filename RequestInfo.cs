@@ -164,11 +164,13 @@ namespace net.vieapps.Services
 		public string GetObjectIdentity(bool requireUUID = false)
 		{
 			var objectIdentity = this.GetQueryParameter("object-identity");
-			return !requireUUID
-				? objectIdentity
-				: !string.IsNullOrWhiteSpace(objectIdentity) && objectIdentity.IsValidUUID()
+			return !string.IsNullOrWhiteSpace(objectIdentity)
+				? !requireUUID
 					? objectIdentity
-					: null;
+					: objectIdentity.IsValidUUID()
+						? objectIdentity
+						: null
+				: null;
 		}
 		#endregion
 

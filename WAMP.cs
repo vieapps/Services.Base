@@ -22,8 +22,6 @@ using Newtonsoft.Json.Linq;
 using net.vieapps.Components.Utility;
 using net.vieapps.Components.Security;
 using net.vieapps.Components.Repository;
-
-[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("VIEApps.Services.Base.Http")]
 #endregion
 
 namespace net.vieapps.Services
@@ -227,7 +225,7 @@ namespace net.vieapps.Services
 		#endregion
 
 		#region Call services
-		internal static ConcurrentDictionary<string, IService> _Services = new ConcurrentDictionary<string, IService>(StringComparer.OrdinalIgnoreCase);
+		internal static ConcurrentDictionary<string, IService> Services { get; } = new ConcurrentDictionary<string, IService>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>
 		/// Gets a service by name
@@ -237,13 +235,13 @@ namespace net.vieapps.Services
 		public static async Task<IService> GetServiceAsync(string name)
 		{
 			IService service = null;
-			if (!string.IsNullOrWhiteSpace(name) && !WAMPConnections._Services.TryGetValue(name, out service))
+			if (!string.IsNullOrWhiteSpace(name) && !WAMPConnections.Services.TryGetValue(name, out service))
 			{
 				await WAMPConnections.OpenOutgoingChannelAsync().ConfigureAwait(false);
-				if (!WAMPConnections._Services.TryGetValue(name, out service))
+				if (!WAMPConnections.Services.TryGetValue(name, out service))
 				{
 					service = WAMPConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IService>(ProxyInterceptor.Create(name));
-					WAMPConnections._Services.TryAdd(name, service);
+					WAMPConnections.Services.TryAdd(name, service);
 				}
 			}
 			return service ?? throw new ServiceNotFoundException($"The service \"net.vieapps.services.{name?.ToLower()}\" is not found");
