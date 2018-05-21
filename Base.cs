@@ -1088,7 +1088,7 @@ namespace net.vieapps.Services
 					else
 					{
 						if (WAMPConnections.ChannelsAreClosedBySystem)
-							this.Logger?.LogInformation($"The outgoging channel is closed - Session ID: {arguments.SessionId} - Reason: {(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)} - {arguments.CloseType}");
+							this.Logger?.LogInformation($"The outgoging channel to WAMP router is closed - Session ID: {arguments.SessionId} - Reason: {(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)} - {arguments.CloseType}");
 						else if (WAMPConnections.OutgoingChannel != null)
 							WAMPConnections.OutgoingChannel.ReOpenChannel(wampChannel => this.Logger?.LogInformation("Re-open the outgoging channel successful"), ex => this.Logger?.LogError("Error occurred while re-opening the outgoging channel", ex), this.CancellationTokenSource.Token);
 					}
@@ -1112,7 +1112,7 @@ namespace net.vieapps.Services
 					else
 					{
 						if (WAMPConnections.ChannelsAreClosedBySystem)
-							this.Logger?.LogInformation($"The incoming channel is closed - Session ID: {arguments.SessionId} - Reason: {(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)} - {arguments.CloseType}");
+							this.Logger?.LogInformation($"The incoming channel to WAMP router is closed - Session ID: {arguments.SessionId} - Reason: {(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)} - {arguments.CloseType}");
 						else if (WAMPConnections.IncommingChannel != null)
 							WAMPConnections.IncommingChannel.ReOpenChannel(wampChannel => this.Logger?.LogInformation("Re-open the incomming channel successful"), ex => this.Logger?.LogError("Error occurred while re-opening the incomming channel", ex), this.CancellationTokenSource.Token);
 					}
@@ -1173,7 +1173,7 @@ namespace net.vieapps.Services
 					}
 					catch (Exception ex)
 					{
-						this.Logger?.LogError($"Cannot invoke the next action: {ex.Message}", ex);
+						this.Logger?.LogError($"Error occurred while invoking the next action: {ex.Message}", ex);
 					}
 			}
 
@@ -1237,7 +1237,7 @@ namespace net.vieapps.Services
 					}
 					catch (Exception ex)
 					{
-						this.Logger?.LogError($"Failure dispose service: {ex.Message}", ex);
+						this.Logger?.LogError($"Error occurred while disposing: {ex.Message}", ex);
 					}
 					finally
 					{
@@ -1246,6 +1246,11 @@ namespace net.vieapps.Services
 			})
 			.ContinueWith(task => WAMPConnections.CloseChannels(), TaskContinuationOptions.OnlyOnRanToCompletion)
 			.ContinueWith(task => this.CancellationTokenSource.Cancel(), TaskContinuationOptions.OnlyOnRanToCompletion)
+			.ContinueWith(task =>
+			{
+				if (this.Logger != null && this.Logger.IsEnabled(LogLevel.Debug))
+					this.Logger.LogDebug("Stopped");
+			}, TaskContinuationOptions.OnlyOnRanToCompletion)
 			.Wait(3456);
 		}
 
@@ -1258,6 +1263,8 @@ namespace net.vieapps.Services
 				this._disposed = true;
 				this.Stop();
 				this.CancellationTokenSource.Dispose();
+				if (this.Logger != null && this.Logger.IsEnabled(LogLevel.Debug))
+					this.Logger.LogDebug("Disposed");
 				GC.SuppressFinalize(this);
 			}
 		}
