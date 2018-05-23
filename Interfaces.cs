@@ -18,17 +18,22 @@ namespace net.vieapps.Services
 	/// <summary>
 	/// Presents a business service
 	/// </summary>
-	public interface IService
+	public interface IService : IDisposable
 	{
 		/// <summary>
-		/// Gets the name of this service (for working with related URIs)
+		/// Gets the name of this service (for working with WAMP protocol)
 		/// </summary>
 		string ServiceName { get; }
 
 		/// <summary>
-		/// Gets the URI of this service (with full namespace, for working with related URIs)
+		/// Gets the URI of this service (with full namespace - for working with WAMP protocol)
 		/// </summary>
 		string ServiceURI { get; }
+
+		/// <summary>
+		/// Gets or sets the logger
+		/// </summary>
+		ILogger Logger { get; set; }
 
 		/// <summary>
 		/// Process the request of this service
@@ -174,12 +179,17 @@ namespace net.vieapps.Services
 	public interface IServiceComponent : IDisposable
 	{
 		/// <summary>
-		/// Gets the name of the service (for working with related URI)
+		/// Gets the name of this service (for working with WAMP protocol)
 		/// </summary>
 		string ServiceName { get; }
 
 		/// <summary>
-		/// Gets or sets the local logger
+		/// Gets the URI of this service (with full namespace - for working with WAMP protocol)
+		/// </summary>
+		string ServiceURI { get; }
+
+		/// <summary>
+		/// Gets or sets the logger
 		/// </summary>
 		ILogger Logger { get; set; }
 
