@@ -67,6 +67,8 @@ namespace net.vieapps.Services
 
 		internal protected List<IDisposable> Timers { get; private set; } = new List<IDisposable>();
 
+		internal protected ServiceState State { get; private set; } = ServiceState.Initializing;
+
 		/// <summary>
 		/// Gets the full URI of this service
 		/// </summary>
@@ -85,16 +87,30 @@ namespace net.vieapps.Services
 		/// <param name="onSuccess"></param>
 		/// <param name="onError"></param>
 		/// <returns></returns>
-		protected async Task RegisterServiceAsync(Func<ServiceBase, Task> onSuccess = null, Action<Exception> onError = null)
+		protected async Task RegisterServiceAsync(Action<ServiceBase> onSuccess = null, Action<Exception> onError = null)
 		{
-			await WAMPConnections.OpenIncomingChannelAsync().ConfigureAwait(false);
-			try
-			{
-				// register the service
-				var name = this.ServiceName.Trim().ToLower();
-				this._instance = await WAMPConnections.IncommingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(name)).ConfigureAwait(false);
+			var name = this.ServiceName.Trim().ToLower();
 
-				// register the handler of inter-communicate messages
+			async Task registerAsync()
+			{
+				try
+				{
+					this._instance = await WAMPConnections.IncommingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(name)).ConfigureAwait(false);
+				}
+				catch
+				{
+					await Task.Delay(UtilityService.GetRandomNumber(456, 789)).ConfigureAwait(false);
+					try
+					{
+						this._instance = await WAMPConnections.IncommingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(name)).ConfigureAwait(false);
+					}
+					catch (Exception)
+					{
+						throw;
+					}
+				}
+				this.Logger.LogInformation($"The service is{(this.State == ServiceState.Disconnected ? " re-" : " ")}registered successful");
+
 				this._communicator?.Dispose();
 				this._communicator = WAMPConnections.IncommingChannel.RealmProxy.Services
 					.GetSubject<CommunicateMessage>($"net.vieapps.rtu.communicate.messages.{name}")
@@ -103,15 +119,24 @@ namespace net.vieapps.Services
 						{
 							await this.ProcessInterCommunicateMessageAsync(message).ConfigureAwait(false);
 						},
-						exception => this.WriteLogs(UtilityService.NewUUID, "Error occurred while fetching inter-communicate message", exception)
+						exception =>
+						{
+							if (this.State == ServiceState.Connected)
+								this.Logger.LogError("Error occurred while fetching inter-communicate message", exception);
+						}
 					);
+				this.Logger.LogInformation($"The inter-communicate message updater is{(this.State == ServiceState.Disconnected ? " re-" : " ")}subscribed successful");
+			}
 
-				// callback when done
-				if (onSuccess != null)
-					await onSuccess(this).ConfigureAwait(false);
+			try
+			{
+				await registerAsync().ConfigureAwait(false);
+				this.State = ServiceState.Connected;
+				onSuccess?.Invoke(this);
 			}
 			catch (Exception ex)
 			{
+				this.Logger.LogError($"Cannot {(this.State == ServiceState.Disconnected ? " re-" : " ")}register the service: {ex.Message}", ex);
 				onError?.Invoke(ex);
 			}
 		}
@@ -286,15 +311,26 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected Task SendWebHookAsync(WebHookMessage message, CancellationToken cancellationToken = default(CancellationToken))
 			=> this.MessagingService.SendWebHookAsync(message, cancellationToken);
-		#endregion
 
+		#endregion
+		
 		#region Working with logs
 		/// <summary>
-		/// Gets or sets the local logger
+		/// Gets or sets the logger
 		/// </summary>
-		public ILogger Logger { get; set; }
+		ILogger IServiceComponent.Logger
+		{
+			get => this.Logger;
+			set => this.Logger = value;
+		}
+
+		/// <summary>
+		/// Gets the logger
+		/// </summary>
+		public ILogger Logger { get; private set; }
 
 		ConcurrentQueue<Tuple<string, string, string, List<string>, string>> Logs { get; } = new ConcurrentQueue<Tuple<string, string, string, List<string>, string>>();
+
 		string _isDebugResultsEnabled = null, _isDebugStacksEnabled = null;
 
 		/// <summary>
@@ -505,8 +541,8 @@ namespace net.vieapps.Services
 				if (this.IsDebugResultsEnabled)
 					await this.WriteLogsAsync(requestInfo.CorrelationID, new List<string>
 					{
-						$"Request:\r\n{requestInfo.ToJson().ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}",
-						$"Response:\r\n{json?.ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}"
+						$"Request: {requestInfo.ToJson().ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}",
+						$"Response: {json?.ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}"
 					}, null, requestInfo.ServiceName, requestInfo.ObjectName).ConfigureAwait(false);
 
 				return json;
@@ -522,8 +558,8 @@ namespace net.vieapps.Services
 					if (this.IsDebugResultsEnabled)
 						await this.WriteLogsAsync(requestInfo.CorrelationID, new List<string>
 						{
-							$"Request (re-call):\r\n{requestInfo.ToJson().ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}",
-							$"Response (re-call):\r\n{json?.ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}"
+							$"Request (re-call): {requestInfo.ToJson().ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}",
+							$"Response (re-call): {json?.ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}"
 						}, null, requestInfo.ServiceName, requestInfo.ObjectName).ConfigureAwait(false);
 
 					return json;
@@ -1073,54 +1109,104 @@ namespace net.vieapps.Services
 		/// <param name="onIncomingConnectionError"></param>
 		/// <param name="onOutgoingConnectionError"></param>
 		/// <returns></returns>
-		protected virtual async Task StartAsync(Func<ServiceBase, Task> onRegisterSuccess = null, Action<Exception> onRegisterError = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
+		protected virtual async Task StartAsync(Action<ServiceBase> onRegisterSuccess = null, Action<Exception> onRegisterError = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
 		{
 			var routerInfo = WAMPConnections.GetRouterInfo();
-			this.Logger?.LogInformation($"Attempting to connect to WAMP router [{routerInfo.Item1}{(routerInfo.Item1.EndsWith("/") ? "" : "/")}{routerInfo.Item2}]");
-
-			// open outgoing channel & initialize helper services
-			await WAMPConnections.OpenOutgoingChannelAsync(
-				onOutgoingConnectionEstablished,
-				onOutgoingConnectionBroken ?? ((sender, arguments) =>
-				{
-					if (arguments.CloseType.Equals(SessionCloseType.Disconnection))
-						this.Logger?.LogInformation($"The outgoging channel is broken because the router is not found or the router is refused - Session ID: {arguments.SessionId} - Reason: {(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)} - {arguments.CloseType}");
-					else
-					{
-						if (WAMPConnections.ChannelsAreClosedBySystem)
-							this.Logger?.LogInformation($"The outgoging channel to WAMP router is closed - Session ID: {arguments.SessionId} - Reason: {(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)} - {arguments.CloseType}");
-						else if (WAMPConnections.OutgoingChannel != null)
-							WAMPConnections.OutgoingChannel.ReOpenChannel(wampChannel => this.Logger?.LogInformation("Re-open the outgoging channel successful"), ex => this.Logger?.LogError("Error occurred while re-opening the outgoging channel", ex), this.CancellationTokenSource.Token);
-					}
-				}),
-				onOutgoingConnectionError
-			).ConfigureAwait(false);
-
+			this.Logger.LogInformation($"Attempting to connect to WAMP router [{routerInfo.Item1}{(routerInfo.Item1.EndsWith("/") ? "" : "/")}{routerInfo.Item2}]");
 			await Task.WhenAll(
-				this.InitializeLoggingServiceAsync(),
-				this.InitializeRTUServiceAsync(),
-				this.InitializeMessagingServiceAsync()
-			).ConfigureAwait(false);
-
-			// open outgoing channel & register this service
-			await WAMPConnections.OpenIncomingChannelAsync(
-				onIncomingConnectionEstablished,
-				onIncomingConnectionBroken ?? ((sender, arguments) =>
-				{
-					if (arguments.CloseType.Equals(SessionCloseType.Disconnection))
-						this.Logger?.LogInformation($"The incoming channel is broken because the router is not found or the router is refused - Session ID: {arguments.SessionId} - Reason: {(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)} - {arguments.CloseType}");
-					else
+				WAMPConnections.OpenIncomingChannelAsync(
+					(sender, arguments) =>
 					{
-						if (WAMPConnections.ChannelsAreClosedBySystem)
-							this.Logger?.LogInformation($"The incoming channel to WAMP router is closed - Session ID: {arguments.SessionId} - Reason: {(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)} - {arguments.CloseType}");
-						else if (WAMPConnections.IncommingChannel != null)
-							WAMPConnections.IncommingChannel.ReOpenChannel(wampChannel => this.Logger?.LogInformation("Re-open the incomming channel successful"), ex => this.Logger?.LogError("Error occurred while re-opening the incomming channel", ex), this.CancellationTokenSource.Token);
-					}
-				}),
-				onIncomingConnectionError
-			).ConfigureAwait(false);
+						this.Logger.LogInformation($"Incomming channel to WAMP router is established - Session ID: {WAMPConnections.IncommingChannelSessionID}");
+						if (this.State == ServiceState.Initializing)
+							this.State = ServiceState.Ready;
 
-			await this.RegisterServiceAsync(onRegisterSuccess, onRegisterError).ConfigureAwait(false);
+						Task.Run(() => this.RegisterServiceAsync(onRegisterSuccess, onRegisterError)).ConfigureAwait(false);
+
+						onIncomingConnectionEstablished?.Invoke(sender, arguments);
+					},
+					(sender, arguments) =>
+					{
+						if (this.State == ServiceState.Connected)
+							this.State = ServiceState.Disconnected;
+
+						if (WAMPConnections.ChannelsAreClosedBySystem || arguments.CloseType.Equals(SessionCloseType.Goodbye))
+							this.Logger.LogInformation($"The incoming channel to WAMP router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+
+						else if (WAMPConnections.IncommingChannel != null)
+						{
+							this.Logger.LogInformation($"The incoming channel to WAMP router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+							WAMPConnections.IncommingChannel.ReOpen(this.CancellationTokenSource.Token, (msg, ex) => this.Logger.LogDebug(msg, ex), "Incoming");
+						}
+
+						onIncomingConnectionBroken?.Invoke(sender, arguments);
+					},
+					(sender, arguments) =>
+					{
+						this.Logger.LogDebug($"The incoming channel to WAMP router got an error: {arguments.Exception.Message}", arguments.Exception);
+						onIncomingConnectionError?.Invoke(sender, arguments);
+					}
+				),
+				WAMPConnections.OpenOutgoingChannelAsync(
+					(sender, arguments) =>
+					{
+						this.Logger.LogInformation($"Outgoing channel to WAMP router is established - Session ID: {WAMPConnections.OutgoingChannelSessionID}");
+
+						Task.Run(async () =>
+						{
+							try
+							{
+								await Task.WhenAll(
+									this.InitializeLoggingServiceAsync(),
+									this.InitializeRTUServiceAsync(),
+									this.InitializeMessagingServiceAsync()
+								).ConfigureAwait(false);
+								this.Logger.LogInformation($"Helper services are{(this.State == ServiceState.Disconnected ? " re-" : " ")}initialized");
+							}
+							catch (WampSessionNotEstablishedException)
+							{
+								try
+								{
+									await Task.WhenAll(
+										this.InitializeLoggingServiceAsync(),
+										this.InitializeRTUServiceAsync(),
+										this.InitializeMessagingServiceAsync()
+									).ConfigureAwait(false);
+									this.Logger.LogInformation($"Helper services are{(this.State == ServiceState.Disconnected ? " re-" : " ")}initialized");
+								}
+								catch (Exception ex)
+								{
+									this.Logger.LogError($"Error occurred while {(this.State == ServiceState.Disconnected ? " re-" : " ")}initializing helper services", ex);
+								}
+							}
+							catch (Exception ex)
+							{
+								this.Logger.LogError($"Error occurred while {(this.State == ServiceState.Disconnected ? " re-" : " ")}initializing helper services", ex);
+							}
+						}).ConfigureAwait(false);
+
+						onOutgoingConnectionEstablished?.Invoke(sender, arguments);
+					},
+					(sender, arguments) =>
+					{
+						if (WAMPConnections.ChannelsAreClosedBySystem || arguments.CloseType.Equals(SessionCloseType.Goodbye))
+							this.Logger.LogInformation($"The outgoging channel to WAMP router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+
+						else if (WAMPConnections.OutgoingChannel != null)
+						{
+							this.Logger.LogInformation($"The outgoging channel to WAMP router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+							WAMPConnections.OutgoingChannel.ReOpen(this.CancellationTokenSource.Token, (msg, ex) => this.Logger.LogDebug(msg, ex), "Outgoing");
+						}
+
+						onOutgoingConnectionBroken?.Invoke(sender, arguments);
+					},
+					(sender, arguments) =>
+					{
+						this.Logger.LogDebug($"The outgoging channel to WAMP router got an error: {arguments.Exception.Message}", arguments.Exception);
+						onOutgoingConnectionError?.Invoke(sender, arguments);
+					}
+				)
+			).ConfigureAwait(false);
 		}
 
 		/// <summary>
@@ -1131,18 +1217,18 @@ namespace net.vieapps.Services
 		/// <param name="nextAsync">The next action to run</param>
 		public virtual void Start(string[] args = null, bool initializeRepository = true, Func<IService, Task> nextAsync = null)
 		{
-			// action to run when start success
-			async Task continueAsync()
+			Task.Run(async () =>
 			{
-				this.Logger?.LogInformation($"Incomming channel to WAMP router is established - Session ID: {WAMPConnections.IncommingChannelSessionID}");
-				this.Logger?.LogInformation($"Outgoing channel to WAMP router is established - Session ID: {WAMPConnections.OutgoingChannelSessionID}");
-
+				await this.StartAsync().ConfigureAwait(false);
+			})
+			.ContinueWith(async (task) =>
+			{
 				// initialize repository
 				if (initializeRepository)
 					try
 					{
-						await Task.Delay(UtilityService.GetRandomNumber(345, 678)).ConfigureAwait(false);
-						this.Logger?.LogInformation("Initializing the repository");
+						await Task.Delay(UtilityService.GetRandomNumber(123, 456)).ConfigureAwait(false);
+						this.Logger.LogInformation("Initializing the repository");
 						RepositoryStarter.Initialize(
 							new List<Assembly> { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
 								.Where(n => !n.Name.IsStartsWith("mscorlib") && !n.Name.IsStartsWith("System") && !n.Name.IsStartsWith("Microsoft") && !n.Name.IsEquals("NETStandard")
@@ -1154,15 +1240,15 @@ namespace net.vieapps.Services
 							(log, ex) =>
 							{
 								if (ex != null)
-									this.Logger?.LogError(log, ex);
+									this.Logger.LogError(log, ex);
 								else
-									this.Logger?.LogInformation(log);
+									this.Logger.LogInformation(log);
 							}
 						);
 					}
 					catch (Exception ex)
 					{
-						this.Logger?.LogError($"Error occurred while initializing the repository: {ex.Message}", ex);
+						this.Logger.LogError($"Error occurred while initializing the repository: {ex.Message}", ex);
 					}
 
 				// run the next action
@@ -1173,85 +1259,42 @@ namespace net.vieapps.Services
 					}
 					catch (Exception ex)
 					{
-						this.Logger?.LogError($"Error occurred while invoking the next action: {ex.Message}", ex);
+						this.Logger.LogError($"Error occurred while invoking the next action: {ex.Message}", ex);
 					}
-			}
-
-			// action to start the service
-			async Task startAsync()
-			{
-				try
-				{
-					await this.StartAsync(
-						async (service) =>
-						{
-							this.Logger?.LogInformation($"Successfully registered the service");
-							await continueAsync().ConfigureAwait(false);
-						},
-						exception => this.Logger?.LogError($"Cannot register the service: {exception.Message}", exception)
-					).ConfigureAwait(false);
-				}
-				catch (Exception ex)
-				{
-					if (ex is ArgumentException && ex.Message.IsContains("Value does not fall within the expected range"))
-					{
-						this.Logger?.LogError($"Got a problem while attempting to connect to WAMP router, try to re-connect... ({ex.Message})", ex);
-
-						WAMPConnections.CloseChannels();
-						this._loggingService = null;
-						this._rtuService = null;
-						this._messagingService = null;
-
-						await Task.Delay(UtilityService.GetRandomNumber(456, 789)).ConfigureAwait(false);
-						await this.StartAsync(
-							async (service) =>
-							{
-								this.Logger?.LogInformation($"Successfully re-registered the service");
-								await continueAsync().ConfigureAwait(false);
-							},
-							exception => this.Logger?.LogError($"Cannot re-register the service: {exception.Message}", exception)
-						).ConfigureAwait(false);
-					}
-					else
-						this.Logger?.LogError($"Cannot start that service: {ex.Message}", ex);
-				}
-			}
-
-			// start the service
-			Task.Run(() => startAsync()).ConfigureAwait(false);
+			}, TaskContinuationOptions.OnlyOnRanToCompletion)
+			.ConfigureAwait(false);
 		}
+
+		bool _stopped = false;
 
 		/// <summary>
 		/// Stops this service (close channels and clean-up)
 		/// </summary>
 		public void Stop()
 		{
-			Task.Run(async () =>
-			{
-				this.StopTimers();
-				this._communicator?.Dispose();
-				if (this._instance != null)
-					try
-					{
-						await this._instance.DisposeAsync().ConfigureAwait(false);
-					}
-					catch (Exception ex)
-					{
-						this.Logger?.LogError($"Error occurred while disposing: {ex.Message}", ex);
-					}
-					finally
-					{
-						this._instance = null;
-					}
-			})
-			.ContinueWith(task => WAMPConnections.CloseChannels(), TaskContinuationOptions.OnlyOnRanToCompletion)
-			.ContinueWith(task => this.CancellationTokenSource.Cancel(), TaskContinuationOptions.OnlyOnRanToCompletion)
-			.ContinueWith(task =>
-			{
-				if (this.Logger != null && this.Logger.IsEnabled(LogLevel.Debug))
-					this.Logger.LogDebug("Stopped");
-			}, TaskContinuationOptions.OnlyOnRanToCompletion)
-			.Wait(3456);
+			if (!this._stopped)
+				Task.Run(async () =>
+				{
+					this._stopped = true;
+					this._communicator?.Dispose();
+					if (this._instance != null)
+						try
+						{
+							await this._instance.DisposeAsync().ConfigureAwait(false);
+						}
+						catch (Exception ex)
+						{
+							this.Logger.LogError($"Error occurred while deregistering: {ex.Message}", ex);
+						}
+						finally
+						{
+							this._instance = null;
+						}
+					WAMPConnections.CloseChannels();
+				})
+				.ContinueWith(task => this.StopTimers(), TaskContinuationOptions.OnlyOnRanToCompletion)
+				.ContinueWith(task => this.CancellationTokenSource.Cancel(), TaskContinuationOptions.OnlyOnRanToCompletion)
+				.Wait(3456);
 		}
 
 		bool _disposed = false;
@@ -1263,8 +1306,6 @@ namespace net.vieapps.Services
 				this._disposed = true;
 				this.Stop();
 				this.CancellationTokenSource.Dispose();
-				if (this.Logger != null && this.Logger.IsEnabled(LogLevel.Debug))
-					this.Logger.LogDebug("Disposed");
 				GC.SuppressFinalize(this);
 			}
 		}

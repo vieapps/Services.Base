@@ -16,6 +16,34 @@ using net.vieapps.Components.Utility;
 namespace net.vieapps.Services
 {
 	/// <summary>
+	/// Presents the state of a service
+	/// </summary>
+	public enum ServiceState
+	{
+		/// <summary>
+		/// Initializing state means the service is starting and not ready to register
+		/// </summary>
+		Initializing,
+
+		/// <summary>
+		/// Ready state means the service is initialized and ready to register with router
+		/// </summary>
+		Ready,
+
+		/// <summary>
+		/// Connected state means the service is initialized, registered and connected
+		/// </summary>
+		Connected,
+
+		/// <summary>
+		/// Disconnected state means the service is initialized but disconnected (and un-registered)
+		/// </summary>
+		Disconnected
+	}
+
+	//  --------------------------------------------------------------------------------------------
+
+	/// <summary>
 	/// Presents a business service
 	/// </summary>
 	public interface IService : IDisposable
@@ -31,9 +59,9 @@ namespace net.vieapps.Services
 		string ServiceURI { get; }
 
 		/// <summary>
-		/// Gets or sets the logger
+		/// Gets the logger
 		/// </summary>
-		ILogger Logger { get; set; }
+		ILogger Logger { get; }
 
 		/// <summary>
 		/// Process the request of this service

@@ -10,6 +10,8 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 
+using Microsoft.Extensions.Logging;
+
 using WampSharp.Binding;
 using WampSharp.Core.Listener;
 using WampSharp.V2;
@@ -73,7 +75,7 @@ namespace net.vieapps.Services
 
 		#region Open
 		/// <summary>
-		/// Opens the incomming channel of the WAMP router
+		/// Opens the incomming channel to the WAMP router
 		/// </summary>
 		/// <param name="onConnectionEstablished"></param>
 		/// <param name="onConnectionBroken"></param>
@@ -97,10 +99,8 @@ namespace net.vieapps.Services
 			{
 				WAMPConnections.IncommingChannelSessionID = args.SessionId;
 				WAMPConnections.ChannelsAreClosedBySystem = false;
+				onConnectionEstablished?.Invoke(sender, args);
 			};
-
-			if (onConnectionEstablished != null)
-				WAMPConnections.IncommingChannel.RealmProxy.Monitor.ConnectionEstablished += new EventHandler<WampSessionCreatedEventArgs>(onConnectionEstablished);
 
 			if (onConnectionBroken != null)
 				WAMPConnections.IncommingChannel.RealmProxy.Monitor.ConnectionBroken += new EventHandler<WampSessionCloseEventArgs>(onConnectionBroken);
@@ -112,7 +112,7 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Opens the outgoging channel of the WAMP router
+		/// Opens the outgoging channel to the WAMP router
 		/// </summary>
 		/// <param name="onConnectionEstablished"></param>
 		/// <param name="onConnectionBroken"></param>
@@ -136,10 +136,8 @@ namespace net.vieapps.Services
 			{
 				WAMPConnections.OutgoingChannelSessionID = args.SessionId;
 				WAMPConnections.ChannelsAreClosedBySystem = false;
+				onConnectionEstablished?.Invoke(sender, args);
 			};
-
-			if (onConnectionEstablished != null)
-				WAMPConnections.OutgoingChannel.RealmProxy.Monitor.ConnectionEstablished += new EventHandler<WampSessionCreatedEventArgs>(onConnectionEstablished);
 
 			if (onConnectionBroken != null)
 				WAMPConnections.OutgoingChannel.RealmProxy.Monitor.ConnectionBroken += new EventHandler<WampSessionCloseEventArgs>(onConnectionBroken);
@@ -152,32 +150,44 @@ namespace net.vieapps.Services
 		#endregion
 
 		#region Re-open
-		static void ReOpenChannel(this IWampChannel wampChannel, Action<IWampChannel> onSuccess, Action<Exception> onError, CancellationToken cancellationToken, int attempts, int minDelay = 234, int maxDelay = 567)
-			=> new WampChannelReconnector(wampChannel, async () =>
+		/// <summary>
+		/// Reopens a channel to the WAMP router
+		/// </summary>
+		/// <param name="wampChannel"></param>
+		/// <param name="cancellationToken"></param>
+		/// <param name="tracker"></param>
+		/// <param name="prefix"></param>
+		/// <param name="awatingTimes"></param>
+		public static void ReOpen(this IWampChannel wampChannel, CancellationToken cancellationToken = default(CancellationToken), Action<string, Exception> tracker = null, string prefix = null, int awatingTimes = 0)
+		{
+			var reconnector = new WampChannelReconnector(wampChannel, async () =>
 			{
 				try
 				{
-					await Task.Delay(UtilityService.GetRandomNumber(minDelay, maxDelay), cancellationToken).ConfigureAwait(false);
-					await wampChannel.Open().WithCancellationToken(cancellationToken).ConfigureAwait(false);
-					onSuccess?.Invoke(wampChannel);
-				}
-				catch (OperationCanceledException)
-				{
-					return;
+					await Task.Delay(awatingTimes > 0 ? awatingTimes : UtilityService.GetRandomNumber(1234, 2345), cancellationToken).ConfigureAwait(false);
 				}
 				catch (Exception ex)
 				{
-					if (attempts < 13)
-					{
-						var reopen = Task.Run(() => wampChannel.ReOpenChannel(onSuccess, onError, cancellationToken, attempts + 1, minDelay + ((attempts + 1) * 13), maxDelay + ((attempts + 1) * 13))).ConfigureAwait(false);
-					}
-					else
-						onError?.Invoke(ex);
+					tracker?.Invoke($"{(string.IsNullOrWhiteSpace(prefix) ? "" : $"[{prefix}] => ")}Cancelled", ex is OperationCanceledException ? null : ex);
+					return;
 				}
-			}).Start();
 
-		public static void ReOpenChannel(this IWampChannel wampChannel, Action<IWampChannel> onSuccess = null, Action<Exception> onError = null, CancellationToken cancellationToken = default(CancellationToken))
-			=> wampChannel.ReOpenChannel(onSuccess, onError, cancellationToken, 0);
+				try
+				{
+					await wampChannel.Open().WithCancellationToken(cancellationToken).ConfigureAwait(false);
+					tracker?.Invoke($"{(string.IsNullOrWhiteSpace(prefix) ? "" : $"[{prefix}] => ")}Reconnected", null);
+				}
+				catch (Exception ex)
+				{
+					tracker?.Invoke($"{(string.IsNullOrWhiteSpace(prefix) ? "" : $"[{prefix}] => ")}Reconnect error: {ex.Message}", ex is System.Net.WebSockets.WebSocketException || ex is ArgumentException || ex is OperationCanceledException ? null : ex);
+				}
+			});
+
+			using (reconnector)
+			{
+				reconnector.Start();
+			}
+		}
 		#endregion
 
 		#region Close
