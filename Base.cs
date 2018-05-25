@@ -84,10 +84,10 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Registers the service
 		/// </summary>
-		/// <param name="onSuccess"></param>
-		/// <param name="onError"></param>
+		/// <param name="onSuccessAsync"></param>
+		/// <param name="onErrorAsync"></param>
 		/// <returns></returns>
-		protected async Task RegisterServiceAsync(Action<ServiceBase> onSuccess = null, Action<Exception> onError = null)
+		protected async Task RegisterServiceAsync(Func<ServiceBase, Task> onSuccessAsync = null, Func<Exception, Task> onErrorAsync = null)
 		{
 			var name = this.ServiceName.Trim().ToLower();
 
@@ -115,15 +115,9 @@ namespace net.vieapps.Services
 				this._communicator = WAMPConnections.IncommingChannel.RealmProxy.Services
 					.GetSubject<CommunicateMessage>($"net.vieapps.rtu.communicate.messages.{name}")
 					.Subscribe(
-						async (message) =>
-						{
-							await this.ProcessInterCommunicateMessageAsync(message).ConfigureAwait(false);
-						},
-						exception =>
-						{
-							if (this.State == ServiceState.Connected)
-								this.Logger.LogError("Error occurred while fetching inter-communicate message", exception);
-						}
+						async (message) => await this.ProcessInterCommunicateMessageAsync(message).ConfigureAwait(false),
+						(exception) => this.Logger.LogError($"Error occurred while fetching inter-communicate message: {exception.Message}", this.State == ServiceState.Connected ? exception : null),
+						() => this.Logger.LogInformation("Inter-communicate message channel is completed")
 					);
 				this.Logger.LogInformation($"The inter-communicate message updater is{(this.State == ServiceState.Disconnected ? " re-" : " ")}subscribed successful");
 			}
@@ -132,12 +126,14 @@ namespace net.vieapps.Services
 			{
 				await registerAsync().ConfigureAwait(false);
 				this.State = ServiceState.Connected;
-				onSuccess?.Invoke(this);
+				if (onSuccessAsync != null)
+					await onSuccessAsync(this).ConfigureAwait(false);
 			}
 			catch (Exception ex)
 			{
 				this.Logger.LogError($"Cannot {(this.State == ServiceState.Disconnected ? " re-" : " ")}register the service: {ex.Message}", ex);
-				onError?.Invoke(ex);
+				if (onErrorAsync != null)
+					await onErrorAsync(ex).ConfigureAwait(false);
 			}
 		}
 		#endregion
@@ -313,7 +309,7 @@ namespace net.vieapps.Services
 			=> this.MessagingService.SendWebHookAsync(message, cancellationToken);
 
 		#endregion
-		
+
 		#region Working with logs
 		/// <summary>
 		/// Gets or sets the logger
@@ -1100,8 +1096,8 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Starts the service (the short way - open channels and register service)
 		/// </summary>
-		/// <param name="onRegisterSuccess"></param>
-		/// <param name="onRegisterError"></param>
+		/// <param name="onRegisterSuccessAsync"></param>
+		/// <param name="onRegisterErrorAsync"></param>
 		/// <param name="onIncomingConnectionEstablished"></param>
 		/// <param name="onOutgoingConnectionEstablished"></param>
 		/// <param name="onIncomingConnectionBroken"></param>
@@ -1109,10 +1105,9 @@ namespace net.vieapps.Services
 		/// <param name="onIncomingConnectionError"></param>
 		/// <param name="onOutgoingConnectionError"></param>
 		/// <returns></returns>
-		protected virtual async Task StartAsync(Action<ServiceBase> onRegisterSuccess = null, Action<Exception> onRegisterError = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
+		protected virtual async Task StartAsync(Func<ServiceBase, Task> onRegisterSuccessAsync = null, Func<Exception, Task> onRegisterErrorAsync = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
 		{
-			var routerInfo = WAMPConnections.GetRouterInfo();
-			this.Logger.LogInformation($"Attempting to connect to WAMP router [{routerInfo.Item1}{(routerInfo.Item1.EndsWith("/") ? "" : "/")}{routerInfo.Item2}]");
+			this.Logger.LogInformation($"Attempting to connect to WAMP router [{WAMPConnections.GetRouterStrInfo()}]");
 			await Task.WhenAll(
 				WAMPConnections.OpenIncomingChannelAsync(
 					(sender, arguments) =>
@@ -1121,7 +1116,7 @@ namespace net.vieapps.Services
 						if (this.State == ServiceState.Initializing)
 							this.State = ServiceState.Ready;
 
-						Task.Run(() => this.RegisterServiceAsync(onRegisterSuccess, onRegisterError)).ConfigureAwait(false);
+						Task.Run(() => this.RegisterServiceAsync(onRegisterSuccessAsync, onRegisterErrorAsync)).ConfigureAwait(false);
 
 						onIncomingConnectionEstablished?.Invoke(sender, arguments);
 					},
@@ -1217,11 +1212,7 @@ namespace net.vieapps.Services
 		/// <param name="nextAsync">The next action to run</param>
 		public virtual void Start(string[] args = null, bool initializeRepository = true, Func<IService, Task> nextAsync = null)
 		{
-			Task.Run(async () =>
-			{
-				await this.StartAsync().ConfigureAwait(false);
-			})
-			.ContinueWith(async (task) =>
+			Task.Run(() => this.StartAsync(async (service) =>
 			{
 				// initialize repository
 				if (initializeRepository)
@@ -1261,8 +1252,7 @@ namespace net.vieapps.Services
 					{
 						this.Logger.LogError($"Error occurred while invoking the next action: {ex.Message}", ex);
 					}
-			}, TaskContinuationOptions.OnlyOnRanToCompletion)
-			.ConfigureAwait(false);
+			})).ConfigureAwait(false);
 		}
 
 		bool _stopped = false;

@@ -38,27 +38,27 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the incomming channel of the WAMP router
 		/// </summary>
-		public static IWampChannel IncommingChannel { get; internal set; }
+		public static IWampChannel IncommingChannel { get; internal set; } = null;
 
 		/// <summary>
 		/// Gets the session's identity of the incomming channel of the WAMP router
 		/// </summary>
-		public static long IncommingChannelSessionID { get; internal set; }
+		public static long IncommingChannelSessionID { get; internal set; } = 0;
 
 		/// <summary>
 		/// Gets the outgoing channel of the WAMP router
 		/// </summary>
-		public static IWampChannel OutgoingChannel { get; internal set; }
+		public static IWampChannel OutgoingChannel { get; internal set; } = null;
 
 		/// <summary>
 		/// Gets the session's identity of the outgoing channel of the WAMP router
 		/// </summary>
-		public static long OutgoingChannelSessionID { get; internal set; }
+		public static long OutgoingChannelSessionID { get; internal set; } = 0;
 
 		/// <summary>
 		/// Gets the state that determines that the WAMP channels are closed by the system
 		/// </summary>
-		public static bool ChannelsAreClosedBySystem { get; internal set; }
+		public static bool ChannelsAreClosedBySystem { get; internal set; } = false;
 
 		/// <summary>
 		/// Gets information of WAMP router
@@ -71,85 +71,50 @@ namespace net.vieapps.Services
 				UtilityService.GetAppSetting("Router:Realm", "VIEAppsRealm"),
 				"json".IsEquals(UtilityService.GetAppSetting("Router:ChannelsMode", "MsgPack"))
 			);
+
+		/// <summary>
+		/// Gets information of WAMP router
+		/// </summary>
+		/// <returns></returns>
+		public static string GetRouterStrInfo()
+		{
+			var routerInfo = WAMPConnections.GetRouterInfo();
+			return $"{routerInfo.Item1}{(routerInfo.Item1.EndsWith("/") ? "" : "/")}{routerInfo.Item2}";
+		}
 		#endregion
 
-		#region Open
+		#region Open & ReOpen
 		/// <summary>
-		/// Opens the incomming channel to the WAMP router
+		/// Opens a channel to the WAMP router
 		/// </summary>
 		/// <param name="onConnectionEstablished"></param>
 		/// <param name="onConnectionBroken"></param>
 		/// <param name="onConnectionError"></param>
 		/// <returns></returns>
-		public static async Task OpenIncomingChannelAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null)
+		public static async Task<IWampChannel> OpenAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null)
 		{
-			if (WAMPConnections.IncommingChannel != null)
-				return;
+			var routerInfo = WAMPConnections.GetRouterInfo();
+			var address = routerInfo.Item1;
+			var realm = routerInfo.Item2;
+			var useJsonChannel = routerInfo.Item3;
 
-			var info = WAMPConnections.GetRouterInfo();
-			var address = info.Item1;
-			var realm = info.Item2;
-			var useJsonChannel = info.Item3;
-
-			WAMPConnections.IncommingChannel = useJsonChannel
+			var wampChannel = useJsonChannel
 				? new DefaultWampChannelFactory().CreateJsonChannel(address, realm)
 				: new DefaultWampChannelFactory().CreateMsgpackChannel(address, realm);
 
-			WAMPConnections.IncommingChannel.RealmProxy.Monitor.ConnectionEstablished += (sender, args) =>
-			{
-				WAMPConnections.IncommingChannelSessionID = args.SessionId;
-				WAMPConnections.ChannelsAreClosedBySystem = false;
-				onConnectionEstablished?.Invoke(sender, args);
-			};
+			if (onConnectionEstablished != null)
+				wampChannel.RealmProxy.Monitor.ConnectionEstablished += new EventHandler<WampSessionCreatedEventArgs>(onConnectionEstablished);
 
 			if (onConnectionBroken != null)
-				WAMPConnections.IncommingChannel.RealmProxy.Monitor.ConnectionBroken += new EventHandler<WampSessionCloseEventArgs>(onConnectionBroken);
+				wampChannel.RealmProxy.Monitor.ConnectionBroken += new EventHandler<WampSessionCloseEventArgs>(onConnectionBroken);
 
 			if (onConnectionError != null)
-				WAMPConnections.IncommingChannel.RealmProxy.Monitor.ConnectionError += new EventHandler<WampConnectionErrorEventArgs>(onConnectionError);
+				wampChannel.RealmProxy.Monitor.ConnectionError += new EventHandler<WampConnectionErrorEventArgs>(onConnectionError);
 
-			await WAMPConnections.IncommingChannel.Open().ConfigureAwait(false);
+			await wampChannel.Open().ConfigureAwait(false);
+			return wampChannel;
 		}
 
-		/// <summary>
-		/// Opens the outgoging channel to the WAMP router
-		/// </summary>
-		/// <param name="onConnectionEstablished"></param>
-		/// <param name="onConnectionBroken"></param>
-		/// <param name="onConnectionError"></param>
-		/// <returns></returns>
-		public static async Task OpenOutgoingChannelAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null)
-		{
-			if (WAMPConnections.OutgoingChannel != null)
-				return;
-
-			var info = WAMPConnections.GetRouterInfo();
-			var address = info.Item1;
-			var realm = info.Item2;
-			var useJsonChannel = info.Item3;
-
-			WAMPConnections.OutgoingChannel = useJsonChannel
-				? new DefaultWampChannelFactory().CreateJsonChannel(address, realm)
-				: new DefaultWampChannelFactory().CreateMsgpackChannel(address, realm);
-
-			WAMPConnections.OutgoingChannel.RealmProxy.Monitor.ConnectionEstablished += (sender, args) =>
-			{
-				WAMPConnections.OutgoingChannelSessionID = args.SessionId;
-				WAMPConnections.ChannelsAreClosedBySystem = false;
-				onConnectionEstablished?.Invoke(sender, args);
-			};
-
-			if (onConnectionBroken != null)
-				WAMPConnections.OutgoingChannel.RealmProxy.Monitor.ConnectionBroken += new EventHandler<WampSessionCloseEventArgs>(onConnectionBroken);
-
-			if (onConnectionError != null)
-				WAMPConnections.OutgoingChannel.RealmProxy.Monitor.ConnectionError += new EventHandler<WampConnectionErrorEventArgs>(onConnectionError);
-
-			await WAMPConnections.OutgoingChannel.Open().ConfigureAwait(false);
-		}
-		#endregion
-
-		#region Re-open
 		/// <summary>
 		/// Reopens a channel to the WAMP router
 		/// </summary>
@@ -190,7 +155,47 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
-		#region Close
+		#region Open channels
+		/// <summary>
+		/// Opens the incomming channel to the WAMP router
+		/// </summary>
+		/// <param name="onConnectionEstablished"></param>
+		/// <param name="onConnectionBroken"></param>
+		/// <param name="onConnectionError"></param>
+		/// <returns></returns>
+		public static async Task<IWampChannel> OpenIncomingChannelAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null)
+			=> WAMPConnections.IncommingChannel ?? (WAMPConnections.IncommingChannel = await WAMPConnections.OpenAsync(
+					(sender, args) =>
+					{
+						WAMPConnections.IncommingChannelSessionID = args.SessionId;
+						WAMPConnections.ChannelsAreClosedBySystem = false;
+						onConnectionEstablished?.Invoke(sender, args);
+					},
+					onConnectionBroken,
+					onConnectionError
+				));
+
+		/// <summary>
+		/// Opens the outgoging channel to the WAMP router
+		/// </summary>
+		/// <param name="onConnectionEstablished"></param>
+		/// <param name="onConnectionBroken"></param>
+		/// <param name="onConnectionError"></param>
+		/// <returns></returns>
+		public static async Task<IWampChannel> OpenOutgoingChannelAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null)
+			=> WAMPConnections.OutgoingChannel ?? (WAMPConnections.OutgoingChannel = await WAMPConnections.OpenAsync(
+					(sender, args) =>
+					{
+						WAMPConnections.OutgoingChannelSessionID = args.SessionId;
+						WAMPConnections.ChannelsAreClosedBySystem = false;
+						onConnectionEstablished?.Invoke(sender, args);
+					},
+					onConnectionBroken,
+					onConnectionError
+				));
+		#endregion
+
+		#region Close channels
 		/// <summary>
 		/// Closes the incomming channel of the WAMP router
 		/// </summary>
