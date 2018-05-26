@@ -227,7 +227,7 @@ namespace net.vieapps.Services
 		/// <param name="args">The starting arguments</param>
 		/// <param name="initializeRepository">true to initialize the repository of the service</param>
 		/// <param name="nextAsync">The next action to run asynchronously</param>
-		void Start(string[] args = null, bool initializeRepository = true, Func<IService, Task> nextAsync = null);
+		void Start(string[] args = null, bool initializeRepository = true, Func<ServiceBase, Task> nextAsync = null);
 
 		/// <summary>
 		/// Stops the service

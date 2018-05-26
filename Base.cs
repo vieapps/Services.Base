@@ -125,9 +125,13 @@ namespace net.vieapps.Services
 			try
 			{
 				await registerAsync().ConfigureAwait(false);
-				this.State = ServiceState.Connected;
-				if (onSuccessAsync != null)
+
+				if (this.State == ServiceState.Disconnected)
+					this.Logger.LogInformation($"The service is re-started successful - PID: {Process.GetCurrentProcess().Id} - URI: {this.ServiceURI}");
+				else if (onSuccessAsync != null)
 					await onSuccessAsync(this).ConfigureAwait(false);
+
+				this.State = ServiceState.Connected;
 			}
 			catch (Exception ex)
 			{
@@ -332,17 +336,17 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the state to write debug log (from app settings - parameter named 'vieapps:Logs:Debug')
 		/// </summary>
-		protected bool IsDebugLogEnabled => this.Logger != null && this.Logger.IsEnabled(LogLevel.Debug);
+		public bool IsDebugLogEnabled => this.Logger != null && this.Logger.IsEnabled(LogLevel.Debug);
 
 		/// <summary>
 		/// Gets the state to write debug result into log (from app settings - parameter named 'vieapps:Logs:ShowResults')
 		/// </summary>
-		protected bool IsDebugResultsEnabled => "true".IsEquals(this._isDebugResultsEnabled ?? (this._isDebugResultsEnabled = UtilityService.GetAppSetting("Logs:ShowResults", "false")));
+		public bool IsDebugResultsEnabled => "true".IsEquals(this._isDebugResultsEnabled ?? (this._isDebugResultsEnabled = UtilityService.GetAppSetting("Logs:ShowResults", "false")));
 
 		/// <summary>
 		/// Gets the state to write error stack to client (from app settings - parameter named 'vieapps:Logs:ShowStacks')
 		/// </summary>
-		protected bool IsDebugStacksEnabled => "true".IsEquals(this._isDebugStacksEnabled ?? (this._isDebugStacksEnabled = UtilityService.GetAppSetting("Logs:ShowStacks", "false")));
+		public bool IsDebugStacksEnabled => "true".IsEquals(this._isDebugStacksEnabled ?? (this._isDebugStacksEnabled = UtilityService.GetAppSetting("Logs:ShowStacks", "false")));
 
 		async Task InitializeLoggingServiceAsync()
 		{
@@ -1158,10 +1162,11 @@ namespace net.vieapps.Services
 								).ConfigureAwait(false);
 								this.Logger.LogInformation($"Helper services are{(this.State == ServiceState.Disconnected ? " re-" : " ")}initialized");
 							}
-							catch (WampSessionNotEstablishedException)
+							catch
 							{
 								try
 								{
+									await Task.Delay(UtilityService.GetRandomNumber(234, 567)).ConfigureAwait(false);
 									await Task.WhenAll(
 										this.InitializeLoggingServiceAsync(),
 										this.InitializeRTUServiceAsync(),
@@ -1173,10 +1178,6 @@ namespace net.vieapps.Services
 								{
 									this.Logger.LogError($"Error occurred while {(this.State == ServiceState.Disconnected ? " re-" : " ")}initializing helper services", ex);
 								}
-							}
-							catch (Exception ex)
-							{
-								this.Logger.LogError($"Error occurred while {(this.State == ServiceState.Disconnected ? " re-" : " ")}initializing helper services", ex);
 							}
 						}).ConfigureAwait(false);
 
@@ -1210,7 +1211,7 @@ namespace net.vieapps.Services
 		/// <param name="args">The starting arguments</param>
 		/// <param name="initializeRepository">true to initialize the repository of the service</param>
 		/// <param name="nextAsync">The next action to run</param>
-		public virtual void Start(string[] args = null, bool initializeRepository = true, Func<IService, Task> nextAsync = null)
+		public virtual void Start(string[] args = null, bool initializeRepository = true, Func<ServiceBase, Task> nextAsync = null)
 		{
 			Task.Run(() => this.StartAsync(async (service) =>
 			{
