@@ -1130,11 +1130,11 @@ namespace net.vieapps.Services
 							this.State = ServiceState.Disconnected;
 
 						if (WAMPConnections.ChannelsAreClosedBySystem || arguments.CloseType.Equals(SessionCloseType.Goodbye))
-							this.Logger.LogInformation($"The incoming channel to WAMP router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+							this.Logger.LogInformation($"The incomming channel to WAMP router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
 
 						else if (WAMPConnections.IncommingChannel != null)
 						{
-							this.Logger.LogInformation($"The incoming channel to WAMP router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+							this.Logger.LogInformation($"The incomming channel to WAMP router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
 							WAMPConnections.IncommingChannel.ReOpen(this.CancellationTokenSource.Token, (msg, ex) => this.Logger.LogDebug(msg, ex), "Incoming");
 						}
 
@@ -1142,7 +1142,7 @@ namespace net.vieapps.Services
 					},
 					(sender, arguments) =>
 					{
-						this.Logger.LogDebug($"The incoming channel to WAMP router got an error: {arguments.Exception.Message}", arguments.Exception);
+						this.Logger.LogDebug($"The incomming channel to WAMP router got an error: {arguments.Exception.Message}", arguments.Exception);
 						onIncomingConnectionError?.Invoke(sender, arguments);
 					}
 				),
@@ -1186,11 +1186,11 @@ namespace net.vieapps.Services
 					(sender, arguments) =>
 					{
 						if (WAMPConnections.ChannelsAreClosedBySystem || arguments.CloseType.Equals(SessionCloseType.Goodbye))
-							this.Logger.LogInformation($"The outgoging channel to WAMP router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+							this.Logger.LogInformation($"The outgoing channel to WAMP router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
 
 						else if (WAMPConnections.OutgoingChannel != null)
 						{
-							this.Logger.LogInformation($"The outgoging channel to WAMP router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+							this.Logger.LogInformation($"The outgoing channel to WAMP router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
 							WAMPConnections.OutgoingChannel.ReOpen(this.CancellationTokenSource.Token, (msg, ex) => this.Logger.LogDebug(msg, ex), "Outgoing");
 						}
 
@@ -1198,7 +1198,7 @@ namespace net.vieapps.Services
 					},
 					(sender, arguments) =>
 					{
-						this.Logger.LogDebug($"The outgoging channel to WAMP router got an error: {arguments.Exception.Message}", arguments.Exception);
+						this.Logger.LogDebug($"The outgoing channel to WAMP router got an error: {arguments.Exception.Message}", arguments.Exception);
 						onOutgoingConnectionError?.Invoke(sender, arguments);
 					}
 				)
