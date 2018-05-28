@@ -1122,7 +1122,14 @@ namespace net.vieapps.Services
 
 						Task.Run(() => this.RegisterServiceAsync(onRegisterSuccessAsync, onRegisterErrorAsync)).ConfigureAwait(false);
 
-						onIncomingConnectionEstablished?.Invoke(sender, arguments);
+						try
+						{
+							onIncomingConnectionEstablished?.Invoke(sender, arguments);
+						}
+						catch (Exception ex)
+						{
+							this.Logger.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionEstablished)}\"action: {ex.Message}", ex);
+						}
 					},
 					(sender, arguments) =>
 					{
@@ -1138,12 +1145,26 @@ namespace net.vieapps.Services
 							WAMPConnections.IncommingChannel.ReOpen(this.CancellationTokenSource.Token, (msg, ex) => this.Logger.LogDebug(msg, ex), "Incoming");
 						}
 
-						onIncomingConnectionBroken?.Invoke(sender, arguments);
+						try
+						{
+							onIncomingConnectionBroken?.Invoke(sender, arguments);
+						}
+						catch (Exception ex)
+						{
+							this.Logger.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionBroken)}\"action: {ex.Message}", ex);
+						}
 					},
 					(sender, arguments) =>
 					{
 						this.Logger.LogDebug($"The incomming channel to WAMP router got an error: {arguments.Exception.Message}", arguments.Exception);
-						onIncomingConnectionError?.Invoke(sender, arguments);
+						try
+						{
+							onIncomingConnectionError?.Invoke(sender, arguments);
+						}
+						catch (Exception ex)
+						{
+							this.Logger.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionError)}\"action: {ex.Message}", ex);
+						}
 					}
 				),
 				WAMPConnections.OpenOutgoingChannelAsync(
@@ -1181,7 +1202,14 @@ namespace net.vieapps.Services
 							}
 						}).ConfigureAwait(false);
 
-						onOutgoingConnectionEstablished?.Invoke(sender, arguments);
+						try
+						{
+							onOutgoingConnectionEstablished?.Invoke(sender, arguments);
+						}
+						catch (Exception ex)
+						{
+							this.Logger.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionEstablished)}\"action: {ex.Message}", ex);
+						}
 					},
 					(sender, arguments) =>
 					{
@@ -1194,12 +1222,26 @@ namespace net.vieapps.Services
 							WAMPConnections.OutgoingChannel.ReOpen(this.CancellationTokenSource.Token, (msg, ex) => this.Logger.LogDebug(msg, ex), "Outgoing");
 						}
 
-						onOutgoingConnectionBroken?.Invoke(sender, arguments);
+						try
+						{
+							onOutgoingConnectionBroken?.Invoke(sender, arguments);
+						}
+						catch (Exception ex)
+						{
+							this.Logger.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionBroken)}\"action: {ex.Message}", ex);
+						}
 					},
 					(sender, arguments) =>
 					{
 						this.Logger.LogDebug($"The outgoing channel to WAMP router got an error: {arguments.Exception.Message}", arguments.Exception);
-						onOutgoingConnectionError?.Invoke(sender, arguments);
+						try
+						{
+							onOutgoingConnectionError?.Invoke(sender, arguments);
+						}
+						catch (Exception ex)
+						{
+							this.Logger.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionError)}\"action: {ex.Message}", ex);
+						}
 					}
 				)
 			).ConfigureAwait(false);
@@ -1231,10 +1273,13 @@ namespace net.vieapps.Services
 							),
 							(log, ex) =>
 							{
-								if (ex != null)
-									this.Logger.LogError(log, ex);
-								else
-									this.Logger.LogInformation(log);
+								if (!this.IsDebugLogEnabled)
+								{
+									if (ex != null)
+										this.Logger.LogError(log, ex);
+									else
+										this.Logger.LogInformation(log);
+								}
 							}
 						);
 					}
@@ -1275,7 +1320,7 @@ namespace net.vieapps.Services
 						}
 						catch (Exception ex)
 						{
-							this.Logger.LogError($"Error occurred while deregistering: {ex.Message}", ex);
+							this.Logger?.LogError($"Error occurred while deregistering: {ex.Message}", ex);
 						}
 						finally
 						{
@@ -1285,6 +1330,7 @@ namespace net.vieapps.Services
 				})
 				.ContinueWith(task => this.StopTimers(), TaskContinuationOptions.OnlyOnRanToCompletion)
 				.ContinueWith(task => this.CancellationTokenSource.Cancel(), TaskContinuationOptions.OnlyOnRanToCompletion)
+				.ContinueWith(task => this.Logger?.LogDebug("Stopped"), TaskContinuationOptions.OnlyOnRanToCompletion)
 				.Wait(3456);
 		}
 
@@ -1297,6 +1343,7 @@ namespace net.vieapps.Services
 				this._disposed = true;
 				this.Stop();
 				this.CancellationTokenSource.Dispose();
+				this.Logger?.LogDebug("Disposed");
 				GC.SuppressFinalize(this);
 			}
 		}
