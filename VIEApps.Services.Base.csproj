@@ -42,7 +42,7 @@
 		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="2.0.2" />
 		<PackageReference Include="MsgPack.Cli" Version="0.9.2" />
 		<PackageReference Include="System.Reactive" Version="3.1.1" />
-		<PackageReference Include="VIEApps.Components.Repository" Version="10.2.2.1806" />
+		<PackageReference Include="VIEApps.Components.Repository" Version="10.2.3.1806" />
 		<PackageReference Include="WampSharp.Default.Client" Version="18.5.1" />
 	</ItemGroup>
 
