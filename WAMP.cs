@@ -24,6 +24,7 @@ using Newtonsoft.Json.Linq;
 using net.vieapps.Components.Utility;
 using net.vieapps.Components.Security;
 using net.vieapps.Components.Repository;
+using net.vieapps.Components.WebSockets;
 #endregion
 
 namespace net.vieapps.Services
@@ -59,6 +60,10 @@ namespace net.vieapps.Services
 		/// Gets the state that determines that the WAMP channels are closed by the system
 		/// </summary>
 		public static bool ChannelsAreClosedBySystem { get; internal set; } = false;
+
+		static WebSocket StatisticsWebSocket { get; set; }
+
+		static ManagedWebSocket StatisticsWebSocketConnection { get; set; }
 
 		/// <summary>
 		/// Gets information of WAMP router
@@ -236,6 +241,44 @@ namespace net.vieapps.Services
 			WAMPConnections.ChannelsAreClosedBySystem = true;
 			WAMPConnections.CloseIncomingChannel();
 			WAMPConnections.CloseOutgoingChannel();
+		}
+		#endregion
+
+		#region Update channels
+		/// <summary>
+		/// Updates related information of the channel
+		/// </summary>
+		/// <param name="wampChannel"></param>
+		/// <param name="sessionID"></param>
+		/// <param name="name"></param>
+		/// <param name="description"></param>
+		public static void Update(this IWampChannel wampChannel, long sessionID, string name, string description)
+		{
+			async Task sendAsync()
+			{
+				await WAMPConnections.StatisticsWebSocketConnection.SendAsync(new JObject
+				{
+					{ "Command", "Update" },
+					{ "SessionID", sessionID },
+					{ "Name", name },
+					{ "Description", description }
+				}.ToString(Formatting.None), true).ConfigureAwait(false);
+			}
+
+			if (WAMPConnections.StatisticsWebSocket == null)
+				WAMPConnections.StatisticsWebSocket = new WebSocket(null, null, CancellationToken.None);
+
+			if (WAMPConnections.StatisticsWebSocketConnection == null)
+			{
+				var uri = new Uri(WAMPConnections.GetRouterStrInfo());
+				WAMPConnections.StatisticsWebSocket.Connect($"{uri.Scheme}://{uri.Host}:56429/", socket =>
+				{
+					WAMPConnections.StatisticsWebSocketConnection = socket;
+					Task.Run(() => sendAsync()).ConfigureAwait(false);
+				}, null);
+			}
+			else
+				Task.Run(() => sendAsync()).ConfigureAwait(false);
 		}
 		#endregion
 

@@ -1117,6 +1117,7 @@ namespace net.vieapps.Services
 					(sender, arguments) =>
 					{
 						this.Logger.LogInformation($"Incomming channel to WAMP router is established - Session ID: {WAMPConnections.IncommingChannelSessionID}");
+						WAMPConnections.IncommingChannel.Update(WAMPConnections.IncommingChannelSessionID, this.ServiceName, $"Incomming ({this.ServiceURI})");
 						if (this.State == ServiceState.Initializing)
 							this.State = ServiceState.Ready;
 
@@ -1171,6 +1172,7 @@ namespace net.vieapps.Services
 					(sender, arguments) =>
 					{
 						this.Logger.LogInformation($"Outgoing channel to WAMP router is established - Session ID: {WAMPConnections.OutgoingChannelSessionID}");
+						WAMPConnections.OutgoingChannel.Update(WAMPConnections.OutgoingChannelSessionID, this.ServiceName, $"Outgoing ({this.ServiceURI})");
 
 						Task.Run(async () =>
 						{
