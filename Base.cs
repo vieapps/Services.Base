@@ -95,14 +95,14 @@ namespace net.vieapps.Services
 			{
 				try
 				{
-					this._instance = await WAMPConnections.IncommingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(name)).ConfigureAwait(false);
+					this._instance = await WAMPConnections.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(name)).ConfigureAwait(false);
 				}
 				catch
 				{
 					await Task.Delay(UtilityService.GetRandomNumber(456, 789)).ConfigureAwait(false);
 					try
 					{
-						this._instance = await WAMPConnections.IncommingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(name)).ConfigureAwait(false);
+						this._instance = await WAMPConnections.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(name)).ConfigureAwait(false);
 					}
 					catch (Exception)
 					{
@@ -112,7 +112,7 @@ namespace net.vieapps.Services
 				this.Logger.LogInformation($"The service is{(this.State == ServiceState.Disconnected ? " re-" : " ")}registered successful");
 
 				this._communicator?.Dispose();
-				this._communicator = WAMPConnections.IncommingChannel.RealmProxy.Services
+				this._communicator = WAMPConnections.IncomingChannel.RealmProxy.Services
 					.GetSubject<CommunicateMessage>($"net.vieapps.rtu.communicate.messages.{name}")
 					.Subscribe(
 						async (message) => await this.ProcessInterCommunicateMessageAsync(message).ConfigureAwait(false),
@@ -1116,8 +1116,8 @@ namespace net.vieapps.Services
 				WAMPConnections.OpenIncomingChannelAsync(
 					(sender, arguments) =>
 					{
-						this.Logger.LogInformation($"Incomming channel to WAMP router is established - Session ID: {WAMPConnections.IncommingChannelSessionID}");
-						WAMPConnections.IncommingChannel.Update(WAMPConnections.IncommingChannelSessionID, this.ServiceName, $"Incomming ({this.ServiceURI})");
+						this.Logger.LogInformation($"Incoming channel to WAMP router is established - Session ID: {WAMPConnections.IncomingChannelSessionID}");
+						WAMPConnections.IncomingChannel.Update(WAMPConnections.IncomingChannelSessionID, this.ServiceName, $"Incoming ({this.ServiceURI})");
 						if (this.State == ServiceState.Initializing)
 							this.State = ServiceState.Ready;
 
@@ -1138,12 +1138,12 @@ namespace net.vieapps.Services
 							this.State = ServiceState.Disconnected;
 
 						if (WAMPConnections.ChannelsAreClosedBySystem || arguments.CloseType.Equals(SessionCloseType.Goodbye))
-							this.Logger.LogInformation($"The incomming channel to WAMP router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+							this.Logger.LogInformation($"The incoming channel to WAMP router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
 
-						else if (WAMPConnections.IncommingChannel != null)
+						else if (WAMPConnections.IncomingChannel != null)
 						{
-							this.Logger.LogInformation($"The incomming channel to WAMP router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
-							WAMPConnections.IncommingChannel.ReOpen(this.CancellationTokenSource.Token, (msg, ex) => this.Logger.LogDebug(msg, ex), "Incoming");
+							this.Logger.LogInformation($"The incoming channel to WAMP router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+							WAMPConnections.IncomingChannel.ReOpen(this.CancellationTokenSource.Token, (msg, ex) => this.Logger.LogDebug(msg, ex), "Incoming");
 						}
 
 						try
@@ -1157,7 +1157,7 @@ namespace net.vieapps.Services
 					},
 					(sender, arguments) =>
 					{
-						this.Logger.LogDebug($"The incomming channel to WAMP router got an error: {arguments.Exception.Message}", arguments.Exception);
+						this.Logger.LogDebug($"The incoming channel to WAMP router got an error: {arguments.Exception.Message}", arguments.Exception);
 						try
 						{
 							onIncomingConnectionError?.Invoke(sender, arguments);

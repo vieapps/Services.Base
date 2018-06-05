@@ -37,14 +37,14 @@ namespace net.vieapps.Services
 
 		#region Properties
 		/// <summary>
-		/// Gets the incomming channel of the WAMP router
+		/// Gets the incoming channel of the WAMP router
 		/// </summary>
-		public static IWampChannel IncommingChannel { get; internal set; } = null;
+		public static IWampChannel IncomingChannel { get; internal set; } = null;
 
 		/// <summary>
-		/// Gets the session's identity of the incomming channel of the WAMP router
+		/// Gets the session's identity of the incoming channel of the WAMP router
 		/// </summary>
-		public static long IncommingChannelSessionID { get; internal set; } = 0;
+		public static long IncomingChannelSessionID { get; internal set; } = 0;
 
 		/// <summary>
 		/// Gets the outgoing channel of the WAMP router
@@ -162,17 +162,17 @@ namespace net.vieapps.Services
 
 		#region Open channels
 		/// <summary>
-		/// Opens the incomming channel to the WAMP router
+		/// Opens the incoming channel to the WAMP router
 		/// </summary>
 		/// <param name="onConnectionEstablished"></param>
 		/// <param name="onConnectionBroken"></param>
 		/// <param name="onConnectionError"></param>
 		/// <returns></returns>
 		public static async Task<IWampChannel> OpenIncomingChannelAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null)
-			=> WAMPConnections.IncommingChannel ?? (WAMPConnections.IncommingChannel = await WAMPConnections.OpenAsync(
+			=> WAMPConnections.IncomingChannel ?? (WAMPConnections.IncomingChannel = await WAMPConnections.OpenAsync(
 					(sender, args) =>
 					{
-						WAMPConnections.IncommingChannelSessionID = args.SessionId;
+						WAMPConnections.IncomingChannelSessionID = args.SessionId;
 						WAMPConnections.ChannelsAreClosedBySystem = false;
 						onConnectionEstablished?.Invoke(sender, args);
 					},
@@ -202,17 +202,17 @@ namespace net.vieapps.Services
 
 		#region Close channels
 		/// <summary>
-		/// Closes the incomming channel of the WAMP router
+		/// Closes the incoming channel of the WAMP router
 		/// </summary>
 		/// <param name="message">The message to send to WAMP router before closing the channel</param>
 		public static void CloseIncomingChannel(string message = null)
 		{
-			if (WAMPConnections.IncommingChannel != null)
+			if (WAMPConnections.IncomingChannel != null)
 				try
 				{
-					WAMPConnections.IncommingChannel.Close(message ?? "Disconnected", new GoodbyeDetails());
-					WAMPConnections.IncommingChannel = null;
-					WAMPConnections.IncommingChannelSessionID = 0;
+					WAMPConnections.IncomingChannel.Close(message ?? "Disconnected", new GoodbyeDetails());
+					WAMPConnections.IncomingChannel = null;
+					WAMPConnections.IncomingChannelSessionID = 0;
 				}
 				catch { }
 		}
@@ -254,6 +254,19 @@ namespace net.vieapps.Services
 		/// <param name="description"></param>
 		public static void Update(this IWampChannel wampChannel, long sessionID, string name, string description)
 		{
+			if (WAMPConnections.StatisticsWebSocket == null)
+				WAMPConnections.StatisticsWebSocket = new WebSocket(null, null, CancellationToken.None)
+				{
+					OnConnectionEstablished = websocket =>
+					{
+						WAMPConnections.StatisticsWebSocketConnection = websocket;
+					},
+					OnConnectionBroken = websocket =>
+					{
+						WAMPConnections.StatisticsWebSocketConnection = null;
+					}
+				};
+
 			async Task sendAsync()
 			{
 				await WAMPConnections.StatisticsWebSocketConnection.SendAsync(new JObject
@@ -265,17 +278,10 @@ namespace net.vieapps.Services
 				}.ToString(Formatting.None), true).ConfigureAwait(false);
 			}
 
-			if (WAMPConnections.StatisticsWebSocket == null)
-				WAMPConnections.StatisticsWebSocket = new WebSocket(null, null, CancellationToken.None);
-
 			if (WAMPConnections.StatisticsWebSocketConnection == null)
 			{
 				var uri = new Uri(WAMPConnections.GetRouterStrInfo());
-				WAMPConnections.StatisticsWebSocket.Connect($"{uri.Scheme}://{uri.Host}:56429/", socket =>
-				{
-					WAMPConnections.StatisticsWebSocketConnection = socket;
-					Task.Run(() => sendAsync()).ConfigureAwait(false);
-				}, null);
+				WAMPConnections.StatisticsWebSocket.Connect($"{uri.Scheme}://{uri.Host}:56429/", websocket => Task.Run(() => sendAsync()).ConfigureAwait(false), null);
 			}
 			else
 				Task.Run(() => sendAsync()).ConfigureAwait(false);
