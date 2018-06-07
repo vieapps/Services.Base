@@ -1123,5 +1123,50 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
+		#region Location
+		/// <summary>
+		/// Gets the location of the session (IP-based)
+		/// </summary>
+		/// <param name="session"></param>
+		/// <param name="correlationID"></param>
+		/// <returns></returns>
+		public static async Task<string> GetLocationAsync(this Session session, string correlationID = null)
+		{
+			try
+			{
+				var json = await WAMPConnections.CallServiceAsync(new RequestInfo(session, "IPLocations")
+				{
+					Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+					{
+						{ "ip-address", session.IP }
+					},
+					CorrelationID = correlationID ?? UtilityService.NewUUID
+				}).ConfigureAwait(false);
+
+				var city = json.Get<string>("City");
+				var region = json.Get<string>("Region");
+				var country = json.Get<string>("Country");
+
+				return "N/A".IsEquals(city) && "N/A".IsEquals(region) && "N/A".IsEquals(country)
+					? "Same Location"
+					: $"{city}, {region}, {country}";
+			}
+			catch
+			{
+				return "Unknown";
+			}
+		}
+
+		/// <summary>
+		/// Gets the location of the request (IP-based)
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <returns></returns>
+		public static Task<string> GetLocationAsync(this RequestInfo requestInfo)
+			=> requestInfo.Session != null
+				? requestInfo.Session.GetLocationAsync(requestInfo.CorrelationID)
+				: Task.FromResult("N/A");
+		#endregion
+
 	}
 }
