@@ -49,12 +49,12 @@ namespace net.vieapps.Services
 	public interface IService : IDisposable
 	{
 		/// <summary>
-		/// Gets the name of this service (for working with WAMP protocol)
+		/// Gets the name of this service (for working with WAMP)
 		/// </summary>
 		string ServiceName { get; }
 
 		/// <summary>
-		/// Gets the URI of this service (with full namespace - for working with WAMP protocol)
+		/// Gets the URI of this service (with full namespace - for working with WAMP)
 		/// </summary>
 		string ServiceURI { get; }
 
@@ -197,6 +197,33 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.{0}.permissions.download.definition")]
 		Task<bool> CanDownloadAsync(IUser user, string systemID, string definitionID, string objectID);
+	}
+
+	//  --------------------------------------------------------------------------------------------
+
+	/// <summary>
+	/// Presents a business service at an unique host
+	/// </summary>
+	public interface IServiceUniqueName : IDisposable
+	{
+		/// <summary>
+		/// Gets the unique name of this service (for working with WAMP)
+		/// </summary>
+		string ServiceUniqueName { get; }
+
+		/// <summary>
+		/// Gets the unique URI of this service (with full namespace - for working with WAMP)
+		/// </summary>
+		string ServiceUniqueURI { get; }
+
+		/// <summary>
+		/// Process the request of this service
+		/// </summary>
+		/// <param name="requestInfo">Requesting Information</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		[WampProcedure("net.vieapps.services.{0}")]
+		Task<JObject> ProcessRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken));
 	}
 
 	//  --------------------------------------------------------------------------------------------

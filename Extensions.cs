@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 
 using WampSharp.Core.Listener;
 using WampSharp.V2;
@@ -1166,6 +1167,42 @@ namespace net.vieapps.Services
 			=> requestInfo.Session != null
 				? requestInfo.Session.GetLocationAsync(requestInfo.CorrelationID)
 				: Task.FromResult("N/A");
+		#endregion
+
+		#region Unique name
+		/// <summary>
+		/// Gets the unique name of a business service
+		/// </summary>
+		/// <param name="name">The string that presents name of a business service</param>
+		/// <param name="user">The string that presents name of the user who runs the process of the business service</param>
+		/// <param name="host">The string that presents name of the host that runs the process of the business service</param>
+		/// <param name="platform">The string that presents name of the platform that runs the process of the business service</param>
+		/// <param name="os">The string that presents name of the operating system that runs the process of the business service</param>
+		/// <returns>The string that presents unique name of a business service at a host</returns>
+		public static string GetUniqueName(string name, string user, string host, string platform, string os)
+		{
+			name = (name ?? "unknown").Trim().ToLower();
+			user = (user ?? Environment.UserName).Trim().ToLower();
+			host = (host ?? Environment.MachineName).Trim().ToLower();
+			platform = (platform ?? RuntimeInformation.FrameworkDescription).Trim();
+			os = (os ?? $"{(RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "Windows" : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "Linux" : "macOS")} {RuntimeInformation.OSArchitecture} ({(RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "Macintosh; Intel Mac OS X; " : "")}{RuntimeInformation.OSDescription.Trim()})").Trim();
+			return $"{name}.{user}-{host}-" + $"{platform} @ {os}".GenerateUUID();
+		}
+
+		/// <summary>
+		/// Gets the unique name of a business service
+		/// </summary>
+		/// <param name="name">The string that presents name of a business service</param>
+		/// <param name="args">The starting arguments</param>
+		/// <returns>The string that presents unique name of a business service at a host</returns>
+		public static string GetUniqueName(string name, string[] args)
+		{
+			var user = args?.FirstOrDefault(a => a.IsStartsWith("/run-user:"));			
+			var host = args?.FirstOrDefault(a => a.IsStartsWith("/run-host:"));
+			var platform = args?.FirstOrDefault(a => a.IsStartsWith("/run-platform:"));
+			var os = args?.FirstOrDefault(a => a.IsStartsWith("/run-os:"));
+			return Extensions.GetUniqueName(name, user?.Replace(StringComparison.OrdinalIgnoreCase, "/run-user:", "").Trim().UrlDecode(), host?.Replace(StringComparison.OrdinalIgnoreCase, "/run-host:", "").Trim().UrlDecode(), platform?.Replace(StringComparison.OrdinalIgnoreCase, "/run-platform:", "").Trim().UrlDecode(), os?.Replace(StringComparison.OrdinalIgnoreCase, "/run-os:", "").Trim().UrlDecode());
+		}
 		#endregion
 
 	}

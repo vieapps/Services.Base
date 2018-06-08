@@ -1,14 +1,14 @@
 ﻿#region Related components
 using System;
 using System.Linq;
-using System.Collections.Generic;
-using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Configuration;
 using System.Diagnostics;
 using System.Reflection;
 using System.Reactive.Linq;
+using System.Collections.Generic;
+using System.Collections.Concurrent;
 
 using WampSharp.V2;
 using WampSharp.V2.Rpc;
@@ -34,7 +34,7 @@ namespace net.vieapps.Services
 	/// <summary>
 	/// Base of all business services
 	/// </summary>
-	public abstract class ServiceBase : IService, IServiceComponent, IDisposable
+	public abstract class ServiceBase : IService, IServiceComponent, IServiceUniqueName, IDisposable
 	{
 		/// <summary>
 		/// Gets the name for working with related URIs
@@ -57,11 +57,17 @@ namespace net.vieapps.Services
 		protected virtual Task ProcessInterCommunicateMessageAsync(CommunicateMessage message, CancellationToken cancellationToken = default(CancellationToken)) => Task.CompletedTask;
 
 		#region Attributes & Properties
-		SystemEx.IAsyncDisposable _instance = null;
-		IDisposable _communicator = null;
-		IRTUService _rtuService = null;
-		ILoggingService _loggingService = null;
-		IMessagingService _messagingService = null;
+		SystemEx.IAsyncDisposable ServiceInstance { get; set; } = null;
+
+		SystemEx.IAsyncDisposable ServiceUniqueInstance { get; set; } = null;
+
+		IDisposable Communicator { get; set; } = null;
+
+		IRTUService RTUService { get; set; } = null;
+
+		ILoggingService LoggingService { get; set; } = null;
+
+		IMessagingService MessagingService { get; set; } = null;
 
 		internal protected CancellationTokenSource CancellationTokenSource { get; } = new CancellationTokenSource();
 
@@ -72,7 +78,17 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the full URI of this service
 		/// </summary>
-		public string ServiceURI => "net.vieapps.services." + (this.ServiceName ?? "unknown").Trim().ToLower();
+		public string ServiceURI => $"net.vieapps.services.{(this.ServiceName ?? "unknown").Trim().ToLower()}";
+
+		/// <summary>
+		/// Gets the unique name for working with related URIs
+		/// </summary>
+		public string ServiceUniqueName { get; private set; }
+
+		/// <summary>
+		/// Gets the full unique URI of this service
+		/// </summary>
+		public string ServiceUniqueURI => $"net.vieapps.services.{(this.ServiceUniqueName ?? "unknown").Trim().ToLower()}";
 
 		/// <summary>
 		/// Gets or sets the single instance of current playing service component
@@ -95,14 +111,16 @@ namespace net.vieapps.Services
 			{
 				try
 				{
-					this._instance = await WAMPConnections.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(name)).ConfigureAwait(false);
+					this.ServiceInstance = await WAMPConnections.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(name)).ConfigureAwait(false);
+					this.ServiceUniqueInstance = await WAMPConnections.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(this.ServiceUniqueName, WampInvokePolicy.Single)).ConfigureAwait(false);
 				}
 				catch
 				{
 					await Task.Delay(UtilityService.GetRandomNumber(456, 789)).ConfigureAwait(false);
 					try
 					{
-						this._instance = await WAMPConnections.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(name)).ConfigureAwait(false);
+						this.ServiceInstance = await WAMPConnections.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(name)).ConfigureAwait(false);
+						this.ServiceUniqueInstance = await WAMPConnections.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(this.ServiceUniqueName, WampInvokePolicy.Single)).ConfigureAwait(false);
 					}
 					catch (Exception)
 					{
@@ -111,8 +129,8 @@ namespace net.vieapps.Services
 				}
 				this.Logger.LogInformation($"The service is{(this.State == ServiceState.Disconnected ? " re-" : " ")}registered successful");
 
-				this._communicator?.Dispose();
-				this._communicator = WAMPConnections.IncomingChannel.RealmProxy.Services
+				this.Communicator?.Dispose();
+				this.Communicator = WAMPConnections.IncomingChannel.RealmProxy.Services
 					.GetSubject<CommunicateMessage>($"net.vieapps.rtu.communicate.messages.{name}")
 					.Subscribe(
 						async (message) => await this.ProcessInterCommunicateMessageAsync(message).ConfigureAwait(false),
@@ -143,25 +161,6 @@ namespace net.vieapps.Services
 		#endregion
 
 		#region Send update messages & notifications
-		async Task InitializeRTUServiceAsync()
-		{
-			if (this._rtuService == null)
-			{
-				await WAMPConnections.OpenOutgoingChannelAsync().ConfigureAwait(false);
-				this._rtuService = WAMPConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IRTUService>(ProxyInterceptor.Create());
-			}
-		}
-
-		IRTUService RTUService
-		{
-			get
-			{
-				if (this._rtuService == null)
-					Task.WaitAll(new[] { this.InitializeRTUServiceAsync() }, 1234);
-				return this._rtuService;
-			}
-		}
-
 		/// <summary>
 		/// Sends a message for updating data of client
 		/// </summary>
@@ -178,7 +177,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected Task SendUpdateMessagesAsync(List<UpdateMessage> messages, CancellationToken cancellationToken = default(CancellationToken))
-			=> messages.ForEachAsync((message, token) => this.RTUService.SendUpdateMessageAsync(message, token), cancellationToken);
+			=> messages.ForEachAsync((Func<UpdateMessage, CancellationToken, Task>)((message, token) => (Task)this.RTUService.SendUpdateMessageAsync(message, token)), cancellationToken);
 
 		/// <summary>
 		/// Sends updating messages to client
@@ -213,25 +212,6 @@ namespace net.vieapps.Services
 		#endregion
 
 		#region Send email & web hook messages
-		async Task InitializeMessagingServiceAsync()
-		{
-			if (this._messagingService == null)
-			{
-				await WAMPConnections.OpenOutgoingChannelAsync().ConfigureAwait(false);
-				this._messagingService = WAMPConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IMessagingService>(ProxyInterceptor.Create());
-			}
-		}
-
-		IMessagingService MessagingService
-		{
-			get
-			{
-				if (this._messagingService == null)
-					Task.WaitAll(new[] { this.InitializeMessagingServiceAsync() }, 1234);
-				return this._messagingService;
-			}
-		}
-
 		/// <summary>
 		/// Sends an email message
 		/// </summary>
@@ -348,25 +328,6 @@ namespace net.vieapps.Services
 		/// </summary>
 		public bool IsDebugStacksEnabled => "true".IsEquals(this._isDebugStacksEnabled ?? (this._isDebugStacksEnabled = UtilityService.GetAppSetting("Logs:ShowStacks", "false")));
 
-		async Task InitializeLoggingServiceAsync()
-		{
-			if (this._loggingService == null)
-			{
-				await WAMPConnections.OpenOutgoingChannelAsync().ConfigureAwait(false);
-				this._loggingService = WAMPConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<ILoggingService>(ProxyInterceptor.Create());
-			}
-		}
-
-		ILoggingService LoggingService
-		{
-			get
-			{
-				if (this._loggingService == null)
-					Task.WaitAll(new[] { this.InitializeLoggingServiceAsync() }, 1234);
-				return this._loggingService;
-			}
-		}
-
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
 		/// </summary>
@@ -409,7 +370,6 @@ namespace net.vieapps.Services
 			Tuple<string, string, string, List<string>, string> log = null;
 			try
 			{
-				await this.InitializeLoggingServiceAsync().ConfigureAwait(false);
 				while (this.Logs.TryDequeue(out log))
 					await this.LoggingService.WriteLogsAsync(log.Item1, log.Item2, log.Item3, log.Item4, log.Item5, this.CancellationTokenSource.Token).ConfigureAwait(false);
 				await this.LoggingService.WriteLogsAsync(correlationID, serviceName ?? (this.ServiceName ?? "APIGateway"), objectName, logs, exception.GetStack(), this.CancellationTokenSource.Token).ConfigureAwait(false);
@@ -1174,35 +1134,17 @@ namespace net.vieapps.Services
 						this.Logger.LogInformation($"Outgoing channel to WAMP router is established - Session ID: {WAMPConnections.OutgoingChannelSessionID}");
 						WAMPConnections.OutgoingChannel.Update(WAMPConnections.OutgoingChannelSessionID, this.ServiceName, $"Outgoing ({this.ServiceURI})");
 
-						Task.Run(async () =>
+						try
 						{
-							try
-							{
-								await Task.WhenAll(
-									this.InitializeLoggingServiceAsync(),
-									this.InitializeRTUServiceAsync(),
-									this.InitializeMessagingServiceAsync()
-								).ConfigureAwait(false);
-								this.Logger.LogInformation($"Helper services are{(this.State == ServiceState.Disconnected ? " re-" : " ")}initialized");
-							}
-							catch
-							{
-								try
-								{
-									await Task.Delay(UtilityService.GetRandomNumber(234, 567)).ConfigureAwait(false);
-									await Task.WhenAll(
-										this.InitializeLoggingServiceAsync(),
-										this.InitializeRTUServiceAsync(),
-										this.InitializeMessagingServiceAsync()
-									).ConfigureAwait(false);
-									this.Logger.LogInformation($"Helper services are{(this.State == ServiceState.Disconnected ? " re-" : " ")}initialized");
-								}
-								catch (Exception ex)
-								{
-									this.Logger.LogError($"Error occurred while {(this.State == ServiceState.Disconnected ? " re-" : " ")}initializing helper services", ex);
-								}
-							}
-						}).ConfigureAwait(false);
+							this.RTUService = WAMPConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IRTUService>(ProxyInterceptor.Create());
+							this.MessagingService = WAMPConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IMessagingService>(ProxyInterceptor.Create());
+							this.LoggingService = WAMPConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<ILoggingService>(ProxyInterceptor.Create());
+							this.Logger.LogInformation($"Helper services are{(this.State == ServiceState.Disconnected ? " re-" : " ")}initialized");
+						}
+						catch (Exception ex)
+						{
+							this.Logger.LogError($"Error occurred while {(this.State == ServiceState.Disconnected ? " re-" : " ")}initializing helper services", ex);
+						}
 
 						try
 						{
@@ -1257,6 +1199,7 @@ namespace net.vieapps.Services
 		/// <param name="nextAsync">The next action to run</param>
 		public virtual void Start(string[] args = null, bool initializeRepository = true, Func<ServiceBase, Task> nextAsync = null)
 		{
+			this.ServiceUniqueName = Extensions.GetUniqueName(this.ServiceName, args);
 			Task.Run(() => this.StartAsync(async (service) =>
 			{
 				// initialize repository
@@ -1303,22 +1246,23 @@ namespace net.vieapps.Services
 			})).ConfigureAwait(false);
 		}
 
-		bool _stopped = false;
+		bool Stopped { get; set; } = false;
 
 		/// <summary>
 		/// Stops this service (close channels and clean-up)
 		/// </summary>
 		public void Stop()
 		{
-			if (!this._stopped)
+			if (!this.Stopped)
 				Task.Run(async () =>
 				{
-					this._stopped = true;
-					this._communicator?.Dispose();
-					if (this._instance != null)
+					this.Stopped = true;
+					this.Communicator?.Dispose();
+
+					if (this.ServiceInstance != null)
 						try
 						{
-							await this._instance.DisposeAsync().ConfigureAwait(false);
+							await this.ServiceInstance.DisposeAsync().ConfigureAwait(false);
 						}
 						catch (Exception ex)
 						{
@@ -1326,8 +1270,23 @@ namespace net.vieapps.Services
 						}
 						finally
 						{
-							this._instance = null;
+							this.ServiceInstance = null;
 						}
+
+					if (this.ServiceUniqueInstance != null)
+						try
+						{
+							await this.ServiceUniqueInstance.DisposeAsync().ConfigureAwait(false);
+						}
+						catch (Exception ex)
+						{
+							this.Logger?.LogError($"Error occurred while deregistering: {ex.Message}", ex);
+						}
+						finally
+						{
+							this.ServiceUniqueInstance = null;
+						}
+
 					WAMPConnections.CloseChannels();
 				})
 				.ContinueWith(task => this.StopTimers(), TaskContinuationOptions.OnlyOnRanToCompletion)
@@ -1336,13 +1295,13 @@ namespace net.vieapps.Services
 				.Wait(3456);
 		}
 
-		bool _disposed = false;
+		bool Disposed { get; set; } = false;
 
 		public virtual void Dispose()
 		{
-			if (!this._disposed)
+			if (!this.Disposed)
 			{
-				this._disposed = true;
+				this.Disposed = true;
 				this.Stop();
 				this.CancellationTokenSource.Dispose();
 				this.Logger?.LogDebug("Disposed");
