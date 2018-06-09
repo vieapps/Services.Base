@@ -1126,6 +1126,11 @@ namespace net.vieapps.Services
 
 		#region Location
 		/// <summary>
+		/// Gets the current location (IP-based)
+		/// </summary>
+		public static string CurrentLocation { get; private set; } = "Unknown";
+
+		/// <summary>
 		/// Gets the location of the session (IP-based)
 		/// </summary>
 		/// <param name="session"></param>
@@ -1135,7 +1140,7 @@ namespace net.vieapps.Services
 		{
 			try
 			{
-				var json = await WAMPConnections.CallServiceAsync(new RequestInfo(session, "IPLocations")
+				var json = await WAMPConnections.CallServiceAsync(new RequestInfo(session, "IPLocations", "IP-Location")
 				{
 					Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 					{
@@ -1148,9 +1153,23 @@ namespace net.vieapps.Services
 				var region = json.Get<string>("Region");
 				var country = json.Get<string>("Country");
 
-				return "N/A".IsEquals(city) && "N/A".IsEquals(region) && "N/A".IsEquals(country)
-					? "Same Location"
-					: $"{city}, {region}, {country}";
+				if ("N/A".IsEquals(city) && "N/A".IsEquals(region) && "N/A".IsEquals(country))
+				{
+					if ("Unknown".IsEquals(Extensions.CurrentLocation))
+					{
+						json = await WAMPConnections.CallServiceAsync(new RequestInfo(session, "IPLocations", "Current")
+						{
+							CorrelationID = correlationID ?? UtilityService.NewUUID
+						}).ConfigureAwait(false);
+						city = json.Get<string>("City");
+						region = json.Get<string>("Region");
+						country = json.Get<string>("Country");
+						Extensions.CurrentLocation = $"{city}, {region}, {country}";
+					}
+					return Extensions.CurrentLocation;
+				}
+
+				return $"{city}, {region}, {country}";
 			}
 			catch
 			{
