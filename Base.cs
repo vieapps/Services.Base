@@ -34,7 +34,7 @@ namespace net.vieapps.Services
 	/// <summary>
 	/// Base of all business services
 	/// </summary>
-	public abstract class ServiceBase : IService, IServiceComponent, IServiceUniqueName, IDisposable
+	public abstract class ServiceBase : IService, IServiceComponent, IUniqueService, IDisposable
 	{
 		/// <summary>
 		/// Gets the name for working with related URIs
@@ -61,7 +61,13 @@ namespace net.vieapps.Services
 
 		SystemEx.IAsyncDisposable ServiceUniqueInstance { get; set; } = null;
 
-		IDisposable Communicator { get; set; } = null;
+		ConcurrentDictionary<string, string> ServiceUniqueNames { get; } = new ConcurrentDictionary<string, string>();
+
+		ConcurrentDictionary<string, IUniqueService> UniqueServices { get; } = new ConcurrentDictionary<string, IUniqueService>(StringComparer.OrdinalIgnoreCase);
+
+		IDisposable ServiceCommunicator { get; set; } = null;
+
+		IDisposable GatewayCommunicator { get; set; } = null;
 
 		IRTUService RTUService { get; set; } = null;
 
@@ -129,14 +135,36 @@ namespace net.vieapps.Services
 				}
 				this.Logger.LogInformation($"The service is{(this.State == ServiceState.Disconnected ? " re-" : " ")}registered successful");
 
-				this.Communicator?.Dispose();
-				this.Communicator = WAMPConnections.IncomingChannel.RealmProxy.Services
+				this.ServiceCommunicator?.Dispose();
+				this.ServiceCommunicator = WAMPConnections.IncomingChannel.RealmProxy.Services
 					.GetSubject<CommunicateMessage>($"net.vieapps.rtu.communicate.messages.{name}")
 					.Subscribe(
 						async (message) => await this.ProcessInterCommunicateMessageAsync(message).ConfigureAwait(false),
 						(exception) => this.Logger.LogError($"Error occurred while fetching inter-communicate message: {exception.Message}", this.State == ServiceState.Connected ? exception : null),
 						() => this.Logger.LogInformation("Inter-communicate message channel is completed")
 					);
+
+				this.GatewayCommunicator?.Dispose();
+				this.GatewayCommunicator = WAMPConnections.IncomingChannel.RealmProxy.Services
+					.GetSubject<CommunicateMessage>($"net.vieapps.rtu.communicate.messages.apigateway")
+					.Subscribe(
+						(message) =>
+						{
+							if (message.Type.IsEquals($"Service#UniqueInfo#{name}"))
+							{
+								var osPlatform = message.Data.Get<string>("OSPlatform") ?? "Windows";
+								if (!this.ServiceUniqueNames.TryGetValue(osPlatform, out string uniqueName))
+								{
+									uniqueName = message.Data.Get<string>("Name") ?? $"{name}.{UtilityService.NewUUID}";
+									this.ServiceUniqueNames.TryAdd(osPlatform, uniqueName);
+									this.Logger.LogInformation($"The unique name of related URIs is updated: {osPlatform} => net.vieapps.services.{uniqueName}");
+								}
+							}
+						},
+						(exception) => this.Logger.LogError($"Error occurred while fetching inter-communicate message of API Gateway: {exception.Message}", this.State == ServiceState.Connected ? exception : null),
+						() => this.Logger.LogInformation("Inter-communicate message channel of API Gateway is completed")
+					);
+
 				this.Logger.LogInformation($"The inter-communicate message updater is{(this.State == ServiceState.Disconnected ? " re-" : " ")}subscribed successful");
 			}
 
@@ -177,7 +205,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected Task SendUpdateMessagesAsync(List<UpdateMessage> messages, CancellationToken cancellationToken = default(CancellationToken))
-			=> messages.ForEachAsync((Func<UpdateMessage, CancellationToken, Task>)((message, token) => (Task)this.RTUService.SendUpdateMessageAsync(message, token)), cancellationToken);
+			=> messages.ForEachAsync((message, token) => this.RTUService.SendUpdateMessageAsync(message, token), cancellationToken);
 
 		/// <summary>
 		/// Sends updating messages to client
@@ -201,6 +229,15 @@ namespace net.vieapps.Services
 			=> this.RTUService.SendInterCommunicateMessageAsync(serviceName, message, cancellationToken);
 
 		/// <summary>
+		/// Send a message for communicating with  of other services
+		/// </summary>
+		/// <param name="message">The message</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		protected Task SendInterCommunicateMessageAsync(CommunicateMessage message, CancellationToken cancellationToken = default(CancellationToken))
+			=> this.RTUService.SendInterCommunicateMessageAsync(message, cancellationToken);
+
+		/// <summary>
 		/// Send a message for updating data of other service
 		/// </summary>
 		/// <param name="serviceName">The name of a service</param>
@@ -209,6 +246,15 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected Task SendInterCommunicateMessagesAsync(string serviceName, List<BaseMessage> messages, CancellationToken cancellationToken = default(CancellationToken))
 			=> this.RTUService.SendInterCommunicateMessagesAsync(serviceName, messages, cancellationToken);
+
+		/// <summary>
+		/// Send a message for communicating with  of other services
+		/// </summary>
+		/// <param name="messages">The collection of messages</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		protected Task SendInterCommunicateMessagesAsync(List<CommunicateMessage> messages, CancellationToken cancellationToken = default(CancellationToken))
+			=> this.RTUService.SendInterCommunicateMessagesAsync(messages, cancellationToken);
 		#endregion
 
 		#region Send email & web hook messages
@@ -471,13 +517,6 @@ namespace net.vieapps.Services
 
 		#region Call services
 		/// <summary>
-		/// Gets a business service
-		/// </summary>
-		/// <param name="name">The string that presents name of a service</param>
-		/// <returns></returns>
-		protected Task<IService> GetServiceAsync(string name) => WAMPConnections.GetServiceAsync(name);
-
-		/// <summary>
 		/// Calls a business service
 		/// </summary>
 		/// <param name="requestInfo">The requesting information</param>
@@ -540,6 +579,35 @@ namespace net.vieapps.Services
 				if (this.IsDebugResultsEnabled)
 					await this.WriteLogsAsync(requestInfo.CorrelationID, $"End process ({requestInfo.Verb} /{requestInfo.ServiceName?.ToLower()}/{requestInfo.ObjectName?.ToLower()}/{requestInfo.GetObjectIdentity()?.ToLower()}) - {requestInfo.Session.AppName} ({requestInfo.Session.AppPlatform}) @ {requestInfo.Session.IP} - Execution times: {stopwatch.GetElapsedTimes()}", null, requestInfo.ServiceName, requestInfo.ObjectName).ConfigureAwait(false);
 			}
+		}
+
+		/// <summary>
+		/// Gets a business service
+		/// </summary>
+		/// <param name="name">The string that presents name of a service</param>
+		/// <returns></returns>
+		protected Task<IService> GetServiceAsync(string name) => WAMPConnections.GetServiceAsync(name);
+
+		/// <summary>
+		/// Gets an unique service by name
+		/// </summary>
+		/// <param name="osPlatform">The string that presents OS Platform (for preparing the uri)</param>
+		/// <returns></returns>
+		protected async Task<IUniqueService> GetUniqueServiceAsync(string osPlatform)
+		{
+			if (string.IsNullOrWhiteSpace(osPlatform) || !this.ServiceUniqueNames.TryGetValue(osPlatform, out string uri) || string.IsNullOrWhiteSpace(uri))
+				return null;
+
+			if (!this.UniqueServices.TryGetValue(uri, out IUniqueService service))
+			{
+				await WAMPConnections.OpenOutgoingChannelAsync().ConfigureAwait(false);
+				if (!this.UniqueServices.TryGetValue(uri, out service))
+				{
+					service = WAMPConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IUniqueService>(ProxyInterceptor.Create(uri));
+					this.UniqueServices.TryAdd(osPlatform, service);
+				}
+			}
+			return service ?? throw new ServiceNotFoundException($"The service \"net.vieapps.services.{uri?.ToLower()}\" is not found");
 		}
 		#endregion
 
@@ -1140,6 +1208,21 @@ namespace net.vieapps.Services
 							this.MessagingService = WAMPConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IMessagingService>(ProxyInterceptor.Create());
 							this.LoggingService = WAMPConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<ILoggingService>(ProxyInterceptor.Create());
 							this.Logger.LogInformation($"Helper services are{(this.State == ServiceState.Disconnected ? " re-" : " ")}initialized");
+
+							Task.Run(async () =>
+							{
+								while (WAMPConnections.IncomingChannel == null)
+									await Task.Delay(UtilityService.GetRandomNumber(123, 456)).ConfigureAwait(false);
+								await this.SendInterCommunicateMessageAsync(new CommunicateMessage
+								{
+									ServiceName = "APIGateway",
+									Type = "Service#RequestUniqueInfo",
+									Data = new JObject
+									{
+										{ "Name", this.ServiceName.Trim().ToLower() }
+									}
+								}).ConfigureAwait(false);
+							}).ConfigureAwait(false);
 						}
 						catch (Exception ex)
 						{
@@ -1257,7 +1340,8 @@ namespace net.vieapps.Services
 				Task.Run(async () =>
 				{
 					this.Stopped = true;
-					this.Communicator?.Dispose();
+					this.ServiceCommunicator?.Dispose();
+					this.GatewayCommunicator?.Dispose();
 
 					if (this.ServiceInstance != null)
 						try

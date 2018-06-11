@@ -298,8 +298,10 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static async Task<IService> GetServiceAsync(string name)
 		{
-			IService service = null;
-			if (!string.IsNullOrWhiteSpace(name) && !WAMPConnections.Services.TryGetValue(name, out service))
+			if (string.IsNullOrWhiteSpace(name))
+				return null;
+
+			if (!WAMPConnections.Services.TryGetValue(name, out IService service))
 			{
 				await WAMPConnections.OpenOutgoingChannelAsync().ConfigureAwait(false);
 				if (!WAMPConnections.Services.TryGetValue(name, out service))
@@ -308,6 +310,7 @@ namespace net.vieapps.Services
 					WAMPConnections.Services.TryAdd(name, service);
 				}
 			}
+
 			return service ?? throw new ServiceNotFoundException($"The service \"net.vieapps.services.{name?.ToLower()}\" is not found");
 		}
 

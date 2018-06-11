@@ -202,9 +202,9 @@ namespace net.vieapps.Services
 	//  --------------------------------------------------------------------------------------------
 
 	/// <summary>
-	/// Presents a business service at an unique host
+	/// Presents a unique business service (means a single instance of a business service at a specific host/controller)
 	/// </summary>
-	public interface IServiceUniqueName : IDisposable
+	public interface IUniqueService : IDisposable
 	{
 		/// <summary>
 		/// Gets the unique name of this service (for working with WAMP)
