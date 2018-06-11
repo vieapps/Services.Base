@@ -589,25 +589,36 @@ namespace net.vieapps.Services
 		protected Task<IService> GetServiceAsync(string name) => WAMPConnections.GetServiceAsync(name);
 
 		/// <summary>
-		/// Gets an unique service by name
+		/// Gets the unique name of the service for a specific OS platform
 		/// </summary>
-		/// <param name="osPlatform">The string that presents OS Platform (for preparing the uri)</param>
+		/// <param name="osPlatform"></param>
+		/// <returns></returns>
+		protected string GetUniqueServiceName(string osPlatform)
+			=> !string.IsNullOrWhiteSpace(osPlatform) && this.ServiceUniqueNames.TryGetValue(osPlatform, out string name)
+				? name
+				: null;
+
+		/// <summary>
+		/// Gets the unique service of a specific OS platform
+		/// </summary>
+		/// <param name="osPlatform">The string that presents name of a specifict OS Platform (Windows, Linux or macOS)</param>
 		/// <returns></returns>
 		protected async Task<IUniqueService> GetUniqueServiceAsync(string osPlatform)
 		{
-			if (string.IsNullOrWhiteSpace(osPlatform) || !this.ServiceUniqueNames.TryGetValue(osPlatform, out string uri) || string.IsNullOrWhiteSpace(uri))
+			var name = this.GetUniqueServiceName(osPlatform);
+			if (string.IsNullOrWhiteSpace(name))
 				return null;
 
-			if (!this.UniqueServices.TryGetValue(uri, out IUniqueService service))
+			if (!this.UniqueServices.TryGetValue(name, out IUniqueService service))
 			{
 				await WAMPConnections.OpenOutgoingChannelAsync().ConfigureAwait(false);
-				if (!this.UniqueServices.TryGetValue(uri, out service))
+				if (!this.UniqueServices.TryGetValue(name, out service))
 				{
-					service = WAMPConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IUniqueService>(ProxyInterceptor.Create(uri));
+					service = WAMPConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IUniqueService>(ProxyInterceptor.Create(name));
 					this.UniqueServices.TryAdd(osPlatform, service);
 				}
 			}
-			return service ?? throw new ServiceNotFoundException($"The service \"net.vieapps.services.{uri?.ToLower()}\" is not found");
+			return service ?? throw new ServiceNotFoundException($"The unique  service \"{this.ServiceURI}\" for specific OS platform ({osPlatform}) is not found");
 		}
 		#endregion
 
