@@ -1224,5 +1224,77 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
+		#region Encryption
+		/// <summary>
+		/// Gest a key for encrypting/decrypting data with this session
+		/// </summary>
+		/// <param name="session"></param>
+		/// <param name="seeds">The seeds for hashing</param>
+		/// <param name="storage">The storage</param>
+		/// <returns></returns>
+		public static byte[] GetEncryptionKey(this Session session, byte[] seeds = null, IDictionary<object, object> storage = null)
+			=> storage != null
+				? storage.ContainsKey("EncryptionKey")
+					? storage["EncryptionKey"] as byte[]
+					: (storage["EncryptionKey"] = session.SessionID.GetHMACHash(seeds ?? CryptoService.DEFAULT_PASS_PHRASE.ToBytes(), "SHA512").GenerateHashKey(256)) as byte[]
+				: session.SessionID.GetHMACHash(seeds ?? CryptoService.DEFAULT_PASS_PHRASE.ToBytes(), "SHA512").GenerateHashKey(256);
+
+		/// <summary>
+		/// Gest a key for encrypting/decrypting data with this session
+		/// </summary>
+		/// <param name="session"></param>
+		/// <param name="seeds">The seeds for hashing</param>
+		/// <param name="storage">The storage</param>
+		/// <returns></returns>
+		public static byte[] GetEncryptionKey(this Session session, string seeds, IDictionary<object, object> storage)
+			=> session.GetEncryptionKey((seeds ?? CryptoService.DEFAULT_PASS_PHRASE).ToBytes(), storage);
+
+		/// <summary>
+		/// Gest an initialize vector for encrypting/decrypting data with this session
+		/// </summary>
+		/// <param name="session"></param>
+		/// <param name="seeds">The seeds for hashing</param>
+		/// <param name="storage">The storage</param>
+		/// <returns></returns>
+		public static byte[] GetEncryptionIV(this Session session, byte[] seeds = null, IDictionary<object, object> storage = null)
+			=> storage != null
+				? storage.ContainsKey("EncryptionIV")
+					? storage["EncryptionIV"] as byte[]
+					: (storage["EncryptionIV"] = session.SessionID.GetHMACHash(seeds ?? CryptoService.DEFAULT_PASS_PHRASE.ToBytes(), "SHA256").GenerateHashKey(128)) as byte[]
+				: session.SessionID.GetHMACHash(seeds ?? CryptoService.DEFAULT_PASS_PHRASE.ToBytes(), "SHA256").GenerateHashKey(128);
+
+		/// <summary>
+		/// Gest an initialize vector for encrypting/decrypting data with this session
+		/// </summary>
+		/// <param name="session"></param>
+		/// <param name="seeds">The seeds for hashing</param>
+		/// <param name="storage">The storage</param>
+		/// <returns></returns>
+		public static byte[] GetEncryptionIV(this Session session, string seeds, IDictionary<object, object> storage)
+			=> session.GetEncryptionIV((seeds ?? CryptoService.DEFAULT_PASS_PHRASE).ToBytes(), storage);
+
+		/// <summary>
+		/// Encrypts the identity (hexa-string)
+		/// </summary>
+		/// <param name="session"></param>
+		/// <param name="id">The identity (hexa-string)</param>
+		/// <param name="keySeeds">The seeds for generating key</param>
+		/// <param name="ivSeeds">The seeds for generating initialize vector</param>
+		/// <returns></returns>
+		public static string GetEncryptID(this Session session, string id, string keySeeds = null, string ivSeeds = null)
+			=> id.HexToBytes().Encrypt(session.GetEncryptionKey(keySeeds ?? CryptoService.DEFAULT_PASS_PHRASE, null), session.GetEncryptionIV(ivSeeds ?? CryptoService.DEFAULT_PASS_PHRASE, null)).ToHex();
+
+		/// <summary>
+		/// Decrypts the identity (hexa-string)
+		/// </summary>
+		/// <param name="session"></param>
+		/// <param name="id">The identity (hexa-string)</param>
+		/// <param name="keySeeds">The seeds for generating key</param>
+		/// <param name="ivSeeds">The seeds for generating initialize vector</param>
+		/// <returns></returns>
+		public static string GetDecryptID(this Session session, string id, string keySeeds = null, string ivSeeds = null)
+			=> id.HexToBytes().Decrypt(session.GetEncryptionKey(keySeeds ?? CryptoService.DEFAULT_PASS_PHRASE, null), session.GetEncryptionIV(ivSeeds ?? CryptoService.DEFAULT_PASS_PHRASE, null)).ToHex();
+		#endregion
+
 	}
 }
