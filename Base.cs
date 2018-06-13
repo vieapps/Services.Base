@@ -437,9 +437,10 @@ namespace net.vieapps.Services
 		/// <param name="exception">The error exception</param>
 		/// <param name="serviceName">The name of service</param>
 		/// <param name="objectName">The name of object</param>
+		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
-		protected Task WriteLogsAsync(string correlationID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null)
-			=> this.WriteLogsAsync(correlationID, logger, !string.IsNullOrWhiteSpace(log) ? new List<string> { log } : null, exception, serviceName, objectName);
+		protected Task WriteLogsAsync(string correlationID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+			=> this.WriteLogsAsync(correlationID, logger, !string.IsNullOrWhiteSpace(log) ? new List<string> { log } : null, exception, serviceName, objectName, mode);
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -462,9 +463,10 @@ namespace net.vieapps.Services
 		/// <param name="exception">The error exception</param>
 		/// <param name="serviceName">The name of service</param>
 		/// <param name="objectName">The name of object</param>
+		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
-		protected Task WriteLogsAsync(string correlationID, string log, Exception exception = null, string serviceName = null, string objectName = null)
-			=> this.WriteLogsAsync(correlationID, !string.IsNullOrWhiteSpace(log) ? new List<string> { log } : null, exception, serviceName, objectName);
+		protected Task WriteLogsAsync(string correlationID, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+			=> this.WriteLogsAsync(correlationID, !string.IsNullOrWhiteSpace(log) ? new List<string> { log } : null, exception, serviceName, objectName, mode);
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -488,8 +490,9 @@ namespace net.vieapps.Services
 		/// <param name="exception">The error exception</param>
 		/// <param name="serviceName">The name of service</param>
 		/// <param name="objectName">The name of object</param>
-		protected void WriteLogs(string correlationID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null)
-			=> this.WriteLogs(correlationID, logger, !string.IsNullOrWhiteSpace(log) ? new List<string> { log } : null, exception, serviceName, objectName);
+		/// <param name="mode">The logging mode</param>
+		protected void WriteLogs(string correlationID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+			=> this.WriteLogs(correlationID, logger, !string.IsNullOrWhiteSpace(log) ? new List<string> { log } : null, exception, serviceName, objectName, mode);
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -511,8 +514,9 @@ namespace net.vieapps.Services
 		/// <param name="exception">The error exception</param>
 		/// <param name="serviceName">The name of service</param>
 		/// <param name="objectName">The name of object</param>
-		protected void WriteLogs(string correlationID, string log, Exception exception = null, string serviceName = null, string objectName = null)
-			=> this.WriteLogs(correlationID, !string.IsNullOrWhiteSpace(log) ? new List<string> { log } : null, exception, serviceName, objectName);
+		/// <param name="mode">The logging mode</param>
+		protected void WriteLogs(string correlationID, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+			=> this.WriteLogs(correlationID, !string.IsNullOrWhiteSpace(log) ? new List<string> { log } : null, exception, serviceName, objectName, mode);
 		#endregion
 
 		#region Call services

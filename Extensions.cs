@@ -1281,8 +1281,10 @@ namespace net.vieapps.Services
 		/// <param name="keySeeds">The seeds for generating key</param>
 		/// <param name="ivSeeds">The seeds for generating initialize vector</param>
 		/// <returns></returns>
-		public static string GetEncryptID(this Session session, string id, string keySeeds = null, string ivSeeds = null)
-			=> id.HexToBytes().Encrypt(session.GetEncryptionKey(keySeeds ?? CryptoService.DEFAULT_PASS_PHRASE, null), session.GetEncryptionIV(ivSeeds ?? CryptoService.DEFAULT_PASS_PHRASE, null)).ToHex();
+		public static string GetEncryptedID(this Session session, string id, string keySeeds = null, string ivSeeds = null)
+			=> !string.IsNullOrWhiteSpace(id)
+				? id.HexToBytes().Encrypt(session.GetEncryptionKey(keySeeds ?? CryptoService.DEFAULT_PASS_PHRASE, null), session.GetEncryptionIV(ivSeeds ?? CryptoService.DEFAULT_PASS_PHRASE, null)).ToHex()
+				: null;
 
 		/// <summary>
 		/// Decrypts the identity (hexa-string)
@@ -1292,8 +1294,10 @@ namespace net.vieapps.Services
 		/// <param name="keySeeds">The seeds for generating key</param>
 		/// <param name="ivSeeds">The seeds for generating initialize vector</param>
 		/// <returns></returns>
-		public static string GetDecryptID(this Session session, string id, string keySeeds = null, string ivSeeds = null)
-			=> id.HexToBytes().Decrypt(session.GetEncryptionKey(keySeeds ?? CryptoService.DEFAULT_PASS_PHRASE, null), session.GetEncryptionIV(ivSeeds ?? CryptoService.DEFAULT_PASS_PHRASE, null)).ToHex();
+		public static string GetDecryptedID(this Session session, string id, string keySeeds = null, string ivSeeds = null)
+			=> !string.IsNullOrWhiteSpace(id)
+				? id.HexToBytes().Decrypt(session.GetEncryptionKey(keySeeds ?? CryptoService.DEFAULT_PASS_PHRASE, null), session.GetEncryptionIV(ivSeeds ?? CryptoService.DEFAULT_PASS_PHRASE, null)).ToHex()
+				: null;
 		#endregion
 
 	}
