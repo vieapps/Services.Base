@@ -1138,6 +1138,7 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static async Task<string> GetLocationAsync(this Session session, string correlationID = null)
 		{
+			correlationID = correlationID ?? UtilityService.NewUUID;
 			try
 			{
 				var json = await WAMPConnections.CallServiceAsync(new RequestInfo(session, "IPLocations", "IP-Location")
@@ -1146,7 +1147,7 @@ namespace net.vieapps.Services
 					{
 						{ "ip-address", session.IP }
 					},
-					CorrelationID = correlationID ?? UtilityService.NewUUID
+					CorrelationID = correlationID
 				}).ConfigureAwait(false);
 
 				var city = json.Get<string>("City");
@@ -1159,17 +1160,17 @@ namespace net.vieapps.Services
 					{
 						json = await WAMPConnections.CallServiceAsync(new RequestInfo(session, "IPLocations", "Current")
 						{
-							CorrelationID = correlationID ?? UtilityService.NewUUID
+							CorrelationID = correlationID
 						}).ConfigureAwait(false);
 						city = json.Get<string>("City");
 						region = json.Get<string>("Region");
 						country = json.Get<string>("Country");
-						Extensions.CurrentLocation = $"{city}, {region}, {country}";
+						Extensions.CurrentLocation = $"{city}, {region}, {country}".Replace(", ,", ",");
 					}
 					return Extensions.CurrentLocation;
 				}
 
-				return $"{city}, {region}, {country}";
+				return $"{city}, {region}, {country}".Replace(", ,", ",");
 			}
 			catch
 			{
@@ -1183,9 +1184,7 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo"></param>
 		/// <returns></returns>
 		public static Task<string> GetLocationAsync(this RequestInfo requestInfo)
-			=> requestInfo.Session != null
-				? requestInfo.Session.GetLocationAsync(requestInfo.CorrelationID)
-				: Task.FromResult("N/A");
+			=> requestInfo.Session?.GetLocationAsync(requestInfo.CorrelationID) ?? Task.FromResult("Unknown");
 		#endregion
 
 		#region Unique name
