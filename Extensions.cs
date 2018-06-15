@@ -1152,6 +1152,8 @@ namespace net.vieapps.Services
 
 				var city = json.Get<string>("City");
 				var region = json.Get<string>("Region");
+				if (region.Equals(city) && !"N/A".IsEquals(city))
+					region = "";
 				var country = json.Get<string>("Country");
 
 				if ("N/A".IsEquals(city) && "N/A".IsEquals(region) && "N/A".IsEquals(country))
@@ -1164,6 +1166,8 @@ namespace net.vieapps.Services
 						}).ConfigureAwait(false);
 						city = json.Get<string>("City");
 						region = json.Get<string>("Region");
+						if (region.Equals(city) && !"N/A".IsEquals(city))
+							region = "";
 						country = json.Get<string>("Country");
 						Extensions.CurrentLocation = $"{city}, {region}, {country}".Replace(", ,", ",");
 					}
