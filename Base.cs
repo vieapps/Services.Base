@@ -47,7 +47,7 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo">The requesting information</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public abstract Task<JObject> ProcessRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken));
+		public abstract Task<JToken> ProcessRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken));
 
 		/// <summary>
 		/// Process the inter-communicate message
@@ -529,7 +529,7 @@ namespace net.vieapps.Services
 		/// <param name="onSuccess">The action to run when success</param>
 		/// <param name="onError">The action to run when got an error</param>
 		/// <returns>A <see cref="JObject">JSON</see> object that presents the results of the business service</returns>
-		protected async Task<JObject> CallServiceAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken), Action<RequestInfo> onStart = null, Action<RequestInfo, JObject> onSuccess = null, Action<RequestInfo, Exception> onError = null)
+		protected async Task<JToken> CallServiceAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken), Action<RequestInfo> onStart = null, Action<RequestInfo, JToken> onSuccess = null, Action<RequestInfo, Exception> onError = null)
 		{
 			var stopwatch = Stopwatch.StartNew();
 			try
@@ -1136,6 +1136,18 @@ namespace net.vieapps.Services
 					exception
 				);
 			}
+		}
+		#endregion
+
+		#region Generate form/view controls
+		/// <summary>
+		/// Generates the form controls of this type
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <returns></returns>
+		protected JToken GenerateFormControls<T>() where T : class
+		{
+			return RepositoryMediator.GenerateFormControls<T>();
 		}
 		#endregion
 

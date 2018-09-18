@@ -320,7 +320,7 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo">The requesting information</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static async Task<JObject> CallServiceAsync(this RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken))
+		public static async Task<JToken> CallServiceAsync(this RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			var service = await WAMPConnections.GetServiceAsync(requestInfo != null && !string.IsNullOrWhiteSpace(requestInfo.ServiceName) ? requestInfo.ServiceName : "unknown").ConfigureAwait(false);
 			return await service.ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false);

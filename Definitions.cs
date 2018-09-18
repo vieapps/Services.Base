@@ -70,7 +70,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.{0}")]
-		Task<JObject> ProcessRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken));
+		Task<JToken> ProcessRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken));
 
 		/// <summary>
 		/// Gets the state that determines the user is able to manage or not
@@ -223,7 +223,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		[WampProcedure("net.vieapps.services.{0}")]
-		Task<JObject> ProcessRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken));
+		Task<JToken> ProcessRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken));
 	}
 
 	//  --------------------------------------------------------------------------------------------

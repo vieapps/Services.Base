@@ -33,14 +33,14 @@ namespace net.vieapps.Services
 		public RequestInfo(Session session = null, string serviceName = null, string objectName = null, string verb = null, Dictionary<string, string> query = null, Dictionary<string, string> header = null, string body = null, Dictionary<string, string> extra = null, string correlationID = null)
 		{
 			this.Session = new Session(session);
-			this.ServiceName = !string.IsNullOrWhiteSpace(serviceName) ? serviceName.Trim().ToLower() : "unknown";
-			this.ObjectName = !string.IsNullOrWhiteSpace(objectName) ? objectName.Trim().ToLower() : "unknown";
-			this.Verb = !string.IsNullOrWhiteSpace(verb) ? verb.Trim().ToUpper() : "GET";
+			this.ServiceName = string.IsNullOrWhiteSpace(serviceName) ? "unknown" : serviceName.Trim().ToLower();
+			this.ObjectName = string.IsNullOrWhiteSpace(objectName) ? "unknown" : objectName.Trim().ToLower();
+			this.Verb = string.IsNullOrWhiteSpace(verb) ? "GET" : verb.Trim().ToUpper();
 			this.Query = new Dictionary<string, string>(query ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase);
 			this.Header = new Dictionary<string, string>(header ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase);
-			this.Body = !string.IsNullOrWhiteSpace(body) ? body : "";
+			this.Body = string.IsNullOrWhiteSpace(body) ? "" : body;
 			this.Extra = new Dictionary<string, string>(extra ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase);
-			this.CorrelationID = !string.IsNullOrWhiteSpace(correlationID) ? correlationID : UtilityService.NewUUID;
+			this.CorrelationID = string.IsNullOrWhiteSpace(correlationID) ? UtilityService.NewUUID : correlationID;
 		}
 
 		#region Properties
