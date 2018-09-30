@@ -19,6 +19,9 @@ using WampSharp.V2.Core.Contracts;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
+using JavaScriptEngineSwitcher.Core;
+using JavaScriptEngineSwitcher.ChakraCore;
+
 using net.vieapps.Components.Utility;
 using net.vieapps.Components.Security;
 using net.vieapps.Components.Repository;
@@ -1301,6 +1304,55 @@ namespace net.vieapps.Services
 			=> !string.IsNullOrWhiteSpace(id)
 				? id.HexToBytes().Decrypt(session.GetEncryptionKey(keySeeds ?? CryptoService.DEFAULT_PASS_PHRASE, null), session.GetEncryptionIV(ivSeeds ?? CryptoService.DEFAULT_PASS_PHRASE, null)).ToHex()
 				: null;
+		#endregion
+
+		#region Evaluate Javascript expression
+		static IJsEngine JsEngine = new ChakraCoreJsEngine(new ChakraCoreSettings
+		{
+			DisableEval = true,
+			EnableExperimentalFeatures = true
+		});
+
+		/// <summary>
+		/// Evaluates an Javascript expression
+		/// </summary>
+		/// <param name="jsExpression">The string that presents an Javascript expression for evaluating</param>
+		/// <returns></returns>
+		public static object Evaluate(string jsExpression)
+		{
+			try
+			{
+				return Extensions.JsEngine.Evaluate(jsExpression);
+			}
+			catch (Exception ex)
+			{
+				if (ex is JsCompilationException)
+					throw new JsCompilationException($"Compile error => {ex.Message}\nFull expression: => \n{jsExpression}", ex);
+				else
+					throw new JsRuntimeException($"Runtime error => {ex.Message}\nFull expression: => \n{jsExpression}", ex);
+			}
+		}
+
+		/// <summary>
+		/// Evaluates an Javascript expression
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="jsExpression">The string that presents an Javascript expression for evaluating</param>
+		/// <returns></returns>
+		public static T Evaluate<T>(string jsExpression)
+		{
+			try
+			{
+				return Extensions.JsEngine.Evaluate<T>(jsExpression);
+			}
+			catch (Exception ex)
+			{
+				if (ex is JsCompilationException)
+					throw new JsCompilationException($"Compile error => {ex.Message}\nFull expression: => \n{jsExpression}", ex);
+				else
+					throw new JsRuntimeException($"Runtime error => {ex.Message}\nFull expression: => \n{jsExpression}", ex);
+			}
+		}
 		#endregion
 
 	}

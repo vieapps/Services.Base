@@ -39,10 +39,23 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<PackageReference Include="JavaScriptEngineSwitcher.ChakraCore" Version="3.0.0-rc1" />
 		<PackageReference Include="MsgPack.Cli" Version="1.0.0" />
 		<PackageReference Include="VIEApps.Components.Repository" Version="10.2.6.1809" />
 		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.2.6.1809" />
-		<PackageReference Include="WampSharp.Default.Client" Version="18.9.1" />
+		<PackageReference Include="WampSharp.Default.Client" Version="18.9.3" />
+	</ItemGroup>
+
+	<ItemGroup Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Windows)))' == 'true'">
+		<PackageReference Include="JavaScriptEngineSwitcher.ChakraCore.Native.win-x64" Version="3.0.0-rc1" />
+	</ItemGroup>
+
+	<ItemGroup Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::OSX)))' == 'true'">
+		<PackageReference Include="JavaScriptEngineSwitcher.ChakraCore.Native.osx-x64" Version="3.0.0-rc1" />
+	</ItemGroup>
+
+	<ItemGroup Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Linux)))' == 'true'">
+		<PackageReference Include="JavaScriptEngineSwitcher.ChakraCore.Native.linux-x64" Version="3.0.0-rc1" />
 	</ItemGroup>
 
 </Project>
