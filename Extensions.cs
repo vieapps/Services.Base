@@ -21,6 +21,8 @@ using Newtonsoft.Json.Linq;
 
 using JavaScriptEngineSwitcher.Core;
 using JavaScriptEngineSwitcher.ChakraCore;
+using JavaScriptEngineSwitcher.Vroom;
+using JSPool;
 
 using net.vieapps.Components.Utility;
 using net.vieapps.Components.Security;
@@ -34,6 +36,23 @@ namespace net.vieapps.Services
 	/// </summary>
 	public static partial class Extensions
 	{
+		static Extensions()
+		{
+			JsEngineSwitcher.Current.EngineFactories.AddVroom(new VroomSettings()).AddChakraCore(new ChakraCoreSettings
+			{
+				DisableEval = true,
+				EnableExperimentalFeatures = true
+			});
+			JsEngineSwitcher.Current.DefaultEngineName = UtilityService.GetAppSetting("JsEngine:DefaultEngineName", "Chakra").IsContains("V8")
+				? VroomJsEngine.EngineName
+				: ChakraCoreJsEngine.EngineName;
+			Extensions.JsEnginePool = new JsPool(new JsPoolConfig
+			 {
+				 MaxEngines = UtilityService.GetAppSetting("JsEngine:MaxEngines", "25").CastAs<int>(),
+				 MaxUsagesPerEngine = UtilityService.GetAppSetting("JsEngine:MaxUsagesPerEngine", "100").CastAs<int>(),
+				 GetEngineTimeout = TimeSpan.FromSeconds(UtilityService.GetAppSetting("JsEngine:GetEngineTimeout", "3").CastAs<int>())
+			 });
+		}
 
 		#region Filter
 		static FilterBy<T> GetFilterBy<T>(string attribute, string @operator, JValue value) where T : class
@@ -1307,29 +1326,36 @@ namespace net.vieapps.Services
 		#endregion
 
 		#region Evaluate Javascript expression
-		static IJsEngine JsEngine = new ChakraCoreJsEngine(new ChakraCoreSettings
+		static JsPool JsEnginePool { get; }
+
+		/// <summary>
+		/// Gets an Javascript engine
+		/// </summary>
+		/// <param name="embedObjects">The collection that presents objects are embed as global variables</param>
+		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
+		/// <returns></returns>
+		public static PooledJsEngine GetJsEngine(IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 		{
-			DisableEval = true,
-			EnableExperimentalFeatures = true
-		});
+			var jsEngine = Extensions.JsEnginePool.GetEngine();
+			if (embedObjects != null)
+				embedObjects.ForEach(kvp => jsEngine.EmbedHostObject(kvp.Key, kvp.Value));
+			if (embedTypes != null)
+				embedTypes.ForEach(kvp => jsEngine.EmbedHostType(kvp.Key, kvp.Value));
+			return jsEngine;
+		}
 
 		/// <summary>
 		/// Evaluates an Javascript expression
 		/// </summary>
-		/// <param name="jsExpression">The string that presents an Javascript expression for evaluating</param>
+		/// <param name="expression">The string that presents an Javascript expression for evaluating</param>
+		/// <param name="embedObjects">The collection that presents objects are embed as global variables</param>
+		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
 		/// <returns></returns>
-		public static object Evaluate(string jsExpression)
+		public static object Evaluate(string expression, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 		{
-			try
+			using (var jsEngine = Extensions.GetJsEngine(embedObjects, embedTypes))
 			{
-				return Extensions.JsEngine.Evaluate(jsExpression);
-			}
-			catch (Exception ex)
-			{
-				if (ex is JsCompilationException)
-					throw new JsCompilationException($"Compile error => {ex.Message}\nFull expression: => \n{jsExpression}", ex);
-				else
-					throw new JsRuntimeException($"Runtime error => {ex.Message}\nFull expression: => \n{jsExpression}", ex);
+				return jsEngine.Evaluate(expression);
 			}
 		}
 
@@ -1337,20 +1363,15 @@ namespace net.vieapps.Services
 		/// Evaluates an Javascript expression
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
-		/// <param name="jsExpression">The string that presents an Javascript expression for evaluating</param>
+		/// <param name="expression">The string that presents an Javascript expression for evaluating</param>
+		/// <param name="embedObjects">The collection that presents objects are embed as global variables</param>
+		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
 		/// <returns></returns>
-		public static T Evaluate<T>(string jsExpression)
+		public static T Evaluate<T>(string expression, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 		{
-			try
+			using (var jsEngine = Extensions.GetJsEngine(embedObjects, embedTypes))
 			{
-				return Extensions.JsEngine.Evaluate<T>(jsExpression);
-			}
-			catch (Exception ex)
-			{
-				if (ex is JsCompilationException)
-					throw new JsCompilationException($"Compile error => {ex.Message}\nFull expression: => \n{jsExpression}", ex);
-				else
-					throw new JsRuntimeException($"Runtime error => {ex.Message}\nFull expression: => \n{jsExpression}", ex);
+				return jsEngine.Evaluate<T>(expression);
 			}
 		}
 		#endregion

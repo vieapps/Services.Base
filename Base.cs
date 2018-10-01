@@ -21,7 +21,6 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.DependencyInjection;
 
 using net.vieapps.Components.Utility;
 using net.vieapps.Components.Security;
@@ -1152,63 +1151,59 @@ namespace net.vieapps.Services
 		#endregion
 
 		#region Evaluate an expression
-		/// <summary>
-		/// Builds the Javascript expression for evaluating
-		/// </summary>
-		/// <param name="expression">The string that presents Javascript for evaluating, the expression must end by statement 'return ..;' to return a value</param>
-		/// <param name="current">The object that presents information that use to fill into 'this' instance</param>
-		/// <param name="requestInfo">The object that presents the requesting information to create meta data like '_requestInfo', '_session', '_user' of 'this' instance</param>
-		/// <param name="additional">The object that presents the additional information to create meta data '_additional' of 'this' instance</param>
-		/// <returns>The string that presents well-form expression for evaluating</returns>
-		protected string BuildExpression(string expression = null, object current = null, RequestInfo requestInfo = null, object additional = null)
-		{
-			var currentObj = current != null
-				? (current is JToken) ? (current as JToken).ToString(Formatting.None) : current.ToJson().ToString(Formatting.None)
-				: "{}";
-			var requestInfoObj = requestInfo != null
-				? requestInfo.ToJson().ToString(Formatting.None)
-				: "{}";
-			var additionalObj = additional != null
-				? (additional is JToken) ? (additional as JToken).ToString(Formatting.None) : additional.ToJson().ToString(Formatting.None)
-				: "{}";
-			var jsexpression = @"(function () {
-				var obj = <<{{current}}>>;
-				obj['__requestInfo'] = <<{{requestInfo}}>>;
-				obj['__additional'] = <<{{additional}}>>;
-				obj['__evaluate'] = function () {
-					" + (expression ?? "return undefined;") + @"
-				};
-				return obj.__evaluate();
-			})();";
-			jsexpression = jsexpression.Replace("\t", "").Replace("\r", "").Replace("\n", " ");
-			jsexpression = jsexpression.Replace("<<{{current}}>>", currentObj);
-			jsexpression = jsexpression.Replace("<<{{requestInfo}}>>", requestInfoObj);
-			jsexpression = jsexpression.Replace("<<{{additional}}>>", additionalObj);
-			return jsexpression;
-		}
+		string GetExpression(string expression, object current)
+			=> "(function (__object) { __object['__evaluate'] = function () {\n"
+				+ (string.IsNullOrWhiteSpace(expression) || expression.Trim().Equals(";") ? "return undefined;" : expression.Trim())
+				+ "\n}; return __object.__evaluate(); })(" + (current != null ? (current is JToken ? current as JToken : current.GetType().IsPrimitiveType() ? new JObject { { "__value", new JValue(current) } } : current.ToJson()).ToString(Formatting.None) : "{}") + ");";
 
 		/// <summary>
 		/// Evaluates an Javascript expression
 		/// </summary>
 		/// <param name="expression">The string that presents Javascript for evaluating, the expression must end by statement 'return ..;' to return a value</param>
-		/// <param name="current">The object that presents information that use to fill into 'this' instance</param>
-		/// <param name="requestInfo">The object that presents the requesting information to create meta data like '_requestInfo', '_session', '_user' of 'this' instance</param>
-		/// <param name="additional">The object that presents the additional information to create meta data '_additional' of 'this' instance</param>
+		/// <param name="current">The object that presents information of current processing object - '__current' global variable and 'this' instance is bond to JSON stringify</param>
+		/// <param name="requestInfo">The object that presents the information - '__requestInfo' global variable</param>
+		/// <param name="embedObjects">The collection that presents objects are embed as global variables</param>
+		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
 		/// <returns>The object the presents the value that evaluated by the expression</returns>
-		protected object EvaluateExpression(string expression, object current, RequestInfo requestInfo, object additional = null)
-			=> Extensions.Evaluate(this.BuildExpression(expression, current, requestInfo, additional));
+		protected object EvaluateExpression(string expression, object current, RequestInfo requestInfo, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
+			=> Extensions.Evaluate(
+				this.GetExpression(expression, current),
+				new Dictionary<string, object>(embedObjects ?? new Dictionary<string, object>())
+				{
+					["__current"] = current,
+					["__requestInfo"] = requestInfo
+				},
+				new Dictionary<string, Type>(embedTypes ?? new Dictionary<string, Type>())
+				{
+					[(current ?? new object()).GetType().GetTypeName(true)] = (current ?? new object()).GetType(),
+					["RequestInfo"] = typeof(RequestInfo)
+				}
+			);
 
 		/// <summary>
 		/// Evaluates an Javascript expression
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
 		/// <param name="expression">The string that presents Javascript for evaluating, the expression must end by statement 'return ..;' to return a value</param>
-		/// <param name="current">The object that presents information that use to fill into 'this' instance</param>
-		/// <param name="requestInfo">The object that presents the requesting information to create meta data like '_requestInfo', '_session', '_user' of 'this' instance</param>
-		/// <param name="additional">The object that presents the additional information to create meta data '_additional' of 'this' instance</param>
+		/// <param name="current">The object that presents information of current processing object - '__current' global variable and 'this' instance is bond to JSON stringify</param>
+		/// <param name="requestInfo">The object that presents the information - '__requestInfo' global variable</param>
+		/// <param name="embedObjects">The collection that presents objects are embed as global variables</param>
+		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
 		/// <returns>The object the presents the value that evaluated by the expression</returns>
-		protected T EvaluateExpression<T>(string expression, object current, RequestInfo requestInfo, object additional = null)
-			=> Extensions.Evaluate<T>(this.BuildExpression(expression, current, requestInfo, additional));
+		protected T EvaluateExpression<T>(string expression, object current, RequestInfo requestInfo, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
+			=> Extensions.Evaluate<T>(
+				this.GetExpression(expression, current),
+				new Dictionary<string, object>(embedObjects ?? new Dictionary<string, object>())
+				{
+					["__current"] = current,
+					["__requestInfo"] = requestInfo
+				},
+				new Dictionary<string, Type>(embedTypes ?? new Dictionary<string, Type>())
+				{
+					[(current ?? new object()).GetType().GetTypeName(true)] = (current ?? new object()).GetType(),
+					["RequestInfo"] = typeof(RequestInfo)
+				}
+			);
 		#endregion
 
 		#region Start & Stop
