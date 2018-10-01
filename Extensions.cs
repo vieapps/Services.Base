@@ -19,10 +19,10 @@ using WampSharp.V2.Core.Contracts;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
+using JSPool;
 using JavaScriptEngineSwitcher.Core;
 using JavaScriptEngineSwitcher.ChakraCore;
 using JavaScriptEngineSwitcher.Vroom;
-using JSPool;
 
 using net.vieapps.Components.Utility;
 using net.vieapps.Components.Security;
@@ -38,12 +38,12 @@ namespace net.vieapps.Services
 	{
 		static Extensions()
 		{
-			JsEngineSwitcher.Current.EngineFactories.AddVroom(new VroomSettings()).AddChakraCore(new ChakraCoreSettings
+			JsEngineSwitcher.Current.EngineFactories.AddVroom().AddChakraCore(new ChakraCoreSettings
 			{
 				DisableEval = true,
 				EnableExperimentalFeatures = true
 			});
-			JsEngineSwitcher.Current.DefaultEngineName = UtilityService.GetAppSetting("JsEngine:DefaultEngineName", "Chakra").IsContains("V8")
+			JsEngineSwitcher.Current.DefaultEngineName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && UtilityService.GetAppSetting("JsEngine:DefaultEngineName", "Chakra").IsContains("V8")
 				? VroomJsEngine.EngineName
 				: ChakraCoreJsEngine.EngineName;
 			Extensions.JsEnginePool = new JsPool(new JsPoolConfig
@@ -1328,19 +1328,24 @@ namespace net.vieapps.Services
 		#region Evaluate Javascript expression
 		static JsPool JsEnginePool { get; }
 
+		internal static T JsCastAs<T>(object jsValue)
+			=> jsValue == null || jsValue is Undefined
+				? default(T)
+				: jsValue is string && typeof(T).Equals(typeof(DateTime)) && (jsValue as string).Contains("T") && (jsValue as string).Contains("Z") && DateTime.TryParse(jsValue as string, out DateTime datetime)
+					? datetime.CastAs<T>()
+					: jsValue.CastAs<T>();
+
 		/// <summary>
 		/// Gets an Javascript engine
 		/// </summary>
-		/// <param name="embedObjects">The collection that presents objects are embed as global variables</param>
+		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
 		/// <returns></returns>
 		public static PooledJsEngine GetJsEngine(IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 		{
 			var jsEngine = Extensions.JsEnginePool.GetEngine();
-			if (embedObjects != null)
-				embedObjects.ForEach(kvp => jsEngine.EmbedHostObject(kvp.Key, kvp.Value));
-			if (embedTypes != null)
-				embedTypes.ForEach(kvp => jsEngine.EmbedHostType(kvp.Key, kvp.Value));
+			embedObjects?.ForEach(kvp => jsEngine.EmbedHostObject(kvp.Key, kvp.Value));
+			embedTypes?.ForEach(kvp => jsEngine.EmbedHostType(kvp.Key, kvp.Value));
 			return jsEngine;
 		}
 
@@ -1348,14 +1353,17 @@ namespace net.vieapps.Services
 		/// Evaluates an Javascript expression
 		/// </summary>
 		/// <param name="expression">The string that presents an Javascript expression for evaluating</param>
-		/// <param name="embedObjects">The collection that presents objects are embed as global variables</param>
+		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
-		/// <returns></returns>
-		public static object Evaluate(string expression, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
+		/// <returns>The object that presents returning value from .NET objects or Javascript object (only supported and converted to Undefied, Boolean, Int, Double and String)</returns>
+		public static object JsEvaluate(string expression, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 		{
 			using (var jsEngine = Extensions.GetJsEngine(embedObjects, embedTypes))
 			{
-				return jsEngine.Evaluate(expression);
+				var jsValue = jsEngine.Evaluate(expression);
+				return jsValue != null && jsValue is Undefined
+					? null
+					: jsValue;
 			}
 		}
 
@@ -1364,16 +1372,11 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
 		/// <param name="expression">The string that presents an Javascript expression for evaluating</param>
-		/// <param name="embedObjects">The collection that presents objects are embed as global variables</param>
+		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
-		/// <returns></returns>
-		public static T Evaluate<T>(string expression, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
-		{
-			using (var jsEngine = Extensions.GetJsEngine(embedObjects, embedTypes))
-			{
-				return jsEngine.Evaluate<T>(expression);
-			}
-		}
+		/// <returns>The object that presents returning value from .NET objects or Javascript object</returns>
+		public static T JsEvaluate<T>(string expression, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
+			=> Extensions.JsCastAs<T>(Extensions.JsEvaluate(expression, embedObjects, embedTypes));
 		#endregion
 
 	}

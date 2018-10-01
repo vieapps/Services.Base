@@ -1151,23 +1151,21 @@ namespace net.vieapps.Services
 		#endregion
 
 		#region Evaluate an expression
-		string GetExpression(string expression, object current)
-			=> "(function (__object) { __object['__evaluate'] = function () {\n"
-				+ (string.IsNullOrWhiteSpace(expression) || expression.Trim().Equals(";") ? "return undefined;" : expression.Trim())
-				+ "\n}; return __object.__evaluate(); })(" + (current != null ? (current is JToken ? current as JToken : current.GetType().IsPrimitiveType() ? new JObject { { "__value", new JValue(current) } } : current.ToJson()).ToString(Formatting.None) : "{}") + ");";
-
 		/// <summary>
 		/// Evaluates an Javascript expression
 		/// </summary>
-		/// <param name="expression">The string that presents Javascript for evaluating, the expression must end by statement 'return ..;' to return a value</param>
+		/// <param name="expression">The string that presents an Javascript expression for evaluating, the expression must end by statement 'return ..;' to return a value</param>
 		/// <param name="current">The object that presents information of current processing object - '__current' global variable and 'this' instance is bond to JSON stringify</param>
 		/// <param name="requestInfo">The object that presents the information - '__requestInfo' global variable</param>
-		/// <param name="embedObjects">The collection that presents objects are embed as global variables</param>
+		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
 		/// <returns>The object the presents the value that evaluated by the expression</returns>
 		protected object EvaluateExpression(string expression, object current, RequestInfo requestInfo, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
-			=> Extensions.Evaluate(
-				this.GetExpression(expression, current),
+			=> Extensions.JsEvaluate(
+				"(function(__object){__object['__evaluate']=function(){" + Environment.NewLine
+				+ (string.IsNullOrWhiteSpace(expression) || expression.Trim().Equals(";") ? "return undefined;" : expression.Trim()) + Environment.NewLine
+				+ "};return __object.__evaluate();})"
+				+ "(" + (current != null ? (current is JToken ? current as JToken : current.GetType().IsPrimitiveType() ? new JObject { { "__value", new JValue(current) } } : current.ToJson()).ToString(Formatting.None) : "{}") + ");",
 				new Dictionary<string, object>(embedObjects ?? new Dictionary<string, object>())
 				{
 					["__current"] = current,
@@ -1184,26 +1182,14 @@ namespace net.vieapps.Services
 		/// Evaluates an Javascript expression
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
-		/// <param name="expression">The string that presents Javascript for evaluating, the expression must end by statement 'return ..;' to return a value</param>
+		/// <param name="expression">The string that presents an Javascript expression for evaluating, the expression must end by statement 'return ..;' to return a value</param>
 		/// <param name="current">The object that presents information of current processing object - '__current' global variable and 'this' instance is bond to JSON stringify</param>
 		/// <param name="requestInfo">The object that presents the information - '__requestInfo' global variable</param>
-		/// <param name="embedObjects">The collection that presents objects are embed as global variables</param>
+		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
 		/// <returns>The object the presents the value that evaluated by the expression</returns>
 		protected T EvaluateExpression<T>(string expression, object current, RequestInfo requestInfo, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
-			=> Extensions.Evaluate<T>(
-				this.GetExpression(expression, current),
-				new Dictionary<string, object>(embedObjects ?? new Dictionary<string, object>())
-				{
-					["__current"] = current,
-					["__requestInfo"] = requestInfo
-				},
-				new Dictionary<string, Type>(embedTypes ?? new Dictionary<string, Type>())
-				{
-					[(current ?? new object()).GetType().GetTypeName(true)] = (current ?? new object()).GetType(),
-					["RequestInfo"] = typeof(RequestInfo)
-				}
-			);
+			=> Extensions.JsCastAs<T>(this.EvaluateExpression(expression, current, requestInfo, embedObjects, embedTypes));
 		#endregion
 
 		#region Start & Stop
