@@ -1331,11 +1331,8 @@ namespace net.vieapps.Services
 						var date = new Date(value);
 						return new DateTime(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), date.getMinutes(), date.getSeconds(), date.getMilliseconds());
 					}
-					else if (typeof value === 'number') {
-						return new DateTime(value);
-					}
 					else {
-						return new DateTime();
+						return typeof value === 'number' ? new DateTime(value) : new DateTime();
 					}
 				}
 				else {
