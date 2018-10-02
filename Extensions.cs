@@ -1316,17 +1316,59 @@ namespace net.vieapps.Services
 				DisableEval = true,
 				EnableExperimentalFeatures = true
 			});
+
 			Extensions.JsEnginePool = new JsPool(new JsPoolConfig
 			{
 				MaxEngines = UtilityService.GetAppSetting("JsEngine:MaxEngines", "25").CastAs<int>(),
 				MaxUsagesPerEngine = UtilityService.GetAppSetting("JsEngine:MaxUsagesPerEngine", "100").CastAs<int>(),
 				GetEngineTimeout = TimeSpan.FromSeconds(UtilityService.GetAppSetting("JsEngine:GetEngineTimeout", "3").CastAs<int>())
 			});
+
+			Extensions.JsFunctions = @"
+			function __toDateTime(value) {
+				if (value !== undefined) {
+					if (value instanceof Date || (typeof value === 'string' && value.trim() !== '')) {
+						var date = new Date(value);
+						return new DateTime(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), date.getMinutes(), date.getSeconds(), date.getMilliseconds());
+					}
+					else if (typeof value === 'number') {
+						return new DateTime(value);
+					}
+					else {
+						return new DateTime();
+					}
+				}
+				else {
+					return new DateTime();
+				}
+			}
+			function __now() {
+				return new Date().toJSON().replace('T', ' ').replace('Z', '').replace(/\-/g, '/');
+			}
+			function __today() {
+				var date = new Date().toJSON();
+				return date.substr(0, date.indexOf('T')).replace(/\-/g, '/');
+			}
+			function __getAnsiUri(value, lowerCase) {
+				return value === undefined || typeof value !== 'string' || value.trim() === '' ? '' : __GetAnsiUri(value, lowerCase !== undefined ? lowerCase : true);
+			}
+			".Replace("\t", "").Replace("\r", "").Replace("\n", " ");
 		}
 
 		static JsPool JsEnginePool { get; }
 
-		internal static T JsCast<T>(object jsValue)
+		/// <summary>
+		/// Gets the common Javascript functions
+		/// </summary>
+		public static string JsFunctions { get; }
+
+		/// <summary>
+		/// Casts the returning value of an Javascript expression
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="jsValue"></param>
+		/// <returns></returns>
+		public static T JsCast<T>(object jsValue)
 			=> jsValue == null || jsValue is Undefined
 				? default(T)
 				: jsValue is string && typeof(T).Equals(typeof(DateTime)) && (jsValue as string).Contains("T") && (jsValue as string).Contains("Z") && DateTime.TryParse(jsValue as string, out DateTime datetime)
@@ -1334,15 +1376,27 @@ namespace net.vieapps.Services
 					: jsValue.CastAs<T>();
 
 		/// <summary>
-		/// Prepare an Javascript engine
+		/// Prepare the Javascript engine
 		/// </summary>
 		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
 		/// <returns></returns>
 		public static IJsEngine PrepareJsEngine(this IJsEngine jsEngine, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 		{
-			embedObjects?.ForEach(kvp => jsEngine.EmbedHostObject(kvp.Key, kvp.Value));
-			embedTypes?.ForEach(kvp => jsEngine.EmbedHostType(kvp.Key, kvp.Value));
+			Func<DateTime> fn_Now = () => DateTime.Now;
+			Func<string, bool, string> fn_GetAnsiUri = (name, lowerCase) => name.GetANSIUri(lowerCase);
+
+			new Dictionary<string, object>(embedObjects ?? new Dictionary<string, object>())
+			{
+				["__Now"] = fn_Now,
+				["__GetAnsiUri"] = fn_GetAnsiUri,
+			}.ForEach(kvp => jsEngine.EmbedHostObject(kvp.Key, kvp.Value));
+
+			new Dictionary<string, Type>(embedTypes ?? new Dictionary<string, Type>())
+			{
+				["Uri"] = typeof(Uri),
+				["DateTime"] = typeof(DateTime),
+			}.ForEach(kvp => jsEngine.EmbedHostType(kvp.Key, kvp.Value));
 			return jsEngine;
 		}
 
@@ -1380,7 +1434,7 @@ namespace net.vieapps.Services
 			=> Extensions.JsCast<T>(jsEngine.JsEvaluate(expression));
 
 		/// <summary>
-		/// Prepare an Javascript engine
+		/// Prepare the Javascript engine
 		/// </summary>
 		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>

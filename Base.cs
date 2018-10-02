@@ -1173,8 +1173,6 @@ namespace net.vieapps.Services
 		protected IDictionary<string, Type> GetJsEmbedTypes(IDictionary<string, Type> embedTypes = null)
 			=> new Dictionary<string, Type>(embedTypes ?? new Dictionary<string, Type>())
 			{
-				["Uri"] = typeof(Uri),
-				["DateTime"] = typeof(DateTime),
 				["RequestInfo"] = typeof(RequestInfo),
 				["Session"] = typeof(Session),
 				["User"] = typeof(User),
@@ -1210,14 +1208,22 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo">The object that presents the information - '__requestInfoJSON' global variable</param>
 		/// <returns></returns>
 		protected string GetJsExpression(string expression, object current, RequestInfo requestInfo)
-		{
-			var jsExpression = "(function(__object){__object['__evaluate']=function(){" + Environment.NewLine
+			=> Extensions.JsFunctions + Environment.NewLine
+				+ @"
+				function now() {
+					return __now();
+				}
+				function today() {
+					return __today();
+				}".Replace("\t", "").Replace("\r", "").Replace("\n", " ") + Environment.NewLine
+				+ "var __requestInfoJSON = " + (requestInfo ?? new RequestInfo()).ToJson() + ";" + Environment.NewLine
+				+ "(function(__object){__object['__evaluate']=function(){" + Environment.NewLine
 				+ (string.IsNullOrWhiteSpace(expression) || expression.Trim().Equals(";")
 					? "return undefined;"
 					: expression.StartsWith("@")
 						? $"return {expression.Right(expression.Length - 1).Trim() + (expression.Trim().EndsWith("();") || expression.Trim().EndsWith("()") ? "" : "();")}"
 						: expression.Trim()) + Environment.NewLine
-				+ "};return __object.__evaluate();})"
+				+ "};return __object.__evaluate();})" + Environment.NewLine
 				+ "(" + (current != null
 					? (current is JToken
 						? current as JToken
@@ -1230,197 +1236,6 @@ namespace net.vieapps.Services
 					).ToString(Formatting.None)
 					: "{}")
 				+ ");";
-
-			var jsFunctions = @"
-			function __toDateTime(value) {
-				if (value !== undefined) {
-					if (typeof value === 'string' && value.trim() !== '') {
-						var date = new Date(value);
-						return new DateTime(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), date.getMinutes(), date.getSeconds(), date.getMilliseconds());
-					}
-					else if (typeof value === 'number') {
-						return new DateTime(value);
-					}
-					else {
-						return new DateTime();
-					}
-				}
-				else {
-					return new DateTime();
-				}
-			}
-			function __now() {
-				return new Date().toJSON().replace('T', ' ').replace('Z', '').replace(/\-/g, '/');
-			}
-			function now() {
-				return __now();
-			}
-			function __today() {
-				var date = new Date().toJSON();
-				return date.substr(0, date.indexOf('T')).replace(/\-/g, '/');
-			}
-			function today() {
-				return __today();
-			}
-			function __toANSI(input, asURI) {
-				if (input === undefined || input.trim() === '') {
-					return '';
-				}
-				var result = input.trim();
-				result = result.replace(/\u00E1/g, 'a');
-				result = result.replace(/\u00C1/g, 'A');
-				result = result.replace(/\u00E0/g, 'a');
-				result = result.replace(/\u00C0/g, 'A');
-				result = result.replace(/\u1EA3/g, 'a');
-				result = result.replace(/\u1EA2/g, 'A');
-				result = result.replace(/\u00E3/g, 'a');
-				result = result.replace(/\u00C3/g, 'A');
-				result = result.replace(/\u1EA1/g, 'a');
-				result = result.replace(/\u1EA0/g, 'A');
-				result = result.replace(/\u0103/g, 'a');
-				result = result.replace(/\u0102/g, 'A');
-				result = result.replace(/\u1EAF/g, 'a');
-				result = result.replace(/\u1EAE/g, 'A');
-				result = result.replace(/\u1EB1/g, 'a');
-				result = result.replace(/\u1EB0/g, 'A');
-				result = result.replace(/\u1EB3/g, 'a');
-				result = result.replace(/\u1EB2/g, 'A');
-				result = result.replace(/\u1EB5/g, 'a');
-				result = result.replace(/\u1EB4/g, 'A');
-				result = result.replace(/\u1EB7/g, 'a');
-				result = result.replace(/\u1EB6/g, 'A');
-				result = result.replace(/\u00E2/g, 'a');
-				result = result.replace(/\u00C2/g, 'A');
-				result = result.replace(/\u1EA5/g, 'a');
-				result = result.replace(/\u1EA4/g, 'A');
-				result = result.replace(/\u1EA7/g, 'a');
-				result = result.replace(/\u1EA6/g, 'A');
-				result = result.replace(/\u1EA9/g, 'a');
-				result = result.replace(/\u1EA8/g, 'A');
-				result = result.replace(/\u1EAB/g, 'a');
-				result = result.replace(/\u1EAA/g, 'A');
-				result = result.replace(/\u1EAD/g, 'a');
-				result = result.replace(/\u1EAC/g, 'A');
-				result = result.replace(/\u00E9/g, 'e');
-				result = result.replace(/\u00C9/g, 'E');
-				result = result.replace(/\u00E8/g, 'e');
-				result = result.replace(/\u00C8/g, 'E');
-				result = result.replace(/\u1EBB/g, 'e');
-				result = result.replace(/\u1EBA/g, 'E');
-				result = result.replace(/\u1EBD/g, 'e');
-				result = result.replace(/\u1EBC/g, 'E');
-				result = result.replace(/\u1EB9/g, 'e');
-				result = result.replace(/\u1EB8/g, 'E');
-				result = result.replace(/\u00EA/g, 'e');
-				result = result.replace(/\u00CA/g, 'E');
-				result = result.replace(/\u1EBF/g, 'e');
-				result = result.replace(/\u1EBE/g, 'E');
-				result = result.replace(/\u1EC1/g, 'e');
-				result = result.replace(/\u1EC0/g, 'E');
-				result = result.replace(/\u1EC3/g, 'e');
-				result = result.replace(/\u1EC2/g, 'E');
-				result = result.replace(/\u1EC5/g, 'e');
-				result = result.replace(/\u1EC4/g, 'E');
-				result = result.replace(/\u1EC7/g, 'e');
-				result = result.replace(/\u1EC6/g, 'E');
-				result = result.replace(/\u00ED/g, 'i');
-				result = result.replace(/\u00CD/g, 'I');
-				result = result.replace(/\u00EC/g, 'i');
-				result = result.replace(/\u00CC/g, 'I');
-				result = result.replace(/\u1EC9/g, 'i');
-				result = result.replace(/\u1EC8/g, 'I');
-				result = result.replace(/\u0129/g, 'i');
-				result = result.replace(/\u0128/g, 'I');
-				result = result.replace(/\u1ECB/g, 'i');
-				result = result.replace(/\u1ECA/g, 'I');
-				result = result.replace(/\u00F3/g, 'o');
-				result = result.replace(/\u00D3/g, 'O');
-				result = result.replace(/\u00F2/g, 'o');
-				result = result.replace(/\u00D2/g, 'O');
-				result = result.replace(/\u1ECF/g, 'o');
-				result = result.replace(/\u1ECE/g, 'O');
-				result = result.replace(/\u00F5/g, 'o');
-				result = result.replace(/\u00D5/g, 'O');
-				result = result.replace(/\u1ECD/g, 'o');
-				result = result.replace(/\u1ECC/g, 'O');
-				result = result.replace(/\u01A1/g, 'o');
-				result = result.replace(/\u01A0/g, 'O');
-				result = result.replace(/\u1EDB/g, 'o');
-				result = result.replace(/\u1EDA/g, 'O');
-				result = result.replace(/\u1EDD/g, 'o');
-				result = result.replace(/\u1EDC/g, 'O');
-				result = result.replace(/\u1EDF/g, 'o');
-				result = result.replace(/\u1EDE/g, 'O');
-				result = result.replace(/\u1EE1/g, 'o');
-				result = result.replace(/\u1EE0/g, 'O');
-				result = result.replace(/\u1EE3/g, 'o');
-				result = result.replace(/\u1EE2/g, 'O');
-				result = result.replace(/\u00F4/g, 'o');
-				result = result.replace(/\u00D4/g, 'O');
-				result = result.replace(/\u1ED1/g, 'o');
-				result = result.replace(/\u1ED0/g, 'O');
-				result = result.replace(/\u1ED3/g, 'o');
-				result = result.replace(/\u1ED2/g, 'O');
-				result = result.replace(/\u1ED5/g, 'o');
-				result = result.replace(/\u1ED4/g, 'O');
-				result = result.replace(/\u1ED7/g, 'o');
-				result = result.replace(/\u1ED6/g, 'O');
-				result = result.replace(/\u1ED9/g, 'o');
-				result = result.replace(/\u1ED8/g, 'O');
-				result = result.replace(/\u00FA/g, 'u');
-				result = result.replace(/\u00DA/g, 'U');
-				result = result.replace(/\u00F9/g, 'u');
-				result = result.replace(/\u00D9/g, 'U');
-				result = result.replace(/\u1EE7/g, 'u');
-				result = result.replace(/\u1EE6/g, 'U');
-				result = result.replace(/\u0169/g, 'u');
-				result = result.replace(/\u0168/g, 'U');
-				result = result.replace(/\u1EE5/g, 'u');
-				result = result.replace(/\u1EE4/g, 'U');
-				result = result.replace(/\u01B0/g, 'u');
-				result = result.replace(/\u01AF/g, 'U');
-				result = result.replace(/\u1EE9/g, 'u');
-				result = result.replace(/\u1EE8/g, 'U');
-				result = result.replace(/\u1EEB/g, 'u');
-				result = result.replace(/\u1EEA/g, 'U');
-				result = result.replace(/\u1EED/g, 'u');
-				result = result.replace(/\u1EEC/g, 'U');
-				result = result.replace(/\u1EEF/g, 'u');
-				result = result.replace(/\u1EEE/g, 'U');
-				result = result.replace(/\u1EF1/g, 'u');
-				result = result.replace(/\u1EF0/g, 'U');
-				result = result.replace(/\u00FD/g, 'y');
-				result = result.replace(/\u00DD/g, 'Y');
-				result = result.replace(/\u1EF3/g, 'y');
-				result = result.replace(/\u1EF2/g, 'Y');
-				result = result.replace(/\u1EF7/g, 'y');
-				result = result.replace(/\u1EF6/g, 'Y');
-				result = result.replace(/\u1EF9/g, 'y');
-				result = result.replace(/\u1EF8/g, 'Y');
-				result = result.replace(/\u1EF5/g, 'y');
-				result = result.replace(/\u1EF4/g, 'Y');
-				result = result.replace(/\u00D0/g, 'D');
-				result = result.replace(/\u0110/g, 'D');
-				result = result.replace(/\u0111/g, 'd');
-				result = result.replace(/\s\s+/g, ' ');
-				if (asURI === true) {
-					result = result.replace(/\s/g, '-').replace(/\&/g, '').replace(/\?/g, '');
-					result = result.replace(/\+/g, '').replace(/\//g, '-').replace(/\'/g, '');
-					result = result.replace(/\\/g, '-').replace(/\=/g, '').replace(/\,/g, '').replace(/\./g, '-');
-					result = result.replace(/\(/g, '').replace(/\)/g, '').replace(/\#/g, '').replace(/\%/g, '');
-					result = result.replace(/\`/g, '').replace(/\!/g, '').replace(/\@/g, '').replace(/\$/g, '');
-					result = result.replace(/\>/g, '').replace(/\</g, '').replace(/\{/g, '').replace(/\}/g, '');
-					result = result.replace(/\[/g, '').replace(/\]/g, '').replace(/\*/g, '').replace(/\^/g, '');
-					result = result.replace(/\:/g, '').replace(/\;/g, '').replace(/\|/g, '').replace(/\'/g, '');
-					result = result.replace(/\_\-\_/g, '-').replace(/\-\_\-/g, '-').replace(/\-\-\-/g, '-').replace(/\-\-/g, '-');
-					result = result.toLowerCase();
-				}
-				return result.trim();
-			}
-			var __requestInfoJSON = " + (requestInfo ?? new RequestInfo()).ToJson() + ";";
-
-			return jsFunctions.Replace("\t", "") + Environment.NewLine + jsExpression;
-		}
 
 		/// <summary>
 		/// Evaluates an Javascript expression
