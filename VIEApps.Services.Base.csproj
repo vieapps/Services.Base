@@ -9,10 +9,10 @@
 		<Company>VIEApps.net</Company>
 		<Product>VIEApps NGX</Product>
 		<Copyright>© 2018 VIEApps.net</Copyright>
-		<Version>10.2.2.1809</Version>
-		<AssemblyVersion>10.2.2.1809</AssemblyVersion>
-		<FileVersion>10.2.2.1809</FileVersion>
-		<InformationalVersion>v10.2.netstandard-2+rev:2018.09.30</InformationalVersion>
+		<Version>10.2.1810.1</Version>
+		<AssemblyVersion>10.2.1810.1</AssemblyVersion>
+		<FileVersion>10.2.1810.1</FileVersion>
+		<InformationalVersion>v10.2.netstandard-2+rev:2018.10.08</InformationalVersion>
 		<GeneratePackageOnBuild>false</GeneratePackageOnBuild>
 		<PackageId>VIEApps.Services.Base</PackageId>
 		<PackageTags>services;microservices;vieapps;vieapps.components;vieapps.services;vieapps.microservices</PackageTags>
@@ -42,8 +42,9 @@
 		<PackageReference Include="JavaScriptEngineSwitcher.ChakraCore" Version="3.0.0-rc1" />
 		<PackageReference Include="JSPool" Version="4.0.0-beta1" />
 		<PackageReference Include="MsgPack.Cli" Version="1.0.0" />
-		<PackageReference Include="VIEApps.Components.Repository" Version="10.2.6.1809" />
-		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.2.6.1809" />
+		<PackageReference Include="System.Reactive" Version="4.1.1" />
+		<PackageReference Include="VIEApps.Components.Repository" Version="10.2.1810.1" />
+		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.2.1810.1" />
 		<PackageReference Include="WampSharp.Default.Client" Version="18.9.3" />
 	</ItemGroup>
 
