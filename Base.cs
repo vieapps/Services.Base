@@ -1458,7 +1458,20 @@ namespace net.vieapps.Services
 									&& !n.Name.IsStartsWith("Newtonsoft") && !n.Name.IsStartsWith("WampSharp") && !n.Name.IsStartsWith("Castle.") && !n.Name.IsStartsWith("StackExchange.")
 									&& !n.Name.IsStartsWith("MongoDB") && !n.Name.IsStartsWith("MySql") && !n.Name.IsStartsWith("Oracle") && !n.Name.IsStartsWith("Npgsql")
 									&& !n.Name.IsStartsWith("VIEApps.Components.") && !n.Name.IsStartsWith("VIEApps.Services.Base") && !n.Name.IsStartsWith("VIEApps.Services.APIGateway"))
-								.Select(n => Assembly.Load(n))
+								.Select(n =>
+								{
+									try
+									{
+										return Assembly.Load(n);
+									}
+									catch (Exception ex)
+									{
+										this.Logger.LogError($"Error occurred while loading an assembly [{n.Name}] => {ex.Message}", ex);
+										return null;
+									}
+								})
+								.Where(a => a != null)
+								.ToList()
 							),
 							(log, ex) =>
 							{
