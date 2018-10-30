@@ -20,7 +20,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="name">The string that presents name of the service (for registering with right URI)</param>
 		/// <param name="options">The options for registering (default is round robin)</param>
-		public RegistrationInterceptor(string name = null, RegisterOptions options = null) : base(options ?? new RegisterOptions() { Invoke = WampInvokePolicy.Roundrobin })
+		public RegistrationInterceptor(string name = null, RegisterOptions options = null) : base(options ?? new RegisterOptions { Invoke = WampInvokePolicy.Roundrobin })
 			=> this._name = name;
 
 		public override string GetProcedureUri(MethodInfo method)
