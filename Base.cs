@@ -215,7 +215,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected Task SendUpdateMessagesAsync(List<BaseMessage> messages, string deviceID, string excludedDeviceID = null, CancellationToken cancellationToken = default(CancellationToken))
-			=> this.RTUService.SendUpdateMessagesAsync(messages?.Select(message => message as IServiceMessage).ToList(), deviceID, excludedDeviceID, cancellationToken);
+			=> this.RTUService.SendUpdateMessagesAsync(messages?.Select(message => message as BaseMessage).ToList(), deviceID, excludedDeviceID, cancellationToken);
 
 		/// <summary>
 		/// Send a message for updating data of other service
@@ -244,7 +244,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected Task SendInterCommunicateMessagesAsync(string serviceName, List<BaseMessage> messages, CancellationToken cancellationToken = default(CancellationToken))
-			=> this.RTUService.SendInterCommunicateMessagesAsync(serviceName, messages?.Select(message => message as IServiceMessage).ToList(), cancellationToken);
+			=> this.RTUService.SendInterCommunicateMessagesAsync(serviceName, messages?.Select(message => message as BaseMessage).ToList(), cancellationToken);
 
 		/// <summary>
 		/// Send a message for communicating with  of other services
@@ -253,7 +253,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected Task SendInterCommunicateMessagesAsync(List<CommunicateMessage> messages, CancellationToken cancellationToken = default(CancellationToken))
-			=> this.RTUService.SendInterCommunicateMessagesAsync(messages?.Select(message => message as ICommunicateMessage).ToList(), cancellationToken);
+			=> this.RTUService.SendInterCommunicateMessagesAsync(messages?.Select(message => message as CommunicateMessage).ToList(), cancellationToken);
 		#endregion
 
 		#region Send email & web hook messages
@@ -1571,9 +1571,6 @@ namespace net.vieapps.Services
 		protected ServiceBase() { }
 
 		~ServiceBase() => this.Dispose();
-
-		Task<JToken> IService.ProcessRequestAsync(IRequestInfo requestInfo, CancellationToken cancellationToken) => this.ProcessRequestAsync(requestInfo is RequestInfo ? requestInfo as RequestInfo : new RequestInfo(requestInfo), cancellationToken);
-		Task<JToken> IUniqueService.ProcessRequestAsync(IRequestInfo requestInfo, CancellationToken cancellationToken) => this.ProcessRequestAsync(requestInfo is RequestInfo ? requestInfo as RequestInfo : new RequestInfo(requestInfo), cancellationToken);
 		#endregion
 
 	}
