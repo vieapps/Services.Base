@@ -16,7 +16,7 @@ namespace net.vieapps.Services
 	/// Presents the requesting information of a service
 	/// </summary>
 	[Serializable]
-	public class RequestInfo
+	public class RequestInfo : IRequestInfo
 	{
 		/// <summary>
 		/// Initializes a requesting information
@@ -30,7 +30,7 @@ namespace net.vieapps.Services
 		/// <param name="body"></param>
 		/// <param name="extra"></param>
 		/// <param name="correlationID"></param>
-		public RequestInfo(Session session = null, string serviceName = null, string objectName = null, string verb = null, Dictionary<string, string> query = null, Dictionary<string, string> header = null, string body = null, Dictionary<string, string> extra = null, string correlationID = null)
+		public RequestInfo(ISession session = null, string serviceName = null, string objectName = null, string verb = null, Dictionary<string, string> query = null, Dictionary<string, string> header = null, string body = null, Dictionary<string, string> extra = null, string correlationID = null)
 		{
 			this.Session = new Session(session);
 			this.ServiceName = string.IsNullOrWhiteSpace(serviceName) ? "unknown" : serviceName.Trim().ToLower();
@@ -43,11 +43,19 @@ namespace net.vieapps.Services
 			this.CorrelationID = string.IsNullOrWhiteSpace(correlationID) ? UtilityService.NewUUID : correlationID;
 		}
 
+		public RequestInfo(IRequestInfo requestInfo) : this(requestInfo?.Session, requestInfo?.ServiceName, requestInfo?.ObjectName, requestInfo?.Verb, requestInfo?.Query, requestInfo?.Header, requestInfo?.Body, requestInfo?.Extra, requestInfo?.CorrelationID) { }
+
 		#region Properties
 		/// <summary>
 		/// Gets or sets the session
 		/// </summary>
 		public Session Session { get; set; }
+
+		ISession IRequestInfo.Session
+		{
+			get => this.Session;
+			set => this.Session = value as Session;
+		}
 
 		/// <summary>
 		/// Gets or sets the name of service

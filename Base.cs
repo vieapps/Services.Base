@@ -33,7 +33,7 @@ namespace net.vieapps.Services
 	/// <summary>
 	/// Base of all business services
 	/// </summary>
-	public abstract class ServiceBase : IService, IServiceComponent, IUniqueService, IDisposable
+	public abstract class ServiceBase : IService, IUniqueService, IServiceComponent, IDisposable
 	{
 		/// <summary>
 		/// Gets the name for working with related URIs
@@ -215,7 +215,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected Task SendUpdateMessagesAsync(List<BaseMessage> messages, string deviceID, string excludedDeviceID = null, CancellationToken cancellationToken = default(CancellationToken))
-			=> this.RTUService.SendUpdateMessagesAsync(messages, deviceID, excludedDeviceID, cancellationToken);
+			=> this.RTUService.SendUpdateMessagesAsync(messages?.Select(message => message as IServiceMessage).ToList(), deviceID, excludedDeviceID, cancellationToken);
 
 		/// <summary>
 		/// Send a message for updating data of other service
@@ -244,7 +244,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected Task SendInterCommunicateMessagesAsync(string serviceName, List<BaseMessage> messages, CancellationToken cancellationToken = default(CancellationToken))
-			=> this.RTUService.SendInterCommunicateMessagesAsync(serviceName, messages, cancellationToken);
+			=> this.RTUService.SendInterCommunicateMessagesAsync(serviceName, messages?.Select(message => message as IServiceMessage).ToList(), cancellationToken);
 
 		/// <summary>
 		/// Send a message for communicating with  of other services
@@ -253,7 +253,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected Task SendInterCommunicateMessagesAsync(List<CommunicateMessage> messages, CancellationToken cancellationToken = default(CancellationToken))
-			=> this.RTUService.SendInterCommunicateMessagesAsync(messages, cancellationToken);
+			=> this.RTUService.SendInterCommunicateMessagesAsync(messages?.Select(message => message as ICommunicateMessage).ToList(), cancellationToken);
 		#endregion
 
 		#region Send email & web hook messages
@@ -1298,10 +1298,10 @@ namespace net.vieapps.Services
 		/// <param name="onIncomingConnectionError"></param>
 		/// <param name="onOutgoingConnectionError"></param>
 		/// <returns></returns>
-		protected virtual async Task StartAsync(Func<ServiceBase, Task> onRegisterSuccessAsync = null, Func<Exception, Task> onRegisterErrorAsync = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
+		protected virtual Task StartAsync(Func<ServiceBase, Task> onRegisterSuccessAsync = null, Func<Exception, Task> onRegisterErrorAsync = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
 		{
 			this.Logger.LogInformation($"Attempting to connect to WAMP router [{WAMPConnections.GetRouterStrInfo()}]");
-			await Task.WhenAll(
+			return Task.WhenAll(
 				WAMPConnections.OpenIncomingChannelAsync(
 					(sender, arguments) =>
 					{
@@ -1432,7 +1432,7 @@ namespace net.vieapps.Services
 						}
 					}
 				)
-			).ConfigureAwait(false);
+			);
 		}
 
 		/// <summary>
@@ -1441,10 +1441,10 @@ namespace net.vieapps.Services
 		/// <param name="args">The starting arguments</param>
 		/// <param name="initializeRepository">true to initialize the repository of the service</param>
 		/// <param name="nextAsync">The next action to run</param>
-		public virtual void Start(string[] args = null, bool initializeRepository = true, Func<ServiceBase, Task> nextAsync = null)
+		public virtual void Start(string[] args = null, bool initializeRepository = true, Func<IService, Task> nextAsync = null)
 		{
 			this.ServiceUniqueName = Extensions.GetUniqueName(this.ServiceName, args);
-			Task.Run(() => this.StartAsync(async (service) =>
+			Task.Run(() => this.StartAsync(async service =>
 			{
 				// initialize repository
 				if (initializeRepository)
@@ -1453,11 +1453,11 @@ namespace net.vieapps.Services
 						await Task.Delay(UtilityService.GetRandomNumber(123, 456)).ConfigureAwait(false);
 						this.Logger.LogInformation("Initializing the repository");
 						RepositoryStarter.Initialize(
-							new List<Assembly> { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
+							new[] { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
 								.Where(n => !n.Name.IsStartsWith("mscorlib") && !n.Name.IsStartsWith("System") && !n.Name.IsStartsWith("Microsoft") && !n.Name.IsEquals("NETStandard")
 									&& !n.Name.IsStartsWith("Newtonsoft") && !n.Name.IsStartsWith("WampSharp") && !n.Name.IsStartsWith("Castle.") && !n.Name.IsStartsWith("StackExchange.")
-									&& !n.Name.IsStartsWith("MongoDB") && !n.Name.IsStartsWith("MySql") && !n.Name.IsStartsWith("Oracle") && !n.Name.IsStartsWith("Npgsql")
-									&& !n.Name.IsStartsWith("VIEApps.Components.") && !n.Name.IsStartsWith("VIEApps.Services.Base") && !n.Name.IsStartsWith("VIEApps.Services.APIGateway")
+									&& !n.Name.IsStartsWith("MongoDB") && !n.Name.IsStartsWith("MySql") && !n.Name.IsStartsWith("Oracle") && !n.Name.IsStartsWith("Npgsql") && !n.Name.IsStartsWith("Serilog")
+									&& !n.Name.IsStartsWith("VIEApps.Components.") && !n.Name.IsStartsWith("VIEApps.Services.Abstractions") && !n.Name.IsStartsWith("VIEApps.Services.Base") && !n.Name.IsStartsWith("VIEApps.Services.APIGateway")
 								)
 								.Select(n =>
 								{
@@ -1570,10 +1570,10 @@ namespace net.vieapps.Services
 
 		protected ServiceBase() { }
 
-		~ServiceBase()
-		{
-			this.Dispose();
-		}
+		~ServiceBase() => this.Dispose();
+
+		Task<JToken> IService.ProcessRequestAsync(IRequestInfo requestInfo, CancellationToken cancellationToken) => this.ProcessRequestAsync(requestInfo is RequestInfo ? requestInfo as RequestInfo : new RequestInfo(requestInfo), cancellationToken);
+		Task<JToken> IUniqueService.ProcessRequestAsync(IRequestInfo requestInfo, CancellationToken cancellationToken) => this.ProcessRequestAsync(requestInfo is RequestInfo ? requestInfo as RequestInfo : new RequestInfo(requestInfo), cancellationToken);
 		#endregion
 
 	}

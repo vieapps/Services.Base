@@ -34,7 +34,7 @@ namespace net.vieapps.Services
 		/// <param name="name">The string that presents name of service (for marking URI)</param>
 		/// <returns></returns>
 		public static RegistrationInterceptor Create(string name = null, string invokePolicy = WampInvokePolicy.Roundrobin)
-			=> new RegistrationInterceptor(name, new RegisterOptions() { Invoke = invokePolicy });
+			=> new RegistrationInterceptor(name, new RegisterOptions { Invoke = invokePolicy });
 	}
 
 	//  --------------------------------------------------------------------------------------------

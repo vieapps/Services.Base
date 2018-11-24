@@ -9,17 +9,18 @@ namespace net.vieapps.Services
 	/// <summary>
 	/// Presents a message for updating information
 	/// </summary>
-	public class BaseMessage
+	[Serializable]
+	public class BaseMessage : IServiceMessage
 	{
 		public BaseMessage() { }
 
 		/// <summary>
-		/// Gets or sets type of update message
+		/// Gets or sets type of the message
 		/// </summary>
 		public string Type { get; set; } = "";
 
 		/// <summary>
-		/// Gets or sets data of update message
+		/// Gets or sets data of the message
 		/// </summary>
 		public JToken Data { get; set; } = new JObject();
 	}
@@ -29,9 +30,10 @@ namespace net.vieapps.Services
 	/// <summary>
 	/// Presents a message for updating via RTU (Real-Time Update)
 	/// </summary>
-	public class UpdateMessage : BaseMessage
+	[Serializable]
+	public class UpdateMessage : BaseMessage, IUpdateMessage
 	{
-		public UpdateMessage(BaseMessage message = null) : base()
+		public UpdateMessage(IServiceMessage message = null) : base()
 		{
 			this.Type = message?.Type ?? "";
 			this.Data = message?.Data ?? new JObject();
@@ -53,9 +55,10 @@ namespace net.vieapps.Services
 	/// <summary>
 	/// Presents a message for communicating between services
 	/// </summary>
-	public class CommunicateMessage : BaseMessage
+	[Serializable]
+	public class CommunicateMessage : BaseMessage, ICommunicateMessage
 	{
-		public CommunicateMessage(string serviceName = null, BaseMessage message = null) : base()
+		public CommunicateMessage(string serviceName = null, IServiceMessage message = null) : base()
 		{
 			this.ServiceName = serviceName ?? "";
 			this.Type = message?.Type ?? "";

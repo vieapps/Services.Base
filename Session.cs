@@ -16,13 +16,13 @@ namespace net.vieapps.Services
 	/// Presents a working session
 	/// </summary>
 	[Serializable]
-	public class Session
+	public class Session : ISession
 	{
 		/// <summary>
 		/// Initializes a new session
 		/// </summary>
 		/// <param name="session"></param>
-		public Session(Session session = null)
+		public Session(ISession session = null)
 		{
 			this.SessionID = session?.SessionID ?? "";
 			this.DeviceID = session?.DeviceID ?? "";
