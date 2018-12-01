@@ -41,7 +41,11 @@
 	<ItemGroup>
 		<PackageReference Include="JavaScriptEngineSwitcher.ChakraCore" Version="3.0.0-rc1" />
 		<PackageReference Include="JSPool" Version="4.0.0-beta1" />
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="2.1.1" />
+		<PackageReference Include="MySqlConnector" Version="0.47.1" />
+		<PackageReference Include="Npgsql" Version="4.0.3" />
 		<PackageReference Include="Serilog.Extensions.Logging.File" Version="1.1.0" />
+		<PackageReference Include="System.Data.SqlClient" Version="4.5.1" />
 		<PackageReference Include="VIEApps.Components.Repository" Version="10.2.1811.2" />
 		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.2.1811.2" />
 	</ItemGroup>

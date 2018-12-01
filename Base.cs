@@ -138,8 +138,8 @@ namespace net.vieapps.Services
 				this.ServiceCommunicator = WAMPConnections.IncomingChannel.RealmProxy.Services
 					.GetSubject<CommunicateMessage>($"net.vieapps.rtu.communicate.messages.{name}")
 					.Subscribe(
-						async (message) => await this.ProcessInterCommunicateMessageAsync(message).ConfigureAwait(false),
-						(exception) => this.Logger.LogError($"Error occurred while fetching inter-communicate message: {exception.Message}", this.State == ServiceState.Connected ? exception : null),
+						async message => await this.ProcessInterCommunicateMessageAsync(message).ConfigureAwait(false),
+						exception => this.Logger.LogError($"Error occurred while fetching inter-communicate message: {exception.Message}", this.State == ServiceState.Connected ? exception : null),
 						() => this.Logger.LogInformation("Inter-communicate message channel is completed")
 					);
 
@@ -147,7 +147,7 @@ namespace net.vieapps.Services
 				this.GatewayCommunicator = WAMPConnections.IncomingChannel.RealmProxy.Services
 					.GetSubject<CommunicateMessage>($"net.vieapps.rtu.communicate.messages.apigateway")
 					.Subscribe(
-						(message) =>
+						message =>
 						{
 							if (message.Type.IsEquals($"Service#UniqueInfo#{name}"))
 							{
@@ -160,7 +160,7 @@ namespace net.vieapps.Services
 								}
 							}
 						},
-						(exception) => this.Logger.LogError($"Error occurred while fetching inter-communicate message of API Gateway: {exception.Message}", this.State == ServiceState.Connected ? exception : null),
+						exception => this.Logger.LogError($"Error occurred while fetching inter-communicate message of API Gateway: {exception.Message}", this.State == ServiceState.Connected ? exception : null),
 						() => this.Logger.LogInformation("Inter-communicate message channel of API Gateway is completed")
 					);
 
@@ -1140,14 +1140,18 @@ namespace net.vieapps.Services
 
 		#region Generate form/view controls
 		/// <summary>
-		/// Generates the form controls of this type
+		/// Generates the controls of this type (for working with input forms)
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
 		/// <returns></returns>
-		protected JToken GenerateFormControls<T>() where T : class
-		{
-			return RepositoryMediator.GenerateFormControls<T>();
-		}
+		protected JToken GenerateFormControls<T>() where T : class => RepositoryMediator.GenerateFormControls<T>();
+
+		/// <summary>
+		/// Generates the controls of this type (for working with view forms)
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <returns></returns>
+		protected JToken GenerateViewControls<T>() where T : class => RepositoryMediator.GenerateFormControls<T>();
 		#endregion
 
 		#region Evaluate an Javascript expression
@@ -1444,7 +1448,7 @@ namespace net.vieapps.Services
 		public virtual void Start(string[] args = null, bool initializeRepository = true, Func<IService, Task> nextAsync = null)
 		{
 			this.ServiceUniqueName = Extensions.GetUniqueName(this.ServiceName, args);
-			Task.Run(() => this.StartAsync(async service =>
+			Task.Run(async () => await this.StartAsync(async service =>
 			{
 				// initialize repository
 				if (initializeRepository)
@@ -1501,57 +1505,61 @@ namespace net.vieapps.Services
 					{
 						this.Logger.LogError($"Error occurred while invoking the next action: {ex.Message}", ex);
 					}
-			})).ConfigureAwait(false);
+			}).ConfigureAwait(false)).ConfigureAwait(false);
 		}
 
-		bool Stopped { get; set; } = false;
+		protected bool Stopped { get; private set; } = false;
 
 		/// <summary>
 		/// Stops this service (close channels and clean-up)
 		/// </summary>
 		public void Stop()
 		{
-			if (!this.Stopped)
-				Task.Run(async () =>
-				{
-					this.Stopped = true;
-					this.ServiceCommunicator?.Dispose();
-					this.GatewayCommunicator?.Dispose();
+			// don't process if already stopped
+			if (this.Stopped)
+				return;
 
-					if (this.ServiceInstance != null)
-						try
-						{
-							await this.ServiceInstance.DisposeAsync().ConfigureAwait(false);
-						}
-						catch (Exception ex)
-						{
-							this.Logger?.LogError($"Error occurred while deregistering: {ex.Message}", ex);
-						}
-						finally
-						{
-							this.ServiceInstance = null;
-						}
+			// dispose communicators
+			this.Stopped = true;
+			this.ServiceCommunicator?.Dispose();
+			this.GatewayCommunicator?.Dispose();
 
-					if (this.ServiceUniqueInstance != null)
-						try
-						{
-							await this.ServiceUniqueInstance.DisposeAsync().ConfigureAwait(false);
-						}
-						catch (Exception ex)
-						{
-							this.Logger?.LogError($"Error occurred while deregistering: {ex.Message}", ex);
-						}
-						finally
-						{
-							this.ServiceUniqueInstance = null;
-						}
+			// dispose instances and close all
+			Task.Run(async () =>
+			{
+				if (this.ServiceInstance != null)
+					try
+					{
+						await this.ServiceInstance.DisposeAsync().ConfigureAwait(false);
+					}
+					catch (Exception ex)
+					{
+						this.Logger?.LogError($"Error occurred while deregistering: {ex.Message}", ex);
+					}
+					finally
+					{
+						this.ServiceInstance = null;
+					}
 
-					WAMPConnections.CloseChannels();
-				})
-				.ContinueWith(task => this.StopTimers(), TaskContinuationOptions.OnlyOnRanToCompletion)
-				.ContinueWith(task => this.CancellationTokenSource.Cancel(), TaskContinuationOptions.OnlyOnRanToCompletion)
-				.ContinueWith(task => this.Logger?.LogDebug("Stopped"), TaskContinuationOptions.OnlyOnRanToCompletion)
-				.Wait(3456);
+				if (this.ServiceUniqueInstance != null)
+					try
+					{
+						await this.ServiceUniqueInstance.DisposeAsync().ConfigureAwait(false);
+					}
+					catch (Exception ex)
+					{
+						this.Logger?.LogError($"Error occurred while deregistering: {ex.Message}", ex);
+					}
+					finally
+					{
+						this.ServiceUniqueInstance = null;
+					}
+			})
+			.ContinueWith(task => WAMPConnections.CloseChannels(), TaskContinuationOptions.OnlyOnRanToCompletion)
+			.ContinueWith(task => this.StopTimers(), TaskContinuationOptions.OnlyOnRanToCompletion)
+			.ContinueWith(task => this.CancellationTokenSource.Cancel(), TaskContinuationOptions.OnlyOnRanToCompletion)
+			.ContinueWith(task => this.Logger?.LogDebug("Stopped"), TaskContinuationOptions.OnlyOnRanToCompletion)
+			.Wait(3456);
 		}
 
 		bool Disposed { get; set; } = false;
