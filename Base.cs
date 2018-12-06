@@ -677,7 +677,7 @@ namespace net.vieapps.Services
 		/// <param name="name"></param>
 		/// <param name="defaultURI"></param>
 		/// <returns></returns>
-		protected string GetHttpURI(string name, string defaultURI) => UtilityService.GetAppSetting("HttpUri:" + name, defaultURI);
+		protected string GetHttpURI(string name, string defaultURI) => UtilityService.GetAppSetting($"HttpUri:{name}", defaultURI);
 		#endregion
 
 		#region Authentication & Authorization
@@ -1304,7 +1304,7 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected virtual Task StartAsync(Func<ServiceBase, Task> onRegisterSuccessAsync = null, Func<Exception, Task> onRegisterErrorAsync = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
 		{
-			this.Logger.LogInformation($"Attempting to connect to WAMP router [{WAMPConnections.GetRouterStrInfo()}]");
+			this.Logger.LogInformation($"Attempting to connect to WAMP router [{new Uri(WAMPConnections.GetRouterStrInfo()).GetResolvedURI()}]");
 			return Task.WhenAll(
 				WAMPConnections.OpenIncomingChannelAsync(
 					(sender, arguments) =>
@@ -1315,7 +1315,6 @@ namespace net.vieapps.Services
 							this.State = ServiceState.Ready;
 
 						Task.Run(() => this.RegisterServiceAsync(onRegisterSuccessAsync, onRegisterErrorAsync)).ConfigureAwait(false);
-
 						try
 						{
 							onIncomingConnectionEstablished?.Invoke(sender, arguments);
@@ -1373,10 +1372,17 @@ namespace net.vieapps.Services
 							this.MessagingService = WAMPConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IMessagingService>(ProxyInterceptor.Create());
 							this.LoggingService = WAMPConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<ILoggingService>(ProxyInterceptor.Create());
 							this.Logger.LogInformation($"Helper services are{(this.State == ServiceState.Disconnected ? " re-" : " ")}initialized");
+						}
+						catch (Exception ex)
+						{
+							this.Logger.LogError($"Error occurred while{(this.State == ServiceState.Disconnected ? " re-" : " ")}initializing helper services", ex);
+						}
 
-							Task.Run(async () =>
+						Task.Run(async () =>
+						{
+							try
 							{
-								while (WAMPConnections.IncomingChannel == null)
+								while (WAMPConnections.IncomingChannel == null || WAMPConnections.OutgoingChannel == null)
 									await Task.Delay(UtilityService.GetRandomNumber(123, 456)).ConfigureAwait(false);
 								await this.SendInterCommunicateMessageAsync(new CommunicateMessage
 								{
@@ -1387,12 +1393,12 @@ namespace net.vieapps.Services
 										{ "Name", this.ServiceName.Trim().ToLower() }
 									}
 								}).ConfigureAwait(false);
-							}).ConfigureAwait(false);
-						}
-						catch (Exception ex)
-						{
-							this.Logger.LogError($"Error occurred while {(this.State == ServiceState.Disconnected ? " re-" : " ")}initializing helper services", ex);
-						}
+							}
+							catch (Exception ex)
+							{
+								this.Logger.LogError($"Error occurred while sending request of service info => {ex.Message}", ex);
+							}
+						}).ConfigureAwait(false);
 
 						try
 						{
@@ -1575,8 +1581,6 @@ namespace net.vieapps.Services
 				GC.SuppressFinalize(this);
 			}
 		}
-
-		protected ServiceBase() { }
 
 		~ServiceBase() => this.Dispose();
 		#endregion
