@@ -92,12 +92,14 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Opens a channel to the WAMP router
 		/// </summary>
-		/// <param name="onConnectionEstablished"></param>
-		/// <param name="onConnectionBroken"></param>
-		/// <param name="onConnectionError"></param>
+		/// <param name="onConnectionEstablished">The action to fire when the connection is established</param>
+		/// <param name="onConnectionBroken">The action to fire when the connection is broken</param>
+		/// <param name="onConnectionError">The action to fire when the connection got any error</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static async Task<IWampChannel> OpenAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null)
+		public static async Task<IWampChannel> OpenAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
+			// prepare
 			var routerInfo = WAMPConnections.GetRouterInfo();
 			var address = routerInfo.Item1;
 			var realm = routerInfo.Item2;
@@ -107,6 +109,7 @@ namespace net.vieapps.Services
 				? new DefaultWampChannelFactory().CreateJsonChannel(address, realm)
 				: new DefaultWampChannelFactory().CreateMsgpackChannel(address, realm);
 
+			// asisgn event handler
 			if (onConnectionEstablished != null)
 				wampChannel.RealmProxy.Monitor.ConnectionEstablished += new EventHandler<WampSessionCreatedEventArgs>(onConnectionEstablished);
 
@@ -116,16 +119,19 @@ namespace net.vieapps.Services
 			if (onConnectionError != null)
 				wampChannel.RealmProxy.Monitor.ConnectionError += new EventHandler<WampConnectionErrorEventArgs>(onConnectionError);
 
-			await wampChannel.Open().ConfigureAwait(false);
+			// open the channel
+			await wampChannel.Open().WithCancellationToken(cancellationToken).ConfigureAwait(false);
+
+			// return the connected channel
 			return wampChannel;
 		}
 
 		/// <summary>
 		/// Reopens a channel to the WAMP router
 		/// </summary>
-		/// <param name="wampChannel"></param>
-		/// <param name="cancellationToken"></param>
-		/// <param name="tracker"></param>
+		/// <param name="wampChannel">The WAMP channel to re-open</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <param name="tracker">The tracker to track the logs</param>
 		/// <param name="prefix"></param>
 		/// <param name="awatingTimes"></param>
 		public static void ReOpen(this IWampChannel wampChannel, CancellationToken cancellationToken = default(CancellationToken), Action<string, Exception> tracker = null, string prefix = null, int awatingTimes = 0)
@@ -164,11 +170,12 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Opens the incoming channel to the WAMP router
 		/// </summary>
-		/// <param name="onConnectionEstablished"></param>
-		/// <param name="onConnectionBroken"></param>
-		/// <param name="onConnectionError"></param>
+		/// <param name="onConnectionEstablished">The action to fire when the connection is established</param>
+		/// <param name="onConnectionBroken">The action to fire when the connection is broken</param>
+		/// <param name="onConnectionError">The action to fire when the connection got any error</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static async Task<IWampChannel> OpenIncomingChannelAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null)
+		public static async Task<IWampChannel> OpenIncomingChannelAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null, CancellationToken cancellationToken = default(CancellationToken))
 			=> WAMPConnections.IncomingChannel ?? (WAMPConnections.IncomingChannel = await WAMPConnections.OpenAsync(
 					(sender, args) =>
 					{
@@ -177,17 +184,19 @@ namespace net.vieapps.Services
 						onConnectionEstablished?.Invoke(sender, args);
 					},
 					onConnectionBroken,
-					onConnectionError
+					onConnectionError,
+					cancellationToken
 				));
 
 		/// <summary>
 		/// Opens the outgoging channel to the WAMP router
 		/// </summary>
-		/// <param name="onConnectionEstablished"></param>
-		/// <param name="onConnectionBroken"></param>
-		/// <param name="onConnectionError"></param>
+		/// <param name="onConnectionEstablished">The action to fire when the connection is established</param>
+		/// <param name="onConnectionBroken">The action to fire when the connection is broken</param>
+		/// <param name="onConnectionError">The action to fire when the connection got any error</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static async Task<IWampChannel> OpenOutgoingChannelAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null)
+		public static async Task<IWampChannel> OpenOutgoingChannelAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null, CancellationToken cancellationToken = default(CancellationToken))
 			=> WAMPConnections.OutgoingChannel ?? (WAMPConnections.OutgoingChannel = await WAMPConnections.OpenAsync(
 					(sender, args) =>
 					{
@@ -196,7 +205,8 @@ namespace net.vieapps.Services
 						onConnectionEstablished?.Invoke(sender, args);
 					},
 					onConnectionBroken,
-					onConnectionError
+					onConnectionError,
+					cancellationToken
 				));
 		#endregion
 

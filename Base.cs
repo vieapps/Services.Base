@@ -1505,7 +1505,7 @@ namespace net.vieapps.Services
 				if (nextAsync != null)
 					try
 					{
-						await nextAsync(this).ConfigureAwait(false);
+						await nextAsync(this).WithCancellationToken(this.CancellationTokenSource.Token).ConfigureAwait(false);
 					}
 					catch (Exception ex)
 					{
