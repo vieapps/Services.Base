@@ -1013,7 +1013,17 @@ namespace net.vieapps.Services
 		protected IDisposable StartTimer(System.Action action, int interval, int delay = 0)
 		{
 			interval = interval < 1 ? 1 : interval;
-			var timer = Observable.Timer(TimeSpan.FromMilliseconds(delay > 0 ? delay : interval * 1000), TimeSpan.FromSeconds(interval)).Subscribe(_ => action?.Invoke());
+			var timer = Observable.Timer(TimeSpan.FromMilliseconds(delay > 0 ? delay : interval * 1000), TimeSpan.FromSeconds(interval)).Subscribe(_ =>
+			{
+				try
+				{
+					action?.Invoke();
+				}
+				catch (Exception ex)
+				{
+					this.WriteLogs(UtilityService.NewUUID, $"Error occurred while invoking a timer action: {ex.Message}", ex, this.ServiceName, "Timers");
+				}
+			});
 			this.Timers.Add(timer);
 			return timer;
 		}
@@ -1454,64 +1464,74 @@ namespace net.vieapps.Services
 		public virtual void Start(string[] args = null, bool initializeRepository = true, Func<IService, Task> nextAsync = null)
 		{
 			this.ServiceUniqueName = Extensions.GetUniqueName(this.ServiceName, args);
-			Task.Run(async () => await this.StartAsync(async service =>
+			Task.Run(async () =>
 			{
-				// initialize repository
-				if (initializeRepository)
-					try
+				try
+				{
+					await this.StartAsync(async service =>
 					{
-						await Task.Delay(UtilityService.GetRandomNumber(123, 456)).ConfigureAwait(false);
-						this.Logger.LogInformation("Initializing the repository");
-						RepositoryStarter.Initialize(
-							new[] { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
-								.Where(n => !n.Name.IsStartsWith("mscorlib") && !n.Name.IsStartsWith("System") && !n.Name.IsStartsWith("Microsoft") && !n.Name.IsEquals("NETStandard")
-									&& !n.Name.IsStartsWith("Newtonsoft") && !n.Name.IsStartsWith("WampSharp") && !n.Name.IsStartsWith("Castle.") && !n.Name.IsStartsWith("StackExchange.")
-									&& !n.Name.IsStartsWith("MongoDB") && !n.Name.IsStartsWith("MySql") && !n.Name.IsStartsWith("Oracle") && !n.Name.IsStartsWith("Npgsql") && !n.Name.IsStartsWith("Serilog")
-									&& !n.Name.IsStartsWith("VIEApps.Components.") && !n.Name.IsStartsWith("VIEApps.Services.Abstractions") && !n.Name.IsStartsWith("VIEApps.Services.Base") && !n.Name.IsStartsWith("VIEApps.Services.APIGateway")
-								)
-								.Select(n =>
-								{
-									try
-									{
-										return Assembly.Load(n);
-									}
-									catch (Exception ex)
-									{
-										this.Logger.LogError($"Error occurred while loading an assembly [{n.Name}] => {ex.Message}", ex);
-										return null;
-									}
-								})
-								.Where(a => a != null)
-								.ToList()
-							),
-							(log, ex) =>
+						// initialize repository
+						if (initializeRepository)
+							try
 							{
-								if (!this.IsDebugLogEnabled)
-								{
-									if (ex != null)
-										this.Logger.LogError(log, ex);
-									else
-										this.Logger.LogInformation(log);
-								}
+								await Task.Delay(UtilityService.GetRandomNumber(123, 456)).ConfigureAwait(false);
+								this.Logger.LogInformation("Initializing the repository");
+								RepositoryStarter.Initialize(
+									new[] { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
+										.Where(n => !n.Name.IsStartsWith("mscorlib") && !n.Name.IsStartsWith("System") && !n.Name.IsStartsWith("Microsoft") && !n.Name.IsEquals("NETStandard")
+											&& !n.Name.IsStartsWith("Newtonsoft") && !n.Name.IsStartsWith("WampSharp") && !n.Name.IsStartsWith("Castle.") && !n.Name.IsStartsWith("StackExchange.")
+											&& !n.Name.IsStartsWith("MongoDB") && !n.Name.IsStartsWith("MySql") && !n.Name.IsStartsWith("Oracle") && !n.Name.IsStartsWith("Npgsql") && !n.Name.IsStartsWith("Serilog")
+											&& !n.Name.IsStartsWith("VIEApps.Components.") && !n.Name.IsStartsWith("VIEApps.Services.Abstractions") && !n.Name.IsStartsWith("VIEApps.Services.Base") && !n.Name.IsStartsWith("VIEApps.Services.APIGateway")
+										)
+										.Select(n =>
+										{
+											try
+											{
+												return Assembly.Load(n);
+											}
+											catch (Exception ex)
+											{
+												this.Logger.LogError($"Error occurred while loading an assembly [{n.Name}] => {ex.Message}", ex);
+												return null;
+											}
+										})
+										.Where(a => a != null)
+										.ToList()
+									),
+									(log, ex) =>
+									{
+										if (!this.IsDebugLogEnabled)
+										{
+											if (ex != null)
+												this.Logger.LogError(log, ex);
+											else
+												this.Logger.LogInformation(log);
+										}
+									}
+								);
 							}
-						);
-					}
-					catch (Exception ex)
-					{
-						this.Logger.LogError($"Error occurred while initializing the repository: {ex.Message}", ex);
-					}
+							catch (Exception ex)
+							{
+								this.Logger.LogError($"Error occurred while initializing the repository: {ex.Message}", ex);
+							}
 
-				// run the next action
-				if (nextAsync != null)
-					try
-					{
-						await nextAsync(this).WithCancellationToken(this.CancellationTokenSource.Token).ConfigureAwait(false);
-					}
-					catch (Exception ex)
-					{
-						this.Logger.LogError($"Error occurred while invoking the next action: {ex.Message}", ex);
-					}
-			}).ConfigureAwait(false)).ConfigureAwait(false);
+						// run the next action
+						if (nextAsync != null)
+							try
+							{
+								await nextAsync(this).WithCancellationToken(this.CancellationTokenSource.Token).ConfigureAwait(false);
+							}
+							catch (Exception ex)
+							{
+								this.Logger.LogError($"Error occurred while invoking the next action: {ex.Message}", ex);
+							}
+					}).ConfigureAwait(false);
+				}
+				catch (Exception ex)
+				{
+					this.Logger.LogError($"Error occurred while starting the service: {ex.Message}", ex);
+				}
+			}).ConfigureAwait(false);
 		}
 
 		protected bool Stopped { get; private set; } = false;

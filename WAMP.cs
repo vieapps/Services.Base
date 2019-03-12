@@ -267,14 +267,8 @@ namespace net.vieapps.Services
 			if (WAMPConnections.StatisticsWebSocket == null)
 				WAMPConnections.StatisticsWebSocket = new WebSocket(null, null, CancellationToken.None)
 				{
-					OnConnectionEstablished = websocket =>
-					{
-						WAMPConnections.StatisticsWebSocketConnection = websocket;
-					},
-					OnConnectionBroken = websocket =>
-					{
-						WAMPConnections.StatisticsWebSocketConnection = null;
-					}
+					OnConnectionEstablished = websocket => WAMPConnections.StatisticsWebSocketConnection = websocket,
+					OnConnectionBroken = websocket => WAMPConnections.StatisticsWebSocketConnection = null
 				};
 
 			async Task sendAsync()
