@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Linq;
 using System.Dynamic;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
@@ -25,144 +26,126 @@ namespace net.vieapps.Services
 	{
 
 		#region Filter
-		static FilterBy<T> GetFilterBy<T>(string attribute, string @operator, JValue value) where T : class
+		static IFilterBy<T> GetFilterBy<T>(this JObject expression) where T : class
 		{
-			return new FilterBy<T>(new JObject()
+			var property = expression.Properties().FirstOrDefault();
+			if (property == null || property.Value == null)
+				return null;
+
+			IFilterBy<T> filter = null;
+			var attribute = property.Name;
+
+			// group comparisions
+			if (attribute.IsEquals("And") || attribute.IsEquals("Or"))
 			{
-				{ "Attribute", attribute },
-				{ "Operator", @operator },
-				{ "Value", value }
-			});
-		}
+				filter = attribute.IsEquals("Or") ? Filters<T>.Or() : Filters<T>.And();
+				(property.Value is JObject ? (property.Value as JObject).ToJArray(kvp => new JObject { { kvp.Key, kvp.Value } }) : property.Value as JArray).ForEach(exp => (filter as FilterBys<T>).Add((exp as JObject).GetFilterBy<T>()));
+				if ((filter as FilterBys<T>).Children.Count < 1)
+					filter = null;
+			}
 
-		static FilterBys<T> GetFilterBys<T>(string @operator, JObject children) where T : class
-		{
-			var childFilters = new List<IFilterBy<T>>();
-			foreach (var info in children)
+			// single comparisions
+			else
 			{
-				IFilterBy<T> filter = null;
-				var name = info.Key;
-				var value = info.Value;
+				var @operator = "";
+				var value = JValue.CreateNull();
 
-				// child expressions
-				if (value is JObject && (name.IsEquals("And") || name.IsEquals("Or")))
-					filter = Extensions.GetFilterBys<T>(name, value as JObject);
-
-				// special comparisons
-				else if (value is JValue)
+				// special comparison
+				if (property.Value is JValue)
 				{
-					var op = (value as JValue).Value.ToString();
-					if (op.IsEquals("IsNull") || op.IsEquals("IsNotNull") || op.IsEquals("IsEmpty") || op.IsEquals("IsNotEmpty"))
-						filter = Extensions.GetFilterBy<T>(name, op, null);
+					@operator = (property.Value as JValue).Value.ToString();
+					if (!@operator.IsEquals("IsNull") && !@operator.IsEquals("IsNotNull") && !@operator.IsEquals("IsEmpty") && !@operator.IsEquals("IsNotEmpty"))
+						@operator = null;
 				}
 
 				// normal comparison
-				else if (value is JObject)
+				else if (property.Value is JObject)
 				{
-					var prop = (value as JObject).Properties().FirstOrDefault();
-					if (prop != null && prop.Value != null && prop.Value is JValue && (prop.Value as JValue).Value != null)
-						filter = Extensions.GetFilterBy<T>(name, prop.Name, prop.Value as JValue);
+					property = (property.Value as JObject).Properties().FirstOrDefault();
+					if (property != null && property.Value != null && property.Value is JValue && (property.Value as JValue).Value != null)
+					{
+						@operator = property.Name;
+						value = property.Value as JValue;
+					}
+					else
+						@operator = null;
 				}
 
-				if (filter != null)
-					childFilters.Add(filter);
+				// unknown comparison
+				else
+					@operator = null;
+
+				filter = @operator != null
+					? new FilterBy<T>(new JObject
+					{
+						{ "Attribute", attribute },
+						{ "Operator", @operator },
+						{ "Value", value }
+					})
+					: null;
 			}
-			return new FilterBys<T>(@operator.ToEnum<GroupOperator>(), childFilters);
+
+			return filter;
 		}
 
 		/// <summary>
 		/// Converts the JSON object to filtering expression
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
-		/// <param name="filterby"></param>
+		/// <param name="expression"></param>
 		/// <returns></returns>
-		public static IFilterBy<T> ToFilterBy<T>(this JObject filterby) where T : class
+		public static IFilterBy<T> ToFilterBy<T>(this JObject expression) where T : class
 		{
-			var orFilters = filterby["Or"] as JObject;
-			var andFilters = filterby["And"] as JObject;
-			var rootFilters = orFilters != null
-				? orFilters
-				: andFilters != null
-					? andFilters
-					: filterby;
+			var property = expression.Properties().FirstOrDefault(p => !string.IsNullOrWhiteSpace(p.Name) && !p.Name.IsEquals("Query"));
+			if (property == null || property.Value == null)
+				return null;
 
-			var filters = orFilters != null
-				? Filters<T>.Or()
-				: Filters<T>.And();
+			var filter = property.Name.IsEquals("Or") ? Filters<T>.Or() : Filters<T>.And();
+			if (!property.Name.IsEquals("And") && !property.Name.IsEquals("Or"))
+				expression.ToJArray(kvp => new JObject { { kvp.Key, kvp.Value } }).ForEach(exp => filter.Add((exp as JObject).GetFilterBy<T>()));
+			else
+			{
+				var children = property.Name.IsEquals("Or") ? expression["Or"] : expression["And"];
+				(children is JObject ? (children as JObject).ToJArray(kvp => new JObject { { kvp.Key, kvp.Value } }) : children as JArray).ForEach(exp => filter.Add((exp as JObject).GetFilterBy<T>()));
+			}
 
-			foreach (var info in rootFilters)
-				if (!info.Key.Equals("") && !info.Key.IsEquals("Query"))
-				{
-					IFilterBy<T> filter = null;
-					var name = info.Key;
-					var value = info.Value;
-
-					// child expressions
-					if (value is JObject && (name.IsEquals("And") || name.IsEquals("Or")))
-						filter = Extensions.GetFilterBys<T>(name, value as JObject);
-
-					// special comparisions
-					else if (value is JValue)
-					{
-						var op = (value as JValue).Value.ToString();
-						if (op.IsEquals("IsNull") || op.IsEquals("IsNotNull") || op.IsEquals("IsEmpty") || op.IsEquals("IsNotEmpty"))
-							filter = Extensions.GetFilterBy<T>(name, op, null);
-					}
-
-					// normal comparisions
-					else if (value is JObject)
-					{
-						var prop = (value as JObject).Properties().FirstOrDefault();
-						if (prop != null && prop.Value != null && prop.Value is JValue && (prop.Value as JValue).Value != null)
-							filter = Extensions.GetFilterBy<T>(name, prop.Name, prop.Value as JValue);
-					}
-
-					if (filter != null)
-						filters.Add(filter);
-				}
-
-			return filters != null && filters.Children.Count > 0
-				? filters
-				: null;
+			return filter != null && filter.Children.Count > 0 ? filter : null;
 		}
 
 		/// <summary>
 		/// Converts the Expando object to filtering expression
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
-		/// <param name="filterby"></param>
+		/// <param name="expression"></param>
 		/// <returns></returns>
-		public static IFilterBy<T> ToFilterBy<T>(this ExpandoObject filterby) where T : class
-		{
-			return Extensions.ToFilterBy<T>(JObject.FromObject(filterby));
-		}
+		public static IFilterBy<T> ToFilterBy<T>(this ExpandoObject expression) where T : class
+			=> JObject.FromObject(expression).ToFilterBy<T>();
 
-		static JProperty AddClientJson(JObject serverJson)
+		static JToken GetClientJson(this JToken serverJson, out string name)
 		{
-			var @operator = (serverJson["Operator"] as JValue).Value.ToString();
-			if (serverJson["Children"] == null)
+			var @operator = serverJson.Get<string>("Operator");
+			var children = serverJson.Get<JArray>("Children");
+			if (children == null)
 			{
-				var token = @operator.IsEquals("IsNull") || @operator.IsEquals("IsNotNull") || @operator.IsEquals("IsEmpty") || @operator.IsEquals("IsNotEmpty")
+				name = serverJson.Get<string>("Attribute");
+				return @operator.IsEquals("IsNull") || @operator.IsEquals("IsNotNull") || @operator.IsEquals("IsEmpty") || @operator.IsEquals("IsNotEmpty")
 					? new JValue(@operator) as JToken
-					: new JObject()
+					: new JObject
 					{
-						{
-							@operator,
-							new JValue((serverJson["Value"] as JValue)?.Value)
-						}
-					} as JToken;
-				return new JProperty((serverJson["Attribute"] as JValue).Value.ToString(), token);
+						{ @operator, serverJson["Value"] as JValue }
+					};
 			}
 			else
 			{
-				var children = serverJson["Children"] as JArray;
-				if (children == null || children.Count < 1)
-					return null;
-
-				var clientJson = new JObject();
-				foreach (JObject childJson in children)
-					clientJson.Add(Extensions.AddClientJson(childJson));
-				return new JProperty(@operator, clientJson);
+				name = @operator;
+				return children.ToJArray(json =>
+				{
+					var value = json.GetClientJson(out @operator);
+					return new JObject
+					{
+						{ @operator, value }
+					};
+				});
 			}
 		}
 
@@ -170,34 +153,30 @@ namespace net.vieapps.Services
 		/// Converts the filtering expression to JSON for using at client-side
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
-		/// <param name="filterby"></param>
+		/// <param name="filter"></param>
 		/// <param name="query"></param>
 		/// <returns></returns>
-		public static JObject ToClientJson<T>(this IFilterBy<T> filterby, string query = null) where T : class
+		public static JObject ToClientJson<T>(this IFilterBy<T> filter, string query = null) where T : class
 		{
 			var clientJson = new JObject();
-			if (!string.IsNullOrEmpty(query))
-				clientJson.Add(new JProperty("Query", query));
 
-			var json = Extensions.AddClientJson(filterby.ToJson());
-			if (json != null)
-				clientJson.Add(json);
+			if (!string.IsNullOrEmpty(query))
+				clientJson["Query"] = query;
+
+			var json = filter.ToJson().GetClientJson(out string @operator);
+			clientJson[@operator] = json;
 
 			return clientJson;
 		}
 
 		/// <summary>
-		/// Gets MD5 hash
+		/// Gets UUID of this filtering definition
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
-		/// <param name="filterby"></param>
+		/// <param name="filter"></param>
 		/// <returns></returns>
-		public static string GetMD5<T>(this IFilterBy<T> filterby) where T : class
-		{
-			return filterby != null
-				? filterby.ToClientJson().ToString(Formatting.None).ToLower().GetMD5()
-				: "";
-		}
+		public static string GetUUID<T>(this IFilterBy<T> filter) where T : class
+			=> filter.ToClientJson().ToString(Formatting.None).ToLower().GenerateUUID();
 		#endregion
 
 		#region Sort
@@ -205,25 +184,24 @@ namespace net.vieapps.Services
 		/// Converts the JSON object to sorting expression
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
-		/// <param name="sortby"></param>
+		/// <param name="expression"></param>
 		/// <returns></returns>
-		public static SortBy<T> ToSortBy<T>(this JObject sortby) where T : class
+		public static SortBy<T> ToSortBy<T>(this JObject expression) where T : class
 		{
 			SortBy<T> sort = null;
-			foreach (var info in sortby)
-				if (!info.Key.Equals(""))
-				{
-					var attribute = info.Key;
-					var mode = (info.Value as JValue).Value.ToString().ToEnum<SortMode>();
+			expression.ForEach(kvp =>
+			{
+				var attribute = kvp.Key;
+				var mode = ((kvp.Value as JValue).Value?.ToString() ?? "Ascending").ToEnum<SortMode>();
 
-					sort = sort != null
-						? mode.Equals(SortMode.Ascending)
-							? sort.ThenByAscending(attribute)
-							: sort.ThenByDescending(attribute)
-						: mode.Equals(SortMode.Ascending)
-							? Sorts<T>.Ascending(attribute)
-							: Sorts<T>.Descending(attribute);
-				}
+				sort = sort != null
+					? mode.Equals(SortMode.Ascending)
+						? sort.ThenByAscending(attribute)
+						: sort.ThenByDescending(attribute)
+					: mode.Equals(SortMode.Ascending)
+						? Sorts<T>.Ascending(attribute)
+						: Sorts<T>.Descending(attribute);
+			});
 			return sort;
 		}
 
@@ -231,49 +209,38 @@ namespace net.vieapps.Services
 		/// Converts the Expando object to sorting expression
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
-		/// <param name="sortby"></param>
+		/// <param name="expression"></param>
 		/// <returns></returns>
-		public static SortBy<T> ToSortBy<T>(this ExpandoObject sortby) where T : class
-		{
-			return Extensions.ToSortBy<T>(JObject.FromObject(sortby));
-		}
+		public static SortBy<T> ToSortBy<T>(this ExpandoObject expression) where T : class
+			=> JObject.FromObject(expression).ToSortBy<T>();
 
-		static void AddClientJson(JObject clientJson, JObject serverJson)
+		static void GetClientJson(this JToken serverJson, JObject clientJson)
 		{
-			var attribute = (serverJson["Attribute"] as JValue).Value.ToString();
-			var mode = (serverJson["Mode"] as JValue).Value.ToString();
-			clientJson.Add(new JProperty(attribute, mode));
-
-			var thenby = serverJson["ThenBy"];
-			if (thenby != null && thenby is JObject)
-				Extensions.AddClientJson(clientJson, thenby as JObject);
+			clientJson[serverJson.Get<string>("Attribute")] = serverJson.Get<string>("Mode") ?? "Ascending";
+			serverJson.Get<JObject>("ThenBy")?.GetClientJson(clientJson);
 		}
 
 		/// <summary>
 		/// Converts the sorting expression to JSON for using at client-side
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
-		/// <param name="sortby"></param>
+		/// <param name="sort"></param>
 		/// <returns></returns>
-		public static JObject ToClientJson<T>(this SortBy<T> sortby) where T : class
+		public static JObject ToClientJson<T>(this SortBy<T> sort) where T : class
 		{
 			var clientJson = new JObject();
-			Extensions.AddClientJson(clientJson, sortby.ToJson());
+			sort.ToJson().GetClientJson(clientJson);
 			return clientJson;
 		}
 
 		/// <summary>
-		/// Gets MD5 hash
+		/// Gets UUID of this sorting definition
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
 		/// <param name="sortby"></param>
 		/// <returns></returns>
-		public static string GetMD5<T>(this SortBy<T> sortby) where T : class
-		{
-			return sortby != null
-				? sortby.ToClientJson().ToString(Formatting.None).ToLower().GetMD5()
-				: "";
-		}
+		public static string GetUUID<T>(this SortBy<T> sortby) where T : class
+			=> sortby.ToClientJson().ToString(Formatting.None).ToLower().GenerateUUID();
 		#endregion
 
 		#region Pagination
@@ -546,8 +513,9 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="session"></param>
 		/// <param name="correlationID"></param>
+		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		public static async Task<string> GetLocationAsync(this Session session, string correlationID = null)
+		public static async Task<string> GetLocationAsync(this Session session, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			correlationID = correlationID ?? UtilityService.NewUUID;
 			try
@@ -559,7 +527,7 @@ namespace net.vieapps.Services
 						{ "ip-address", session.IP }
 					},
 					CorrelationID = correlationID
-				}).ConfigureAwait(false);
+				}, cancellationToken).ConfigureAwait(false);
 
 				var city = json.Get<string>("City");
 				var region = json.Get<string>("Region");
@@ -574,7 +542,7 @@ namespace net.vieapps.Services
 						json = await WAMPConnections.CallServiceAsync(new RequestInfo(session, "IPLocations", "Current")
 						{
 							CorrelationID = correlationID
-						}).ConfigureAwait(false);
+						}, cancellationToken).ConfigureAwait(false);
 						city = json.Get<string>("City");
 						region = json.Get<string>("Region");
 						if (region.Equals(city) && !"N/A".IsEquals(city))
@@ -597,9 +565,10 @@ namespace net.vieapps.Services
 		/// Gets the location of the request (IP-based)
 		/// </summary>
 		/// <param name="requestInfo"></param>
+		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		public static Task<string> GetLocationAsync(this RequestInfo requestInfo)
-			=> requestInfo.Session?.GetLocationAsync(requestInfo.CorrelationID) ?? Task.FromResult("Unknown");
+		public static Task<string> GetLocationAsync(this RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken))
+			=> requestInfo.Session?.GetLocationAsync(requestInfo.CorrelationID, cancellationToken) ?? Task.FromResult("Unknown");
 		#endregion
 
 		#region Encryption

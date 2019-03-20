@@ -339,7 +339,7 @@ namespace net.vieapps.Services
 
 		#endregion
 
-		#region Working with logs
+		#region Loggings
 		/// <summary>
 		/// Gets or sets the logger
 		/// </summary>
@@ -589,7 +589,8 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="name">The string that presents name of a service</param>
 		/// <returns></returns>
-		protected Task<IService> GetServiceAsync(string name) => WAMPConnections.GetServiceAsync(name);
+		protected Task<IService> GetServiceAsync(string name)
+			=> WAMPConnections.GetServiceAsync(name);
 
 		/// <summary>
 		/// Gets the unique name of the service for a specific OS platform
@@ -625,7 +626,7 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
-		#region Working sessions
+		#region Sessions
 		/// <summary>
 		/// Gets the sessions of an user. 1st element is session identity, 2nd element is device identity, 3rd element is app info, 4th element is online status
 		/// </summary>
@@ -652,14 +653,15 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
-		#region Keys & HTTP URIs
+		#region Keys, Http URIs, Paths
 		/// <summary>
 		/// Gets a key from app settings
 		/// </summary>
 		/// <param name="name"></param>
 		/// <param name="defaultKey"></param>
 		/// <returns></returns>
-		protected string GetKey(string name, string defaultKey) => UtilityService.GetAppSetting("Keys:" + name, defaultKey);
+		protected string GetKey(string name, string defaultKey)
+			=> UtilityService.GetAppSetting("Keys:" + name, defaultKey);
 
 		/// <summary>
 		/// Gets the key for encrypting/decrypting data with AES
@@ -672,12 +674,22 @@ namespace net.vieapps.Services
 		protected string ValidationKey => this.GetKey("Validation", "VIEApps-D6C8C563-NGX-26CC-Services-43AC-Validation-9040-Key-E803AF0F36E4");
 
 		/// <summary>
-		/// Gets a HTTP URI from app settings
+		/// Gets settings of an HTTP URI from app settings
 		/// </summary>
 		/// <param name="name"></param>
 		/// <param name="defaultURI"></param>
 		/// <returns></returns>
-		protected string GetHttpURI(string name, string defaultURI) => UtilityService.GetAppSetting($"HttpUri:{name}", defaultURI);
+		protected string GetHttpURI(string name, string defaultURI)
+			=> UtilityService.GetAppSetting($"HttpUri:{name}", defaultURI);
+
+		/// <summary>
+		/// Gets settings of a directory path from app settings
+		/// </summary>
+		/// <param name="name"></param>
+		/// <param name="defaultPath"></param>
+		/// <returns></returns>
+		protected string GetPath(string name, string defaultPath = null)
+			=> UtilityService.GetAppSetting($"Path:{name}", defaultPath);
 		#endregion
 
 		#region Authentication & Authorization
@@ -686,14 +698,16 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="requestInfo">The requesting information that contains user information</param>
 		/// <returns></returns>
-		protected bool IsAuthenticated(RequestInfo requestInfo) => requestInfo.IsAuthenticated();
+		protected bool IsAuthenticated(RequestInfo requestInfo)
+			=> requestInfo.IsAuthenticated();
 
 		/// <summary>
 		/// The the global privilege role of the user in this service
 		/// </summary>
 		/// <param name="user"></param>
 		/// <returns></returns>
-		protected virtual string GetPrivilegeRole(IUser user) => user?.GetPrivilegeRole(this.ServiceName);
+		protected virtual string GetPrivilegeRole(IUser user)
+			=> user?.GetPrivilegeRole(this.ServiceName);
 
 		/// <summary>
 		/// Gets the default privileges  of the user in this service
@@ -701,14 +715,16 @@ namespace net.vieapps.Services
 		/// <param name="user"></param>
 		/// <param name="privileges"></param>
 		/// <returns></returns>
-		protected virtual List<Privilege> GetPrivileges(IUser user, Privileges privileges) => user?.GetPrivileges(privileges, this.ServiceName);
+		protected virtual List<Privilege> GetPrivileges(IUser user, Privileges privileges)
+			=> user?.GetPrivileges(privileges, this.ServiceName);
 
 		/// <summary>
 		/// Gets the default privilege actions in this service
 		/// </summary>
 		/// <param name="role"></param>
 		/// <returns></returns>
-		protected virtual List<string> GetPrivilegeActions(PrivilegeRole role) => role.GetPrivilegeActions();
+		protected virtual List<string> GetPrivilegeActions(PrivilegeRole role)
+			=> role.GetPrivilegeActions();
 
 		/// <summary>
 		/// Gets the state that determines the user is system administrator or not
@@ -1002,7 +1018,7 @@ namespace net.vieapps.Services
 				: Task.FromResult(false);
 		#endregion
 
-		#region Working with timers
+		#region Timers
 		/// <summary>
 		/// Starts a timer (using ReactiveX)
 		/// </summary>
@@ -1031,10 +1047,11 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Stops all timers
 		/// </summary>
-		protected void StopTimers() => this.Timers.ForEach(timer => timer.Dispose());
+		protected void StopTimers()
+			=> this.Timers.ForEach(timer => timer.Dispose());
 		#endregion
 
-		#region Working with cache
+		#region Caching
 		/// <summary>
 		/// Gets the key for working with caching
 		/// </summary>
@@ -1045,14 +1062,14 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected string GetCacheKey<T>(IFilterBy<T> filter, SortBy<T> sort, int pageNumber = 0) where T : class
 			=> typeof(T).GetTypeName(true) + "#"
-				+ (filter != null ? $"{filter.GetMD5()}:" : "")
-				+ (sort != null ? $"{sort.GetMD5()}:" : "")
+				+ (filter != null ? $"{filter.GetUUID()}:" : "")
+				+ (sort != null ? $"{sort.GetUUID()}:" : "")
 				+ (pageNumber > 0 ? $"{pageNumber}" : "");
 
 		List<string> GetRelatedCacheKeys<T>(IFilterBy<T> filter, SortBy<T> sort) where T : class
 		{
-			var key = this.GetCacheKey<T>(filter, sort);
-			var keys = new List<string>() { key, $"{key}json", $"{key}total" };
+			var key = this.GetCacheKey(filter, sort);
+			var keys = new List<string> { key, $"{key}json", $"{key}total" };
 			for (var index = 1; index <= 100; index++)
 			{
 				keys.Add($"{key}{index}");
@@ -1085,7 +1102,7 @@ namespace net.vieapps.Services
 				: Task.CompletedTask;
 		#endregion
 
-		#region Get runtime exception
+		#region Runtime exception
 		/// <summary>
 		/// Gets the runtime exception to throw to caller
 		/// </summary>
@@ -1148,20 +1165,22 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
-		#region Generate form/view controls
+		#region Controls of forms/views
 		/// <summary>
 		/// Generates the controls of this type (for working with input forms)
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
 		/// <returns></returns>
-		protected JToken GenerateFormControls<T>() where T : class => RepositoryMediator.GenerateFormControls<T>();
+		protected JToken GenerateFormControls<T>() where T : class
+			=> RepositoryMediator.GenerateFormControls<T>();
 
 		/// <summary>
 		/// Generates the controls of this type (for working with view forms)
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
 		/// <returns></returns>
-		protected JToken GenerateViewControls<T>() where T : class => RepositoryMediator.GenerateFormControls<T>();
+		protected JToken GenerateViewControls<T>() where T : class
+			=> RepositoryMediator.GenerateFormControls<T>();
 		#endregion
 
 		#region Evaluate an Javascript expression
@@ -1224,10 +1243,10 @@ namespace net.vieapps.Services
 		protected string GetJsExpression(string expression, object current, RequestInfo requestInfo)
 			=> Extensions.JsFunctions + Environment.NewLine
 				+ @"
-				function now() {
+				function now(){
 					return __now();
 				}
-				function today() {
+				function today(){
 					return __today();
 				}".Replace("\t", "").Replace("\r", "").Replace("\n", " ") + Environment.NewLine
 				+ "var __requestInfoJSON = " + (requestInfo ?? new RequestInfo()).ToJson() + ";" + Environment.NewLine
@@ -1581,10 +1600,10 @@ namespace net.vieapps.Services
 						this.ServiceUniqueInstance = null;
 					}
 			})
-			.ContinueWith(task => WAMPConnections.CloseChannels(), TaskContinuationOptions.OnlyOnRanToCompletion)
-			.ContinueWith(task => this.StopTimers(), TaskContinuationOptions.OnlyOnRanToCompletion)
-			.ContinueWith(task => this.CancellationTokenSource.Cancel(), TaskContinuationOptions.OnlyOnRanToCompletion)
-			.ContinueWith(task => this.Logger?.LogDebug("Stopped"), TaskContinuationOptions.OnlyOnRanToCompletion)
+			.ContinueWith(_ => WAMPConnections.CloseChannels(), TaskContinuationOptions.OnlyOnRanToCompletion)
+			.ContinueWith(_ => this.StopTimers(), TaskContinuationOptions.OnlyOnRanToCompletion)
+			.ContinueWith(_ => this.CancellationTokenSource.Cancel(), TaskContinuationOptions.OnlyOnRanToCompletion)
+			.ContinueWith(_ => this.Logger?.LogDebug("Stopped"), TaskContinuationOptions.OnlyOnRanToCompletion)
 			.Wait(3456);
 		}
 
