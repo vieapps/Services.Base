@@ -102,7 +102,7 @@ namespace net.vieapps.Services
 
 			var filter = property.Name.IsEquals("Or") ? Filters<T>.Or() : Filters<T>.And();
 			if (!property.Name.IsEquals("And") && !property.Name.IsEquals("Or"))
-				expression.ToJArray(kvp => new JObject { { kvp.Key, kvp.Value } }).ForEach(exp => filter.Add(exp != null && exp is JObject ? (exp as JObject).GetFilterBy<T>() : null));
+				expression.ToJArray(kvp => new JObject { { kvp.Key, kvp.Value } }).ForEach(exp => filter.Add((exp as JObject).GetFilterBy<T>()));
 			else
 			{
 				var children = property.Name.IsEquals("Or") ? expression["Or"] : expression["And"];
@@ -160,7 +160,7 @@ namespace net.vieapps.Services
 		{
 			var clientJson = new JObject();
 
-			if (!string.IsNullOrEmpty(query))
+			if (!string.IsNullOrWhiteSpace(query))
 				clientJson["Query"] = query;
 
 			var json = filter.ToJson().GetClientJson(out string @operator);
