@@ -28,7 +28,7 @@ namespace net.vieapps.Services
 		#region Filter
 		static IFilterBy<T> GetFilterBy<T>(this JObject expression) where T : class
 		{
-			var property = expression.Properties().FirstOrDefault();
+			var property = expression.Properties()?.FirstOrDefault();
 			if (property == null || property.Value == null)
 				return null;
 
@@ -39,7 +39,7 @@ namespace net.vieapps.Services
 			if (attribute.IsEquals("And") || attribute.IsEquals("Or"))
 			{
 				filter = attribute.IsEquals("Or") ? Filters<T>.Or() : Filters<T>.And();
-				(property.Value is JObject ? (property.Value as JObject).ToJArray(kvp => new JObject { { kvp.Key, kvp.Value } }) : property.Value as JArray).ForEach(exp => (filter as FilterBys<T>).Add((exp as JObject).GetFilterBy<T>()));
+				(property.Value is JObject ? (property.Value as JObject).ToJArray(kvp => new JObject { { kvp.Key, kvp.Value } }) : property.Value as JArray).ForEach(exp => (filter as FilterBys<T>).Add(exp != null && exp is JObject ? (exp as JObject).GetFilterBy<T>() : null));
 				if ((filter as FilterBys<T>).Children.Count < 1)
 					filter = null;
 			}
@@ -61,7 +61,7 @@ namespace net.vieapps.Services
 				// normal comparison
 				else if (property.Value is JObject)
 				{
-					property = (property.Value as JObject).Properties().FirstOrDefault();
+					property = (property.Value as JObject).Properties()?.FirstOrDefault();
 					if (property != null && property.Value != null && property.Value is JValue && (property.Value as JValue).Value != null)
 					{
 						@operator = property.Name;
@@ -96,17 +96,17 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static IFilterBy<T> ToFilterBy<T>(this JObject expression) where T : class
 		{
-			var property = expression.Properties().FirstOrDefault(p => !string.IsNullOrWhiteSpace(p.Name) && !p.Name.IsEquals("Query"));
+			var property = expression.Properties()?.FirstOrDefault(p => !string.IsNullOrWhiteSpace(p.Name) && !p.Name.IsEquals("Query"));
 			if (property == null || property.Value == null)
 				return null;
 
 			var filter = property.Name.IsEquals("Or") ? Filters<T>.Or() : Filters<T>.And();
 			if (!property.Name.IsEquals("And") && !property.Name.IsEquals("Or"))
-				expression.ToJArray(kvp => new JObject { { kvp.Key, kvp.Value } }).ForEach(exp => filter.Add((exp as JObject).GetFilterBy<T>()));
+				expression.ToJArray(kvp => new JObject { { kvp.Key, kvp.Value } }).ForEach(exp => filter.Add(exp != null && exp is JObject ? (exp as JObject).GetFilterBy<T>() : null));
 			else
 			{
 				var children = property.Name.IsEquals("Or") ? expression["Or"] : expression["And"];
-				(children is JObject ? (children as JObject).ToJArray(kvp => new JObject { { kvp.Key, kvp.Value } }) : children as JArray).ForEach(exp => filter.Add((exp as JObject).GetFilterBy<T>()));
+				(children is JObject ? (children as JObject).ToJArray(kvp => new JObject { { kvp.Key, kvp.Value } }) : children as JArray).ForEach(exp => filter.Add(exp != null && exp is JObject ? (exp as JObject).GetFilterBy<T>() : null));
 			}
 
 			return filter != null && filter.Children.Count > 0 ? filter : null;
