@@ -26,6 +26,32 @@ namespace net.vieapps.Services
 	{
 
 		#region Filter
+		/// <summary>
+		/// Prepares the comparing values of the filtering expression (means evaluating all JS expressions)
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="filterBy"></param>
+		/// <param name="current">The object that presents information of current processing object - '__current' global variable and 'this' instance is bond to JSON stringify</param>
+		/// <param name="requestInfo">The object that presents the information - '__requestInfo' global variable</param>
+		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
+		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
+		public static void Prepare<T>(this FilterBys<T> filterBy, object current = null, RequestInfo requestInfo = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null) where T : class
+		{
+			using (var jsEngine = Extensions.GetJsEngine(Extensions.GetJsEmbedObjects(current, requestInfo, embedObjects), Extensions.GetJsEmbedTypes(embedTypes)))
+			{
+				filterBy.Children.ForEach(filter =>
+				{
+					if (filter is FilterBys<T>)
+						(filter as FilterBys<T>).Prepare(current, requestInfo, embedObjects, embedTypes);
+					else if ((filter as FilterBy<T>).Value != null && (filter as FilterBy<T>).Value is string && ((filter as FilterBy<T>).Value as string).StartsWith("@"))
+					{
+						var jsExpression = Extensions.GetJsExpression((filter as FilterBy<T>).Value as string, current, requestInfo);
+						(filter as FilterBy<T>).Value = jsEngine.JsEvaluate(jsExpression);
+					}
+				});
+			}
+		}
+
 		static IFilterBy<T> GetFilterBy<T>(this JObject expression) where T : class
 		{
 			var property = expression.Properties()?.FirstOrDefault();

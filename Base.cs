@@ -1192,11 +1192,7 @@ namespace net.vieapps.Services
 		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <returns></returns>
 		protected IDictionary<string, object> GetJsEmbedObjects(object current, RequestInfo requestInfo, IDictionary<string, object> embedObjects = null)
-			=> new Dictionary<string, object>(embedObjects ?? new Dictionary<string, object>())
-			{
-				["__current"] = current,
-				["__requestInfo"] = requestInfo,
-			};
+			=> Extensions.GetJsEmbedObjects(current, requestInfo, embedObjects);
 
 		/// <summary>
 		/// Gest the Javascript embed types
@@ -1204,12 +1200,7 @@ namespace net.vieapps.Services
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
 		/// <returns></returns>
 		protected IDictionary<string, Type> GetJsEmbedTypes(IDictionary<string, Type> embedTypes = null)
-			=> new Dictionary<string, Type>(embedTypes ?? new Dictionary<string, Type>())
-			{
-				["RequestInfo"] = typeof(RequestInfo),
-				["Session"] = typeof(Session),
-				["User"] = typeof(User),
-			};
+			=> Extensions.GetJsEmbedTypes(embedTypes);
 
 		/// <summary>
 		/// Creates the Javascript engine for evaluating an expression
@@ -1241,34 +1232,7 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo">The object that presents the information - '__requestInfoJSON' global variable</param>
 		/// <returns></returns>
 		protected string GetJsExpression(string expression, object current, RequestInfo requestInfo)
-			=> Extensions.JsFunctions + Environment.NewLine
-				+ @"
-				function now(){
-					return __now();
-				}
-				function today(){
-					return __today();
-				}".Replace("\t", "").Replace("\r", "").Replace("\n", " ") + Environment.NewLine
-				+ "var __requestInfoJSON = " + (requestInfo ?? new RequestInfo()).ToJson() + ";" + Environment.NewLine
-				+ "(function(__object){__object['__evaluate']=function(){" + Environment.NewLine
-				+ (string.IsNullOrWhiteSpace(expression) || expression.Trim().Equals(";")
-					? "return undefined;"
-					: expression.StartsWith("@")
-						? $"return {expression.Right(expression.Length - 1).Trim() + (expression.Trim().EndsWith("();") || expression.Trim().EndsWith("()") ? "" : "();")}"
-						: expression.Trim()) + Environment.NewLine
-				+ "};return __object.__evaluate();})" + Environment.NewLine
-				+ "(" + (current != null
-					? (current is JToken
-						? current as JToken
-						: current.GetType().IsPrimitiveType()
-							? new JObject
-							{
-								{ "__value", new JValue(current) }
-							}
-							: current.ToJson()
-					).ToString(Formatting.None)
-					: "{}")
-				+ ");";
+			=> Extensions.GetJsExpression(expression, current, requestInfo);
 
 		/// <summary>
 		/// Evaluates an Javascript expression
@@ -1279,11 +1243,12 @@ namespace net.vieapps.Services
 		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
 		/// <returns>The object the presents the value that evaluated by the expression</returns>
-		protected object JsEvaluate(string expression, object current, RequestInfo requestInfo, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
+		protected object JsEvaluate(string expression, object current = null, RequestInfo requestInfo = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 		{
 			using (var jsEngine = this.GetJsEngine(current, requestInfo, embedObjects, embedTypes))
 			{
-				return jsEngine.JsEvaluate(this.GetJsExpression(expression, current, requestInfo));
+				var jsExpression = this.GetJsExpression(expression, current, requestInfo);
+				return jsEngine.JsEvaluate(jsExpression);
 			}
 		}
 
@@ -1297,7 +1262,7 @@ namespace net.vieapps.Services
 		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
 		/// <returns>The object the presents the value that evaluated by the expression</returns>
-		protected T JsEvaluate<T>(string expression, object current, RequestInfo requestInfo, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
+		protected T JsEvaluate<T>(string expression, object current = null, RequestInfo requestInfo = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 			=> Extensions.JsCast<T>(this.JsEvaluate(expression, current, requestInfo, embedObjects, embedTypes));
 
 		/// <summary>
@@ -1309,7 +1274,7 @@ namespace net.vieapps.Services
 		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
 		/// <returns>The collection of value that evaluated by the expressions</returns>
-		protected IEnumerable<object> JsEvaluate(IEnumerable<string> expressions, object current, RequestInfo requestInfo, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
+		protected IEnumerable<object> JsEvaluate(IEnumerable<string> expressions, object current = null, RequestInfo requestInfo = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 		{
 			using (var jsEngine = this.GetJsEngine(current, requestInfo, embedObjects, embedTypes))
 			{
