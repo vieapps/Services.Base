@@ -673,6 +673,23 @@ namespace net.vieapps.Services
 				: null;
 		#endregion
 
+		#region Get platform & environment info
+		/// <summary>
+		/// Gets the name of the runtime OS platform
+		/// </summary>
+		/// <returns></returns>
+		public static string GetRuntimeOS()
+			=> RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "Windows" : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "Linux" : "macOS";
+
+		/// <summary>
+		/// Gets the information of the runtime platform
+		/// </summary>
+		/// <returns></returns>
+		public static string GetRuntimePlatform(bool getFrameworkDescription = true)
+			=> (getFrameworkDescription ? $"{RuntimeInformation.FrameworkDescription} @ " : "")
+			+ $"{Extensions.GetRuntimeOS()} {RuntimeInformation.OSArchitecture} ({(RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "Macintosh; Intel Mac OS X; " : "")}{RuntimeInformation.OSDescription.Trim()})";
+		#endregion
+
 		#region Get unique name & end-point
 		/// <summary>
 		/// Gets the unique name of a business service
@@ -689,7 +706,7 @@ namespace net.vieapps.Services
 			user = (user ?? Environment.UserName).Trim().ToLower();
 			host = (host ?? Environment.MachineName).Trim().ToLower();
 			platform = (platform ?? RuntimeInformation.FrameworkDescription).Trim();
-			os = (os ?? $"{(RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "Windows" : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "Linux" : "macOS")} {RuntimeInformation.OSArchitecture} ({(RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "Macintosh; Intel Mac OS X; " : "")}{RuntimeInformation.OSDescription.Trim()})").Trim();
+			os = os ?? Extensions.GetRuntimeOS();
 			return $"{name}.{user}-{host}-" + $"{platform} @ {os}".GenerateUUID();
 		}
 
