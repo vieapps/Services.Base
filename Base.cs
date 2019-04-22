@@ -470,6 +470,28 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
 		/// </summary>
+		/// <param name="requestInfo">The request information</param>
+		/// <param name="logs">The logs</param>
+		/// <param name="exception">The exception</param>
+		/// <param name="mode">The logging mode</param>
+		/// <returns></returns>
+		protected Task WriteLogsAsync(RequestInfo requestInfo, List<string> logs, Exception exception = null, LogLevel mode = LogLevel.Information)
+			=> this.WriteLogsAsync(requestInfo.CorrelationID, this.Logger, logs, exception, requestInfo.ServiceName, requestInfo.ObjectName, mode);
+
+		/// <summary>
+		/// Writes the logs (to centerlized logging system and local logs)
+		/// </summary>
+		/// <param name="requestInfo">The request information</param>
+		/// <param name="log">The logs</param>
+		/// <param name="exception">The exception</param>
+		/// <param name="mode">The logging mode</param>
+		/// <returns></returns>
+		protected Task WriteLogsAsync(RequestInfo requestInfo, string log, Exception exception = null, LogLevel mode = LogLevel.Information)
+			=> this.WriteLogsAsync(requestInfo, !string.IsNullOrWhiteSpace(log) ? new List<string> { log } : null, exception, mode);
+
+		/// <summary>
+		/// Writes the logs (to centerlized logging system and local logs)
+		/// </summary>
 		/// <param name="correlationID">The correlation identity</param>
 		/// <param name="logger">The local logger</param>
 		/// <param name="logs">The logs</param>
@@ -516,6 +538,28 @@ namespace net.vieapps.Services
 		/// <param name="mode">The logging mode</param>
 		protected void WriteLogs(string correlationID, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
 			=> this.WriteLogs(correlationID, !string.IsNullOrWhiteSpace(log) ? new List<string> { log } : null, exception, serviceName, objectName, mode);
+
+		/// <summary>
+		/// Writes the logs (to centerlized logging system and local logs)
+		/// </summary>
+		/// <param name="requestInfo">The request information</param>
+		/// <param name="logs">The logs</param>
+		/// <param name="exception">The exception</param>
+		/// <param name="mode">The logging mode</param>
+		/// <returns></returns>
+		protected void WriteLogs(RequestInfo requestInfo, List<string> logs, Exception exception = null, LogLevel mode = LogLevel.Information)
+			=> Task.Run(() => this.WriteLogsAsync(requestInfo, logs, exception, mode)).ConfigureAwait(false);
+
+		/// <summary>
+		/// Writes the logs (to centerlized logging system and local logs)
+		/// </summary>
+		/// <param name="requestInfo">The request information</param>
+		/// <param name="log">The logs</param>
+		/// <param name="exception">The exception</param>
+		/// <param name="mode">The logging mode</param>
+		/// <returns></returns>
+		protected void WriteLogs(RequestInfo requestInfo, string log, Exception exception = null, LogLevel mode = LogLevel.Information)
+			=> this.WriteLogs(requestInfo, !string.IsNullOrWhiteSpace(log) ? new List<string> { log } : null, exception, mode);
 		#endregion
 
 		#region Call services
@@ -1127,7 +1171,7 @@ namespace net.vieapps.Services
 
 			// write into logs
 			stopwatch?.Stop();
-			this.WriteLogs(requestInfo.CorrelationID, new List<string> { $"Error response: {message}{(stopwatch == null ? "" : $" - Execution times: {stopwatch.GetElapsedTimes()}")}", $"Request: {requestInfo.ToJson().ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}" }, exception, requestInfo.ServiceName, requestInfo.ObjectName);
+			this.WriteLogs(requestInfo, new List<string> { $"Error response: {message}{(stopwatch == null ? "" : $" - Execution times: {stopwatch.GetElapsedTimes()}")}", $"Request: {requestInfo.ToJson().ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}" }, exception);
 
 			// return the exception
 			if (exception is WampException)
