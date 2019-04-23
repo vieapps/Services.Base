@@ -103,6 +103,26 @@ namespace net.vieapps.Services
 
 		#region Register the service
 		/// <summary>
+		/// Process the inter-communicate message
+		/// </summary>
+		/// <param name="message">The message</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		protected virtual Task ProcessGatewayCommunicateMessageAsync(CommunicateMessage message, CancellationToken cancellationToken = default(CancellationToken))
+		{
+			if (message.Type.IsEquals($"Service#UniqueInfo#{this.ServiceName.Trim().ToLower()}"))
+			{
+				var osPlatform = message.Data.Get<string>("OSPlatform") ?? "Windows";
+				if (!this.ServiceUniqueNames.TryGetValue(osPlatform, out string uniqueName))
+				{
+					uniqueName = message.Data.Get<string>("Name") ?? $"{this.ServiceName.Trim().ToLower()}.{UtilityService.NewUUID}";
+					this.ServiceUniqueNames.TryAdd(osPlatform, uniqueName);
+					this.Logger.LogInformation($"The unique name of related URIs is updated: {osPlatform} => net.vieapps.services.{uniqueName}");
+				}
+			}
+			return Task.CompletedTask;
+		}
+
+		/// <summary>
 		/// Registers the service
 		/// </summary>
 		/// <param name="onSuccessAsync"></param>
@@ -139,29 +159,15 @@ namespace net.vieapps.Services
 					.GetSubject<CommunicateMessage>($"net.vieapps.rtu.communicate.messages.{name}")
 					.Subscribe(
 						async message => await this.ProcessInterCommunicateMessageAsync(message).ConfigureAwait(false),
-						exception => this.Logger.LogError($"Error occurred while fetching inter-communicate message: {exception.Message}", this.State == ServiceState.Connected ? exception : null),
-						() => this.Logger.LogInformation("Inter-communicate message channel is completed")
+						exception => this.Logger.LogError($"Error occurred while fetching an inter-communicate message => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
 					);
 
 				this.GatewayCommunicator?.Dispose();
 				this.GatewayCommunicator = WAMPConnections.IncomingChannel.RealmProxy.Services
 					.GetSubject<CommunicateMessage>($"net.vieapps.rtu.communicate.messages.apigateway")
 					.Subscribe(
-						message =>
-						{
-							if (message.Type.IsEquals($"Service#UniqueInfo#{name}"))
-							{
-								var osPlatform = message.Data.Get<string>("OSPlatform") ?? "Windows";
-								if (!this.ServiceUniqueNames.TryGetValue(osPlatform, out string uniqueName))
-								{
-									uniqueName = message.Data.Get<string>("Name") ?? $"{name}.{UtilityService.NewUUID}";
-									this.ServiceUniqueNames.TryAdd(osPlatform, uniqueName);
-									this.Logger.LogInformation($"The unique name of related URIs is updated: {osPlatform} => net.vieapps.services.{uniqueName}");
-								}
-							}
-						},
-						exception => this.Logger.LogError($"Error occurred while fetching inter-communicate message of API Gateway: {exception.Message}", this.State == ServiceState.Connected ? exception : null),
-						() => this.Logger.LogInformation("Inter-communicate message channel of API Gateway is completed")
+						async message => await this.ProcessGatewayCommunicateMessageAsync(message).ConfigureAwait(false),
+						exception => this.Logger.LogError($"Error occurred while fetching an inter-communicate message of API Gateway => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
 					);
 
 				this.Logger.LogInformation($"The inter-communicate message updater is{(this.State == ServiceState.Disconnected ? " re-" : " ")}subscribed successful");
@@ -180,7 +186,7 @@ namespace net.vieapps.Services
 			}
 			catch (Exception ex)
 			{
-				this.Logger.LogError($"Cannot {(this.State == ServiceState.Disconnected ? " re-" : " ")}register the service: {ex.Message}", ex);
+				this.Logger.LogError($"Cannot {(this.State == ServiceState.Disconnected ? " re-" : " ")}register the service => {ex.Message}", ex);
 				if (onErrorAsync != null)
 					await onErrorAsync(ex).ConfigureAwait(false);
 			}
