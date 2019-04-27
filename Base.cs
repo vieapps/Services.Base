@@ -423,13 +423,13 @@ namespace net.vieapps.Services
 			{
 				while (this.Logs.TryDequeue(out log))
 					await this.LoggingService.WriteLogsAsync(log.Item1, log.Item2, log.Item3, log.Item4, log.Item5, this.CancellationTokenSource.Token).ConfigureAwait(false);
-				await this.LoggingService.WriteLogsAsync(correlationID, serviceName ?? (this.ServiceName ?? "APIGateway"), objectName, logs, exception.GetStack(), this.CancellationTokenSource.Token).ConfigureAwait(false);
+				await this.LoggingService.WriteLogsAsync(correlationID, serviceName ?? this.ServiceName ?? "APIGateway", objectName, logs, exception.GetStack(), this.CancellationTokenSource.Token).ConfigureAwait(false);
 			}
 			catch
 			{
 				if (log != null)
 					this.Logs.Enqueue(log);
-				this.Logs.Enqueue(new Tuple<string, string, string, List<string>, string>(correlationID, serviceName ?? (this.ServiceName ?? "APIGateway"), objectName, logs, exception.GetStack()));
+				this.Logs.Enqueue(new Tuple<string, string, string, List<string>, string>(correlationID, serviceName ?? this.ServiceName ?? "APIGateway", objectName, logs, exception.GetStack()));
 			}
 		}
 
