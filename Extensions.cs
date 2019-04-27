@@ -546,7 +546,7 @@ namespace net.vieapps.Services
 			correlationID = correlationID ?? UtilityService.NewUUID;
 			try
 			{
-				var json = await WAMPConnections.CallServiceAsync(new RequestInfo(session, "IPLocations", "IP-Location")
+				var json = await RouterConnections.CallServiceAsync(new RequestInfo(session, "IPLocations", "IP-Location")
 				{
 					Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 					{
@@ -565,7 +565,7 @@ namespace net.vieapps.Services
 				{
 					if ("Unknown".IsEquals(Extensions.CurrentLocation))
 					{
-						json = await WAMPConnections.CallServiceAsync(new RequestInfo(session, "IPLocations", "Current")
+						json = await RouterConnections.CallServiceAsync(new RequestInfo(session, "IPLocations", "Current")
 						{
 							CorrelationID = correlationID
 						}, cancellationToken).ConfigureAwait(false);

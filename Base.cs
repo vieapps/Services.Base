@@ -136,16 +136,16 @@ namespace net.vieapps.Services
 			{
 				try
 				{
-					this.ServiceInstance = await WAMPConnections.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(name)).ConfigureAwait(false);
-					this.ServiceUniqueInstance = await WAMPConnections.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(this.ServiceUniqueName, WampInvokePolicy.Single)).ConfigureAwait(false);
+					this.ServiceInstance = await RouterConnections.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(name)).ConfigureAwait(false);
+					this.ServiceUniqueInstance = await RouterConnections.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(this.ServiceUniqueName, WampInvokePolicy.Single)).ConfigureAwait(false);
 				}
 				catch
 				{
 					await Task.Delay(UtilityService.GetRandomNumber(456, 789)).ConfigureAwait(false);
 					try
 					{
-						this.ServiceInstance = await WAMPConnections.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(name)).ConfigureAwait(false);
-						this.ServiceUniqueInstance = await WAMPConnections.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(this.ServiceUniqueName, WampInvokePolicy.Single)).ConfigureAwait(false);
+						this.ServiceInstance = await RouterConnections.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(name)).ConfigureAwait(false);
+						this.ServiceUniqueInstance = await RouterConnections.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(this.ServiceUniqueName, WampInvokePolicy.Single)).ConfigureAwait(false);
 					}
 					catch (Exception)
 					{
@@ -155,7 +155,7 @@ namespace net.vieapps.Services
 				this.Logger.LogInformation($"The service is{(this.State == ServiceState.Disconnected ? " re-" : " ")}registered successful");
 
 				this.ServiceCommunicator?.Dispose();
-				this.ServiceCommunicator = WAMPConnections.IncomingChannel.RealmProxy.Services
+				this.ServiceCommunicator = RouterConnections.IncomingChannel.RealmProxy.Services
 					.GetSubject<CommunicateMessage>($"net.vieapps.rtu.communicate.messages.{name}")
 					.Subscribe(
 						async message => await this.ProcessInterCommunicateMessageAsync(message).ConfigureAwait(false),
@@ -163,7 +163,7 @@ namespace net.vieapps.Services
 					);
 
 				this.GatewayCommunicator?.Dispose();
-				this.GatewayCommunicator = WAMPConnections.IncomingChannel.RealmProxy.Services
+				this.GatewayCommunicator = RouterConnections.IncomingChannel.RealmProxy.Services
 					.GetSubject<CommunicateMessage>($"net.vieapps.rtu.communicate.messages.apigateway")
 					.Subscribe(
 						async message => await this.ProcessGatewayCommunicateMessageAsync(message).ConfigureAwait(false),
@@ -640,7 +640,7 @@ namespace net.vieapps.Services
 		/// <param name="name">The string that presents name of a service</param>
 		/// <returns></returns>
 		protected Task<IService> GetServiceAsync(string name)
-			=> WAMPConnections.GetServiceAsync(name);
+			=> RouterConnections.GetServiceAsync(name);
 
 		/// <summary>
 		/// Gets the unique name of the service for a specific OS platform
@@ -665,10 +665,10 @@ namespace net.vieapps.Services
 
 			if (!this.UniqueServices.TryGetValue(name, out IUniqueService service))
 			{
-				await WAMPConnections.OpenOutgoingChannelAsync().ConfigureAwait(false);
+				await RouterConnections.OpenOutgoingChannelAsync().ConfigureAwait(false);
 				if (!this.UniqueServices.TryGetValue(name, out service))
 				{
-					service = WAMPConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IUniqueService>(ProxyInterceptor.Create(name));
+					service = RouterConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IUniqueService>(ProxyInterceptor.Create(name));
 					this.UniqueServices.TryAdd(osPlatform, service);
 				}
 			}
@@ -1348,13 +1348,13 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected virtual Task StartAsync(Func<ServiceBase, Task> onRegisterSuccessAsync = null, Func<Exception, Task> onRegisterErrorAsync = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
 		{
-			this.Logger.LogInformation($"Attempting to connect to WAMP router [{new Uri(WAMPConnections.GetRouterStrInfo()).GetResolvedURI()}]");
+			this.Logger.LogInformation($"Attempting to connect to API Gateway Router [{new Uri(RouterConnections.GetRouterStrInfo()).GetResolvedURI()}]");
 			return Task.WhenAll(
-				WAMPConnections.OpenIncomingChannelAsync(
+				RouterConnections.OpenIncomingChannelAsync(
 					(sender, arguments) =>
 					{
-						this.Logger.LogInformation($"Incoming channel to WAMP router is established - Session ID: {WAMPConnections.IncomingChannelSessionID}");
-						WAMPConnections.IncomingChannel.Update(WAMPConnections.IncomingChannelSessionID, this.ServiceName, $"Incoming ({this.ServiceURI})");
+						this.Logger.LogInformation($"Incoming channel to API Gateway Router is established - Session ID: {RouterConnections.IncomingChannelSessionID}");
+						RouterConnections.IncomingChannel.Update(RouterConnections.IncomingChannelSessionID, this.ServiceName, $"Incoming ({this.ServiceURI})");
 						if (this.State == ServiceState.Initializing)
 							this.State = ServiceState.Ready;
 
@@ -1373,13 +1373,13 @@ namespace net.vieapps.Services
 						if (this.State == ServiceState.Connected)
 							this.State = ServiceState.Disconnected;
 
-						if (WAMPConnections.ChannelsAreClosedBySystem || arguments.CloseType.Equals(SessionCloseType.Goodbye))
-							this.Logger.LogInformation($"The incoming channel to WAMP router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+						if (RouterConnections.ChannelsAreClosedBySystem || arguments.CloseType.Equals(SessionCloseType.Goodbye))
+							this.Logger.LogInformation($"The incoming channel to API Gateway Router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
 
-						else if (WAMPConnections.IncomingChannel != null)
+						else if (RouterConnections.IncomingChannel != null)
 						{
-							this.Logger.LogInformation($"The incoming channel to WAMP router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
-							WAMPConnections.IncomingChannel.ReOpen(this.CancellationTokenSource.Token, (msg, ex) => this.Logger.LogDebug(msg, ex), "Incoming");
+							this.Logger.LogInformation($"The incoming channel to API Gateway Router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+							RouterConnections.IncomingChannel.ReOpen(this.CancellationTokenSource.Token, (msg, ex) => this.Logger.LogDebug(msg, ex), "Incoming");
 						}
 
 						try
@@ -1393,7 +1393,7 @@ namespace net.vieapps.Services
 					},
 					(sender, arguments) =>
 					{
-						this.Logger.LogDebug($"The incoming channel to WAMP router got an error: {arguments.Exception.Message}", arguments.Exception);
+						this.Logger.LogDebug($"The incoming channel to API Gateway Router got an error: {arguments.Exception.Message}", arguments.Exception);
 						try
 						{
 							onIncomingConnectionError?.Invoke(sender, arguments);
@@ -1404,17 +1404,17 @@ namespace net.vieapps.Services
 						}
 					}
 				),
-				WAMPConnections.OpenOutgoingChannelAsync(
+				RouterConnections.OpenOutgoingChannelAsync(
 					(sender, arguments) =>
 					{
-						this.Logger.LogInformation($"Outgoing channel to WAMP router is established - Session ID: {WAMPConnections.OutgoingChannelSessionID}");
-						WAMPConnections.OutgoingChannel.Update(WAMPConnections.OutgoingChannelSessionID, this.ServiceName, $"Outgoing ({this.ServiceURI})");
+						this.Logger.LogInformation($"Outgoing channel to API Gateway Router is established - Session ID: {RouterConnections.OutgoingChannelSessionID}");
+						RouterConnections.OutgoingChannel.Update(RouterConnections.OutgoingChannelSessionID, this.ServiceName, $"Outgoing ({this.ServiceURI})");
 
 						try
 						{
-							this.RTUService = WAMPConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IRTUService>(ProxyInterceptor.Create());
-							this.MessagingService = WAMPConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IMessagingService>(ProxyInterceptor.Create());
-							this.LoggingService = WAMPConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<ILoggingService>(ProxyInterceptor.Create());
+							this.RTUService = RouterConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IRTUService>(ProxyInterceptor.Create());
+							this.MessagingService = RouterConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IMessagingService>(ProxyInterceptor.Create());
+							this.LoggingService = RouterConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<ILoggingService>(ProxyInterceptor.Create());
 							this.Logger.LogInformation($"Helper services are{(this.State == ServiceState.Disconnected ? " re-" : " ")}initialized");
 						}
 						catch (Exception ex)
@@ -1426,7 +1426,7 @@ namespace net.vieapps.Services
 						{
 							try
 							{
-								while (WAMPConnections.IncomingChannel == null || WAMPConnections.OutgoingChannel == null)
+								while (RouterConnections.IncomingChannel == null || RouterConnections.OutgoingChannel == null)
 									await Task.Delay(UtilityService.GetRandomNumber(123, 456)).ConfigureAwait(false);
 								await this.SendInterCommunicateMessageAsync(new CommunicateMessage
 								{
@@ -1455,13 +1455,13 @@ namespace net.vieapps.Services
 					},
 					(sender, arguments) =>
 					{
-						if (WAMPConnections.ChannelsAreClosedBySystem || arguments.CloseType.Equals(SessionCloseType.Goodbye))
-							this.Logger.LogInformation($"The outgoing channel to WAMP router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+						if (RouterConnections.ChannelsAreClosedBySystem || arguments.CloseType.Equals(SessionCloseType.Goodbye))
+							this.Logger.LogInformation($"The outgoing channel to API Gateway Router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
 
-						else if (WAMPConnections.OutgoingChannel != null)
+						else if (RouterConnections.OutgoingChannel != null)
 						{
-							this.Logger.LogInformation($"The outgoing channel to WAMP router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
-							WAMPConnections.OutgoingChannel.ReOpen(this.CancellationTokenSource.Token, (msg, ex) => this.Logger.LogDebug(msg, ex), "Outgoing");
+							this.Logger.LogInformation($"The outgoing channel to API Gateway Router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+							RouterConnections.OutgoingChannel.ReOpen(this.CancellationTokenSource.Token, (msg, ex) => this.Logger.LogDebug(msg, ex), "Outgoing");
 						}
 
 						try
@@ -1475,7 +1475,7 @@ namespace net.vieapps.Services
 					},
 					(sender, arguments) =>
 					{
-						this.Logger.LogDebug($"The outgoing channel to WAMP router got an error: {arguments.Exception.Message}", arguments.Exception);
+						this.Logger.LogDebug($"The outgoing channel to API Gateway Router got an error: {arguments.Exception.Message}", arguments.Exception);
 						try
 						{
 							onOutgoingConnectionError?.Invoke(sender, arguments);
@@ -1615,7 +1615,7 @@ namespace net.vieapps.Services
 						this.ServiceUniqueInstance = null;
 					}
 			})
-			.ContinueWith(_ => WAMPConnections.CloseChannels(), TaskContinuationOptions.OnlyOnRanToCompletion)
+			.ContinueWith(_ => RouterConnections.CloseChannels(), TaskContinuationOptions.OnlyOnRanToCompletion)
 			.ContinueWith(_ => this.StopTimers(), TaskContinuationOptions.OnlyOnRanToCompletion)
 			.ContinueWith(_ => this.CancellationTokenSource.Cancel(), TaskContinuationOptions.OnlyOnRanToCompletion)
 			.ContinueWith(_ => this.Logger?.LogDebug("Stopped"), TaskContinuationOptions.OnlyOnRanToCompletion)
