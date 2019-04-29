@@ -8,11 +8,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
-
 using WampSharp.V2.Core.Contracts;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-
+using Microsoft.Extensions.Logging;
 using net.vieapps.Components.Utility;
 using net.vieapps.Components.Repository;
 #endregion
@@ -546,7 +545,7 @@ namespace net.vieapps.Services
 			correlationID = correlationID ?? UtilityService.NewUUID;
 			try
 			{
-				var json = await RouterConnections.CallServiceAsync(new RequestInfo(session, "IPLocations", "IP-Location")
+				var response = await RouterConnections.CallServiceAsync(new RequestInfo(session, "IPLocations", "IP-Location")
 				{
 					Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 					{
@@ -555,25 +554,25 @@ namespace net.vieapps.Services
 					CorrelationID = correlationID
 				}, cancellationToken).ConfigureAwait(false);
 
-				var city = json.Get<string>("City");
-				var region = json.Get<string>("Region");
+				var city = response.Get<string>("City");
+				var region = response.Get<string>("Region");
 				if (region.Equals(city) && !"N/A".IsEquals(city))
 					region = "";
-				var country = json.Get<string>("Country");
+				var country = response.Get<string>("Country");
 
 				if ("N/A".IsEquals(city) && "N/A".IsEquals(region) && "N/A".IsEquals(country))
 				{
 					if ("Unknown".IsEquals(Extensions.CurrentLocation))
 					{
-						json = await RouterConnections.CallServiceAsync(new RequestInfo(session, "IPLocations", "Current")
+						response = await RouterConnections.CallServiceAsync(new RequestInfo(session, "IPLocations", "Current")
 						{
 							CorrelationID = correlationID
 						}, cancellationToken).ConfigureAwait(false);
-						city = json.Get<string>("City");
-						region = json.Get<string>("Region");
+						city = response.Get<string>("City");
+						region = response.Get<string>("Region");
 						if (region.Equals(city) && !"N/A".IsEquals(city))
 							region = "";
-						country = json.Get<string>("Country");
+						country = response.Get<string>("Country");
 						Extensions.CurrentLocation = $"{city}, {region}, {country}".Replace(", ,", ",");
 					}
 					return Extensions.CurrentLocation;
@@ -594,7 +593,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
 		public static Task<string> GetLocationAsync(this RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken))
-			=> requestInfo.Session?.GetLocationAsync(requestInfo.CorrelationID, cancellationToken) ?? Task.FromResult("Unknown");
+			=> requestInfo.Session == null ? Task.FromResult("Unknown") : requestInfo.Session.GetLocationAsync(requestInfo.CorrelationID, cancellationToken);
 		#endregion
 
 		#region Encryption
