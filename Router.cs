@@ -70,7 +70,7 @@ namespace net.vieapps.Services
 			(
 				UtilityService.GetAppSetting("Router:Uri", "ws://127.0.0.1:16429/"),
 				UtilityService.GetAppSetting("Router:Realm", "VIEAppsRealm"),
-				"json".IsEquals(UtilityService.GetAppSetting("Router:ChannelsMode", "Json"))
+				"json".IsEquals(UtilityService.GetAppSetting("Router:ChannelsMode", "MsgPack"))
 			);
 
 		/// <summary>
