@@ -9,18 +9,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
-
 using Microsoft.Extensions.Logging;
-
 using WampSharp.Binding;
 using WampSharp.Core.Listener;
 using WampSharp.V2;
 using WampSharp.V2.Realm;
 using WampSharp.V2.Core.Contracts;
-
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-
 using net.vieapps.Components.Utility;
 using net.vieapps.Components.Security;
 using net.vieapps.Components.Repository;
@@ -32,7 +28,7 @@ namespace net.vieapps.Services
 	/// <summary>
 	/// Helper extension methods for working with API Gateway Router
 	/// </summary>
-	public static partial class RouterConnections
+	public static partial class Router
 	{
 
 		#region Properties
@@ -74,7 +70,7 @@ namespace net.vieapps.Services
 			(
 				UtilityService.GetAppSetting("Router:Uri", "ws://127.0.0.1:16429/"),
 				UtilityService.GetAppSetting("Router:Realm", "VIEAppsRealm"),
-				"json".IsEquals(UtilityService.GetAppSetting("Router:ChannelsMode", "MsgPack"))
+				"json".IsEquals(UtilityService.GetAppSetting("Router:ChannelsMode", "Json"))
 			);
 
 		/// <summary>
@@ -83,7 +79,7 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static string GetRouterStrInfo()
 		{
-			var routerInfo = RouterConnections.GetRouterInfo();
+			var routerInfo = Router.GetRouterInfo();
 			return $"{routerInfo.Item1}{(routerInfo.Item1.EndsWith("/") ? "" : "/")}{routerInfo.Item2}";
 		}
 		#endregion
@@ -97,10 +93,9 @@ namespace net.vieapps.Services
 		/// <param name="onConnectionError">The action to fire when the connection got any error</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static async Task<IWampChannel> OpenAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null, CancellationToken cancellationToken = default(CancellationToken))
+		public static Task<IWampChannel> OpenAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
-			// prepare
-			var routerInfo = RouterConnections.GetRouterInfo();
+			var routerInfo = Router.GetRouterInfo();
 			var address = routerInfo.Item1;
 			var realm = routerInfo.Item2;
 			var useJsonChannel = routerInfo.Item3;
@@ -109,6 +104,20 @@ namespace net.vieapps.Services
 				? new DefaultWampChannelFactory().CreateJsonChannel(address, realm)
 				: new DefaultWampChannelFactory().CreateMsgpackChannel(address, realm);
 
+			return wampChannel.OpenAsync(cancellationToken, onConnectionEstablished, onConnectionBroken, onConnectionError);
+		}
+
+		/// <summary>
+		/// Opens a channel to the API Gateway Router
+		/// </summary>
+		/// <param name="wampChannel"></param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <param name="onConnectionEstablished">The action to fire when the connection is established</param>
+		/// <param name="onConnectionBroken">The action to fire when the connection is broken</param>
+		/// <param name="onConnectionError">The action to fire when the connection got any error</param>
+		/// <returns></returns>
+		public static async Task<IWampChannel> OpenAsync(this IWampChannel wampChannel, CancellationToken cancellationToken = default(CancellationToken), Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null)
+		{
 			// asisgn event handler
 			if (onConnectionEstablished != null)
 				wampChannel.RealmProxy.Monitor.ConnectionEstablished += new EventHandler<WampSessionCreatedEventArgs>(onConnectionEstablished);
@@ -121,8 +130,6 @@ namespace net.vieapps.Services
 
 			// open the channel
 			await wampChannel.Open().WithCancellationToken(cancellationToken).ConfigureAwait(false);
-
-			// return the connected channel
 			return wampChannel;
 		}
 
@@ -176,11 +183,11 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		public static async Task<IWampChannel> OpenIncomingChannelAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null, CancellationToken cancellationToken = default(CancellationToken))
-			=> RouterConnections.IncomingChannel ?? (RouterConnections.IncomingChannel = await RouterConnections.OpenAsync(
+			=> Router.IncomingChannel ?? (Router.IncomingChannel = await Router.OpenAsync(
 					(sender, args) =>
 					{
-						RouterConnections.IncomingChannelSessionID = args.SessionId;
-						RouterConnections.ChannelsAreClosedBySystem = false;
+						Router.IncomingChannelSessionID = args.SessionId;
+						Router.ChannelsAreClosedBySystem = false;
 						onConnectionEstablished?.Invoke(sender, args);
 					},
 					onConnectionBroken,
@@ -197,11 +204,11 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		public static async Task<IWampChannel> OpenOutgoingChannelAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null, CancellationToken cancellationToken = default(CancellationToken))
-			=> RouterConnections.OutgoingChannel ?? (RouterConnections.OutgoingChannel = await RouterConnections.OpenAsync(
+			=> Router.OutgoingChannel ?? (Router.OutgoingChannel = await Router.OpenAsync(
 					(sender, args) =>
 					{
-						RouterConnections.OutgoingChannelSessionID = args.SessionId;
-						RouterConnections.ChannelsAreClosedBySystem = false;
+						Router.OutgoingChannelSessionID = args.SessionId;
+						Router.ChannelsAreClosedBySystem = false;
 						onConnectionEstablished?.Invoke(sender, args);
 					},
 					onConnectionBroken,
@@ -217,12 +224,12 @@ namespace net.vieapps.Services
 		/// <param name="message">The message to send to API Gateway Router before closing the channel</param>
 		public static void CloseIncomingChannel(string message = null)
 		{
-			if (RouterConnections.IncomingChannel != null)
+			if (Router.IncomingChannel != null)
 				try
 				{
-					RouterConnections.IncomingChannel.Close(message ?? "Disconnected", new GoodbyeDetails());
-					RouterConnections.IncomingChannel = null;
-					RouterConnections.IncomingChannelSessionID = 0;
+					Router.IncomingChannel.Close(message ?? "Disconnected", new GoodbyeDetails());
+					Router.IncomingChannel = null;
+					Router.IncomingChannelSessionID = 0;
 				}
 				catch { }
 		}
@@ -233,12 +240,12 @@ namespace net.vieapps.Services
 		/// <param name="message">The message to send to API Gateway Router before closing the channel</param>
 		public static void CloseOutgoingChannel(string message = null)
 		{
-			if (RouterConnections.OutgoingChannel != null)
+			if (Router.OutgoingChannel != null)
 				try
 				{
-					RouterConnections.OutgoingChannel.Close(message ?? "Disconnected", new GoodbyeDetails());
-					RouterConnections.OutgoingChannel = null;
-					RouterConnections.OutgoingChannelSessionID = 0;
+					Router.OutgoingChannel.Close(message ?? "Disconnected", new GoodbyeDetails());
+					Router.OutgoingChannel = null;
+					Router.OutgoingChannelSessionID = 0;
 				}
 				catch { }
 		}
@@ -248,9 +255,9 @@ namespace net.vieapps.Services
 		/// </summary>
 		public static void CloseChannels()
 		{
-			RouterConnections.ChannelsAreClosedBySystem = true;
-			RouterConnections.CloseIncomingChannel();
-			RouterConnections.CloseOutgoingChannel();
+			Router.ChannelsAreClosedBySystem = true;
+			Router.CloseIncomingChannel();
+			Router.CloseOutgoingChannel();
 		}
 		#endregion
 
@@ -264,16 +271,16 @@ namespace net.vieapps.Services
 		/// <param name="description"></param>
 		public static void Update(this IWampChannel wampChannel, long sessionID, string name, string description)
 		{
-			if (RouterConnections.StatisticsWebSocket == null)
-				RouterConnections.StatisticsWebSocket = new WebSocket(null, null, CancellationToken.None)
+			if (Router.StatisticsWebSocket == null)
+				Router.StatisticsWebSocket = new WebSocket(null, null, CancellationToken.None)
 				{
-					OnConnectionEstablished = websocket => RouterConnections.StatisticsWebSocketConnection = websocket,
-					OnConnectionBroken = websocket => RouterConnections.StatisticsWebSocketConnection = null
+					OnConnectionEstablished = websocket => Router.StatisticsWebSocketConnection = websocket,
+					OnConnectionBroken = websocket => Router.StatisticsWebSocketConnection = null
 				};
 
 			async Task sendAsync()
 			{
-				await RouterConnections.StatisticsWebSocketConnection.SendAsync(new JObject
+				await Router.StatisticsWebSocketConnection.SendAsync(new JObject
 				{
 					{ "Command", "Update" },
 					{ "SessionID", sessionID },
@@ -282,10 +289,10 @@ namespace net.vieapps.Services
 				}.ToString(Formatting.None), true).ConfigureAwait(false);
 			}
 
-			if (RouterConnections.StatisticsWebSocketConnection == null)
+			if (Router.StatisticsWebSocketConnection == null)
 			{
-				var uri = new Uri(RouterConnections.GetRouterStrInfo());
-				RouterConnections.StatisticsWebSocket.Connect($"{uri.Scheme}://{uri.Host}:56429/", websocket => Task.Run(() => sendAsync()).ConfigureAwait(false), null);
+				var uri = new Uri(Router.GetRouterStrInfo());
+				Router.StatisticsWebSocket.Connect($"{uri.Scheme}://{uri.Host}:56429/", websocket => Task.Run(() => sendAsync()).ConfigureAwait(false), null);
 			}
 			else
 				Task.Run(() => sendAsync()).ConfigureAwait(false);
@@ -305,13 +312,13 @@ namespace net.vieapps.Services
 			if (string.IsNullOrWhiteSpace(name))
 				return null;
 
-			if (!RouterConnections.Services.TryGetValue(name, out IService service))
+			if (!Router.Services.TryGetValue(name, out IService service))
 			{
-				await RouterConnections.OpenOutgoingChannelAsync().ConfigureAwait(false);
-				if (!RouterConnections.Services.TryGetValue(name, out service))
+				await Router.OpenOutgoingChannelAsync().ConfigureAwait(false);
+				if (!Router.Services.TryGetValue(name, out service))
 				{
-					service = RouterConnections.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IService>(ProxyInterceptor.Create(name));
-					RouterConnections.Services.TryAdd(name, service);
+					service = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IService>(ProxyInterceptor.Create(name));
+					Router.Services.TryAdd(name, service);
 				}
 			}
 
@@ -326,7 +333,7 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static async Task<JToken> CallServiceAsync(this RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken))
 		{
-			var service = await RouterConnections.GetServiceAsync(requestInfo != null && !string.IsNullOrWhiteSpace(requestInfo.ServiceName) ? requestInfo.ServiceName : "unknown").ConfigureAwait(false);
+			var service = await Router.GetServiceAsync(requestInfo != null && !string.IsNullOrWhiteSpace(requestInfo.ServiceName) ? requestInfo.ServiceName : "unknown").ConfigureAwait(false);
 			return await service.ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false);
 		}
 		#endregion

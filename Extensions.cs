@@ -545,7 +545,7 @@ namespace net.vieapps.Services
 			correlationID = correlationID ?? UtilityService.NewUUID;
 			try
 			{
-				var response = await RouterConnections.CallServiceAsync(new RequestInfo(session, "IPLocations", "IP-Location")
+				var response = await Router.CallServiceAsync(new RequestInfo(session, "IPLocations", "IP-Location")
 				{
 					Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 					{
@@ -564,7 +564,7 @@ namespace net.vieapps.Services
 				{
 					if ("Unknown".IsEquals(Extensions.CurrentLocation))
 					{
-						response = await RouterConnections.CallServiceAsync(new RequestInfo(session, "IPLocations", "Current")
+						response = await Router.CallServiceAsync(new RequestInfo(session, "IPLocations", "Current")
 						{
 							CorrelationID = correlationID
 						}, cancellationToken).ConfigureAwait(false);
