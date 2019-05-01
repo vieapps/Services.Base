@@ -678,7 +678,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <returns></returns>
 		public static string GetRuntimeOS()
-			=> RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "Windows" : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "Linux" : "macOS";
+			=> RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "macOS" : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "Linux" : "Windows";
 
 		/// <summary>
 		/// Gets the information of the runtime platform
@@ -686,7 +686,7 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static string GetRuntimePlatform(bool getFrameworkDescription = true)
 			=> (getFrameworkDescription ? $"{RuntimeInformation.FrameworkDescription} @ " : "")
-			+ $"{Extensions.GetRuntimeOS()} {RuntimeInformation.OSArchitecture} ({(RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "Macintosh; Intel Mac OS X; " : "")}{RuntimeInformation.OSDescription.Trim()})";
+			+ $"{Extensions.GetRuntimeOS()} {RuntimeInformation.OSArchitecture.ToString().ToLower()} ({(RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "Macintosh; Intel Mac OS X; " : "")}{RuntimeInformation.OSDescription.Trim()})";
 		#endregion
 
 		#region Get unique name & end-point

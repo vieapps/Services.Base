@@ -59,7 +59,7 @@ namespace net.vieapps.Services
 
 		static WebSocket StatisticsWebSocket { get; set; }
 
-		static ManagedWebSocket StatisticsWebSocketConnection { get; set; }
+		static string StatisticsWebSocketState { get; set; }
 
 		/// <summary>
 		/// Gets information of API Gateway Router
@@ -157,7 +157,7 @@ namespace net.vieapps.Services
 
 				try
 				{
-					await wampChannel.Open().WithCancellationToken(cancellationToken).ConfigureAwait(false);
+					await wampChannel.OpenAsync(cancellationToken).ConfigureAwait(false);
 					tracker?.Invoke($"{(string.IsNullOrWhiteSpace(prefix) ? "" : $"[{prefix}] => ")}Reconnected", null);
 				}
 				catch (Exception ex)
@@ -269,33 +269,29 @@ namespace net.vieapps.Services
 		/// <param name="sessionID"></param>
 		/// <param name="name"></param>
 		/// <param name="description"></param>
-		public static void Update(this IWampChannel wampChannel, long sessionID, string name, string description)
+		public static async Task UpdateAsync(this IWampChannel wampChannel, long sessionID, string name, string description)
 		{
 			if (Router.StatisticsWebSocket == null)
-				Router.StatisticsWebSocket = new WebSocket(null, null, CancellationToken.None)
-				{
-					OnConnectionEstablished = websocket => Router.StatisticsWebSocketConnection = websocket,
-					OnConnectionBroken = websocket => Router.StatisticsWebSocketConnection = null
-				};
+				Router.StatisticsWebSocket = new WebSocket(null, null, CancellationToken.None);
 
-			async Task sendAsync()
+			if (Router.StatisticsWebSocketState == null)
 			{
-				await Router.StatisticsWebSocketConnection.SendAsync(new JObject
+				Router.StatisticsWebSocketState = "connecting";
+				var uri = new Uri(Router.GetRouterStrInfo());
+				Router.StatisticsWebSocket.Connect($"{uri.Scheme}://{uri.Host}:56429/", websocket => Router.StatisticsWebSocketState = "connected", exception => Router.StatisticsWebSocketState = "closed");
+			}
+
+			while (Router.StatisticsWebSocketState == "connecting")
+				await Task.Delay(UtilityService.GetRandomNumber(234, 567)).ConfigureAwait(false);
+
+			if (Router.StatisticsWebSocketState == "connected")
+				await Router.StatisticsWebSocket.GetWebSockets().First().SendAsync(new JObject
 				{
 					{ "Command", "Update" },
 					{ "SessionID", sessionID },
 					{ "Name", name },
 					{ "Description", description }
 				}.ToString(Formatting.None), true).ConfigureAwait(false);
-			}
-
-			if (Router.StatisticsWebSocketConnection == null)
-			{
-				var uri = new Uri(Router.GetRouterStrInfo());
-				Router.StatisticsWebSocket.Connect($"{uri.Scheme}://{uri.Host}:56429/", websocket => Task.Run(() => sendAsync()).ConfigureAwait(false), null);
-			}
-			else
-				Task.Run(() => sendAsync()).ConfigureAwait(false);
 		}
 		#endregion
 

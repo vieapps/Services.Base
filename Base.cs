@@ -1359,7 +1359,7 @@ namespace net.vieapps.Services
 					(sender, arguments) =>
 					{
 						this.Logger.LogInformation($"Incoming channel to API Gateway Router is established - Session ID: {Router.IncomingChannelSessionID}");
-						Router.IncomingChannel.Update(Router.IncomingChannelSessionID, this.ServiceName, $"Incoming ({this.ServiceURI})");
+						Task.Run(() => Router.IncomingChannel.UpdateAsync(Router.IncomingChannelSessionID, this.ServiceName, $"Incoming ({this.ServiceURI})")).ConfigureAwait(false);
 						if (this.State == ServiceState.Initializing)
 							this.State = ServiceState.Ready;
 
@@ -1413,7 +1413,7 @@ namespace net.vieapps.Services
 					(sender, arguments) =>
 					{
 						this.Logger.LogInformation($"Outgoing channel to API Gateway Router is established - Session ID: {Router.OutgoingChannelSessionID}");
-						Router.OutgoingChannel.Update(Router.OutgoingChannelSessionID, this.ServiceName, $"Outgoing ({this.ServiceURI})");
+						Task.Run(() => Router.OutgoingChannel.UpdateAsync(Router.OutgoingChannelSessionID, this.ServiceName, $"Outgoing ({this.ServiceURI})")).ConfigureAwait(false);
 
 						try
 						{
