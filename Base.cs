@@ -66,11 +66,11 @@ namespace net.vieapps.Services
 			if (message.Type.IsStartsWith("Service#UniqueInfo") && message.Type.EndsWith($"#{this.ServiceName.Trim().ToLower()}"))
 			{
 				var osPlatform = message.Data.Get<string>("OSPlatform") ?? "Windows";
-				if (!this.ServiceUniqueNames.TryGetValue(osPlatform, out string uniqueName))
+				if (!this.ServiceUniqueNames.TryGetValue(osPlatform, out var uniqueName))
 				{
 					uniqueName = message.Data.Get<string>("Name") ?? $"{this.ServiceName.Trim().ToLower()}.{UtilityService.NewUUID}";
 					this.ServiceUniqueNames.TryAdd(osPlatform, uniqueName);
-					this.Logger.LogInformation($"The unique name of related URIs is updated: {osPlatform} => net.vieapps.services.{uniqueName}");
+					this.Logger.LogInformation($"The unique name of related URIs is updated: {osPlatform} => services.{uniqueName}");
 				}
 			}
 			return Task.CompletedTask;
@@ -161,7 +161,7 @@ namespace net.vieapps.Services
 
 				this.ServiceCommunicator?.Dispose();
 				this.ServiceCommunicator = Router.IncomingChannel.RealmProxy.Services
-					.GetSubject<CommunicateMessage>($"net.vieapps.rtu.communicate.messages.{name}")
+					.GetSubject<CommunicateMessage>($"rtu.communicate.messages.{name}")
 					.Subscribe(
 						async message => await this.ProcessInterCommunicateMessageAsync(message).ConfigureAwait(false),
 						exception => this.Logger.LogError($"Error occurred while fetching an inter-communicate message => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
@@ -169,7 +169,7 @@ namespace net.vieapps.Services
 
 				this.GatewayCommunicator?.Dispose();
 				this.GatewayCommunicator = Router.IncomingChannel.RealmProxy.Services
-					.GetSubject<CommunicateMessage>($"net.vieapps.rtu.communicate.messages.apigateway")
+					.GetSubject<CommunicateMessage>($"rtu.communicate.messages.apigateway")
 					.Subscribe(
 						async message => await this.ProcessGatewayCommunicateMessageAsync(message).ConfigureAwait(false),
 						exception => this.Logger.LogError($"Error occurred while fetching an inter-communicate message of API Gateway => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
@@ -691,12 +691,8 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected async Task<List<Tuple<string, string, string, bool>>> GetSessionsAsync(RequestInfo requestInfo, string userID = null, CancellationToken cancellationToken = default(CancellationToken))
 		{
-			var result = await this.CallServiceAsync(new RequestInfo
+			var result = await this.CallServiceAsync(new RequestInfo(requestInfo.Session, "Users", "Account", "HEAD")
 			{
-				Session = requestInfo.Session,
-				ServiceName = "users",
-				ObjectName = "account",
-				Verb = "HEAD",
 				Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 				{
 					{ "object-identity", userID ?? requestInfo.Session.User.ID }

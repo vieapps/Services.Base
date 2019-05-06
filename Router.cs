@@ -318,7 +318,7 @@ namespace net.vieapps.Services
 				}
 			}
 
-			return service ?? throw new ServiceNotFoundException($"The service \"net.vieapps.services.{name?.ToLower()}\" is not found");
+			return service ?? throw new ServiceNotFoundException($"The service \"{name?.ToLower()}\" is not found");
 		}
 
 		/// <summary>
