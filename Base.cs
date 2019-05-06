@@ -104,7 +104,7 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the full URI of this service
 		/// </summary>
-		public string ServiceURI => $"net.vieapps.services.{(this.ServiceName ?? "unknown").Trim().ToLower()}";
+		public string ServiceURI => $"services.{(this.ServiceName ?? "unknown").Trim().ToLower()}";
 
 		/// <summary>
 		/// Gets the unique name for working with related URIs
@@ -114,7 +114,7 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the full unique URI of this service
 		/// </summary>
-		public string ServiceUniqueURI => $"net.vieapps.services.{(this.ServiceUniqueName ?? "unknown").Trim().ToLower()}";
+		public string ServiceUniqueURI => $"services.{(this.ServiceUniqueName ?? "unknown").Trim().ToLower()}";
 
 		/// <summary>
 		/// Gets or sets the single instance of current playing service component

@@ -7,13 +7,26 @@
 		<WarningLevel>3</WarningLevel>
 		<DocumentationFile>bin\$(Configuration)\netstandard2.0\VIEApps.Services.Base.xml</DocumentationFile>
 		<AssemblyTitle>VIEApps NGX Service Base</AssemblyTitle>
+		<AssemblyVersion>10.2.1905.1</AssemblyVersion>
+		<FileVersion>10.2.1905.1</FileVersion>
+		<InformationalVersion>v10.2.netstandard-2+rev:2019.05.01-extensions</InformationalVersion>
+		<GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+		<PackageId>VIEApps.Services.Base</PackageId>
+		<Version>10.2.1905.1</Version>
+		<Title>VIEApps NGX Base Service</Title>
+		<Description>The base for all microservices in the VIEApps NGX</Description>
 		<Authors>VIEApps.net</Authors>
 		<Company>VIEApps.net</Company>
 		<Product>VIEApps NGX</Product>
 		<Copyright>© 2019 VIEApps.net</Copyright>
-		<AssemblyVersion>10.2.1905.1</AssemblyVersion>
-		<FileVersion>10.2.1905.1</FileVersion>
-		<InformationalVersion>v10.2.netstandard-2+rev:2019.05.01-extensions</InformationalVersion>
+		<PackageLicense>LICENSE.md</PackageLicense>
+		<PackageOutputPath>..\..\Components</PackageOutputPath>
+		<PackageTags>services;microservices;vieapps;vieapps.components;vieapps.services;vieapps.microservices</PackageTags>
+		<PackageReleaseNotes>Upgrade to latest components</PackageReleaseNotes>
+		<PackageIconUrl>https://github.com/vieapps/Components.Utility/raw/master/logo.png</PackageIconUrl>
+		<PackageProjectUrl>https://github.com/vieapps/Services.Base</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/vieapps/Services.Base</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
 	</PropertyGroup>
 
 	<ItemGroup>
