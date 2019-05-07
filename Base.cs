@@ -161,7 +161,7 @@ namespace net.vieapps.Services
 
 				this.ServiceCommunicator?.Dispose();
 				this.ServiceCommunicator = Router.IncomingChannel.RealmProxy.Services
-					.GetSubject<CommunicateMessage>($"rtu.communicate.messages.{name}")
+					.GetSubject<CommunicateMessage>($"messages.services.{name}")
 					.Subscribe(
 						async message => await this.ProcessInterCommunicateMessageAsync(message).ConfigureAwait(false),
 						exception => this.Logger.LogError($"Error occurred while fetching an inter-communicate message => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
@@ -169,7 +169,7 @@ namespace net.vieapps.Services
 
 				this.GatewayCommunicator?.Dispose();
 				this.GatewayCommunicator = Router.IncomingChannel.RealmProxy.Services
-					.GetSubject<CommunicateMessage>($"rtu.communicate.messages.apigateway")
+					.GetSubject<CommunicateMessage>("messages.services.apigateway")
 					.Subscribe(
 						async message => await this.ProcessGatewayCommunicateMessageAsync(message).ConfigureAwait(false),
 						exception => this.Logger.LogError($"Error occurred while fetching an inter-communicate message of API Gateway => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
@@ -226,7 +226,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected Task SendUpdateMessagesAsync(List<BaseMessage> messages, string deviceID, string excludedDeviceID = null, CancellationToken cancellationToken = default(CancellationToken))
-			=> this.RTUService.SendUpdateMessagesAsync(messages?.Select(message => message as BaseMessage).ToList(), deviceID, excludedDeviceID, cancellationToken);
+			=> this.RTUService.SendUpdateMessagesAsync(messages, deviceID, excludedDeviceID, cancellationToken);
 
 		/// <summary>
 		/// Send a message for updating data of other service
@@ -255,7 +255,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected Task SendInterCommunicateMessagesAsync(string serviceName, List<BaseMessage> messages, CancellationToken cancellationToken = default(CancellationToken))
-			=> this.RTUService.SendInterCommunicateMessagesAsync(serviceName, messages?.Select(message => message as BaseMessage).ToList(), cancellationToken);
+			=> this.RTUService.SendInterCommunicateMessagesAsync(serviceName, messages, cancellationToken);
 
 		/// <summary>
 		/// Send a message for communicating with  of other services
@@ -264,7 +264,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected Task SendInterCommunicateMessagesAsync(List<CommunicateMessage> messages, CancellationToken cancellationToken = default(CancellationToken))
-			=> this.RTUService.SendInterCommunicateMessagesAsync(messages?.Select(message => message as CommunicateMessage).ToList(), cancellationToken);
+			=> this.RTUService.SendInterCommunicateMessagesAsync(messages, cancellationToken);
 		#endregion
 
 		#region Send email & web hook messages

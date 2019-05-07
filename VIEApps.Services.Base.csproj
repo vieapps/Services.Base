@@ -7,14 +7,14 @@
 		<WarningLevel>3</WarningLevel>
 		<DocumentationFile>bin\$(Configuration)\netstandard2.0\VIEApps.Services.Base.xml</DocumentationFile>
 		<AssemblyTitle>VIEApps NGX Service Base</AssemblyTitle>
-		<AssemblyVersion>10.2.1905.1</AssemblyVersion>
-		<FileVersion>10.2.1905.1</FileVersion>
-		<InformationalVersion>v10.2.netstandard-2+rev:2019.05.01-extensions</InformationalVersion>
+		<AssemblyVersion>10.2.1905.2</AssemblyVersion>
+		<FileVersion>10.2.1905.2</FileVersion>
+		<InformationalVersion>v10.2.netstandard-2+rev:2019.05.07-URIs</InformationalVersion>
 		<GeneratePackageOnBuild>false</GeneratePackageOnBuild>
 		<PackageId>VIEApps.Services.Base</PackageId>
-		<Version>10.2.1905.1</Version>
+		<Version>10.2.1905.2</Version>
 		<Title>VIEApps NGX Base Service</Title>
-		<Description>The base for all microservices in the VIEApps NGX</Description>
+		<Description>The abstract base for all microservices in the VIEApps NGX</Description>
 		<Authors>VIEApps.net</Authors>
 		<Company>VIEApps.net</Company>
 		<Product>VIEApps NGX</Product>
@@ -22,7 +22,7 @@
 		<PackageLicense>LICENSE.md</PackageLicense>
 		<PackageOutputPath>..\..\Components</PackageOutputPath>
 		<PackageTags>services;microservices;vieapps;vieapps.components;vieapps.services;vieapps.microservices</PackageTags>
-		<PackageReleaseNotes>Upgrade to latest components</PackageReleaseNotes>
+		<PackageReleaseNotes>Initial the package with service/topic URIs</PackageReleaseNotes>
 		<PackageIconUrl>https://github.com/vieapps/Components.Utility/raw/master/logo.png</PackageIconUrl>
 		<PackageProjectUrl>https://github.com/vieapps/Services.Base</PackageProjectUrl>
 		<RepositoryUrl>https://github.com/vieapps/Services.Base</RepositoryUrl>
@@ -45,28 +45,9 @@
 		<PackageReference Include="Npgsql" Version="4.0.6" />
 		<PackageReference Include="Serilog.Extensions.Logging.File" Version="1.1.0" />
 		<PackageReference Include="System.Data.SqlClient" Version="4.6.0" />
-		<PackageReference Include="VIEApps.Components.Repository" Version="10.2.1905.1" />
-		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.2.1905.1" />
-	</ItemGroup>
-
-	<ItemGroup Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Windows)))|$(Platform)' == 'true|AnyCPU'">
-		<PackageReference Include="JavaScriptEngineSwitcher.ChakraCore.Native.win-x64" Version="3.1.0" />
-	</ItemGroup>
-
-	<ItemGroup Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Windows)))|$(Platform)' == 'true|x86'">
-		<PackageReference Include="JavaScriptEngineSwitcher.ChakraCore.Native.win-x86" Version="3.1.0" />
-	</ItemGroup>
-
-	<ItemGroup Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::OSX)))' == 'true'">
-		<PackageReference Include="JavaScriptEngineSwitcher.ChakraCore.Native.osx-x64" Version="3.1.0" />
-	</ItemGroup>
-
-	<ItemGroup Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Linux)))' == 'true'">
-		<PackageReference Include="JavaScriptEngineSwitcher.ChakraCore.Native.linux-x64" Version="3.1.0" />
-	</ItemGroup>
-
-	<ItemGroup>
-		<ProjectReference Include="..\Abstractions\VIEApps.Services.Abstractions.csproj" />
+		<PackageReference Include="VIEApps.Components.Repository" Version="10.2.1905.2" />
+		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.2.1905.2" />
+		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.2.1905.2" />
 	</ItemGroup>
 
 </Project>

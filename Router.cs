@@ -308,7 +308,7 @@ namespace net.vieapps.Services
 			if (string.IsNullOrWhiteSpace(name))
 				return null;
 
-			if (!Router.Services.TryGetValue(name, out IService service))
+			if (!Router.Services.TryGetValue(name, out var service))
 			{
 				await Router.OpenOutgoingChannelAsync().ConfigureAwait(false);
 				if (!Router.Services.TryGetValue(name, out service))
@@ -329,7 +329,7 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static async Task<JToken> CallServiceAsync(this RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken))
 		{
-			var service = await Router.GetServiceAsync(requestInfo != null && !string.IsNullOrWhiteSpace(requestInfo.ServiceName) ? requestInfo.ServiceName : "unknown").ConfigureAwait(false);
+			var service = await Router.GetServiceAsync(requestInfo?.ServiceName ?? "unknown").ConfigureAwait(false);
 			return await service.ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false);
 		}
 		#endregion
