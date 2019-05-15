@@ -761,21 +761,26 @@ namespace net.vieapps.Services
 
 		#region Authorization (Privilege)
 		/// <summary>
-		/// The the global privilege role of the user in this service
-		/// </summary>
-		/// <param name="user"></param>
-		/// <returns></returns>
-		protected virtual string GetPrivilegeRole(IUser user)
-			=> user?.GetPrivilegeRole(this.ServiceName);
-
-		/// <summary>
 		/// Gets the default privileges  of the user in this service
 		/// </summary>
 		/// <param name="user"></param>
 		/// <param name="privileges"></param>
 		/// <returns></returns>
 		protected virtual List<Privilege> GetPrivileges(IUser user, Privileges privileges)
-			=> user?.GetPrivileges(privileges, this.ServiceName);
+			=> null;
+
+		/// <summary>
+		/// The the global privilege role of the user in this service
+		/// </summary>
+		/// <param name="user"></param>
+		/// <returns></returns>
+		protected virtual string GetPrivilegeRole(IUser user)
+		{
+			var privilege = user != null && user.Privileges != null
+				? user.Privileges.FirstOrDefault(p => p.ServiceName.IsEquals(this.ServiceName) && string.IsNullOrWhiteSpace(p.ObjectName) && string.IsNullOrWhiteSpace(p.ObjectIdentity))
+				: null;
+			return privilege?.Role ?? PrivilegeRole.Viewer.ToString();
+		}
 
 		/// <summary>
 		/// Gets the default privilege actions in this service
@@ -783,7 +788,57 @@ namespace net.vieapps.Services
 		/// <param name="role"></param>
 		/// <returns></returns>
 		protected virtual List<string> GetPrivilegeActions(PrivilegeRole role)
-			=> role.GetPrivilegeActions();
+		{
+			var actions = new List<Components.Security.Action>();
+			switch (role)
+			{
+				case PrivilegeRole.Administrator:
+					actions = new List<Components.Security.Action>
+					{
+						Components.Security.Action.Full
+					};
+					break;
+
+				case PrivilegeRole.Moderator:
+					actions = new List<Components.Security.Action>
+					{
+						Components.Security.Action.Approve,
+						Components.Security.Action.Update,
+						Components.Security.Action.Create,
+						Components.Security.Action.View,
+						Components.Security.Action.Download
+					};
+					break;
+
+				case PrivilegeRole.Editor:
+					actions = new List<Components.Security.Action>
+					{
+						Components.Security.Action.Update,
+						Components.Security.Action.Create,
+						Components.Security.Action.View,
+						Components.Security.Action.Download
+					};
+					break;
+
+				case PrivilegeRole.Contributor:
+					actions = new List<Components.Security.Action>
+					{
+						Components.Security.Action.Create,
+						Components.Security.Action.View,
+						Components.Security.Action.Download
+					};
+					break;
+
+				default:
+					actions = new List<Components.Security.Action>
+					{
+						Components.Security.Action.View,
+						Components.Security.Action.Download
+					};
+					break;
+			}
+			return actions.Select(a => a.ToString()).ToList();
+		}
 		#endregion
 
 		#region Authorization (Admin)
@@ -799,15 +854,8 @@ namespace net.vieapps.Services
 			if (user != null && user.IsAuthenticated)
 				try
 				{
-					var response = await new RequestInfo
+					var response = await new RequestInfo(new Session { User = new User(user) }, "Users", "Account", "GET")
 					{
-						Session = new Session
-						{
-							User = new User(user)
-						},
-						ServiceName = "Users",
-						ObjectName = "Account",
-						Verb = "GET",
 						Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 						{
 							{ "IsSystemAdministrator", "" }
@@ -837,119 +885,84 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected Task<bool> IsSystemAdministratorAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken))
-			=> this.IsSystemAdministratorAsync(requestInfo?.Session?.User, requestInfo?.CorrelationID, cancellationToken);
+			=> this.IsSystemAdministratorAsync(requestInfo?.Session, requestInfo?.CorrelationID, cancellationToken);
 
 		/// <summary>
 		/// Gets the state that determines the user is service administrator or not
 		/// </summary>
 		/// <param name="user">The user information</param>
-		/// <param name="serviceName">The name of service</param>
+		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
+		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public Task<bool> IsServiceAdministratorAsync(IUser user, string serviceName = null)
-			=> user != null
-				? user.IsServiceAdministratorAsync(serviceName ?? this.ServiceName, this.GetPrivileges, this.GetPrivilegeActions)
-				: Task.FromResult(false);
+		protected async Task<bool> IsServiceAdministratorAsync(IUser user, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
+			=> user != null && user.IsAuthenticated
+				? user.IsAuthorized(this.ServiceName, null, null, Components.Security.Action.Full, null, getPrivileges ?? this.GetPrivileges, getActions ?? this.GetPrivilegeActions) || await this.IsSystemAdministratorAsync(user, correlationID, cancellationToken).ConfigureAwait(false)
+				: false;
 
 		/// <summary>
 		/// Gets the state that determines the user is service administrator or not
 		/// </summary>
 		/// <param name="session">The session information</param>
-		/// <param name="serviceName">The name of service</param>
+		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
+		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public Task<bool> IsServiceAdministratorAsync(Session session, string serviceName = null)
-			=> session != null
-				? session.IsServiceAdministratorAsync(serviceName ?? this.ServiceName, this.GetPrivileges, this.GetPrivilegeActions)
-				: Task.FromResult(false);
+		protected Task<bool> IsServiceAdministratorAsync(Session session, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
+			=> this.IsServiceAdministratorAsync(session?.User, getPrivileges, getActions, correlationID, cancellationToken);
 
 		/// <summary>
 		/// Gets the state that determines the user is service administrator or not
 		/// </summary>
 		/// <param name="requestInfo">The requesting information that contains user information and related service</param>
+		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
+		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public Task<bool> IsServiceAdministratorAsync(RequestInfo requestInfo)
-			=> requestInfo != null
-				? requestInfo.IsServiceAdministratorAsync(this.GetPrivileges, this.GetPrivilegeActions)
-				: Task.FromResult(false);
+		protected Task<bool> IsServiceAdministratorAsync(RequestInfo requestInfo, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, CancellationToken cancellationToken = default(CancellationToken))
+			=> this.IsServiceAdministratorAsync(requestInfo?.Session, getPrivileges, getActions, requestInfo.CorrelationID, cancellationToken);
 
 		/// <summary>
 		/// Gets the state that determines the user is service administrator or not
 		/// </summary>
 		/// <param name="user">The user information</param>
-		/// <param name="serviceName">The name of service</param>
+		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
+		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public Task<bool> IsServiceModeratorAsync(IUser user, string serviceName = null)
-			=> user != null
-				? user.IsServiceModeratorAsync(serviceName ?? this.ServiceName, this.GetPrivileges, this.GetPrivilegeActions)
-				: Task.FromResult(false);
+		protected async Task<bool> IsServiceModeratorAsync(IUser user, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
+			=> user != null && user.IsAuthenticated
+				? user.IsAuthorized(this.ServiceName, null, null, Components.Security.Action.Approve, null, getPrivileges ?? this.GetPrivileges, getActions ?? this.GetPrivilegeActions) || await this.IsServiceAdministratorAsync(user, getPrivileges, getActions, correlationID, cancellationToken).ConfigureAwait(false)
+				: false;
 
 		/// <summary>
 		/// Gets the state that determines the user is service administrator or not
 		/// </summary>
 		/// <param name="session">The session information</param>
-		/// <param name="serviceName">The name of service</param>
+		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
+		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public Task<bool> IsServiceModeratorAsync(Session session, string serviceName = null)
-			=> session != null
-				? session.IsServiceModeratorAsync(serviceName ?? this.ServiceName, this.GetPrivileges, this.GetPrivilegeActions)
-				: Task.FromResult(false);
+		protected Task<bool> IsServiceModeratorAsync(Session session, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
+			=> this.IsServiceModeratorAsync(session?.User, getPrivileges, getActions, correlationID, cancellationToken);
 
 		/// <summary>
 		/// Gets the state that determines the user is service administrator or not
 		/// </summary>
 		/// <param name="requestInfo">The requesting information that contains user information and related service</param>
+		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
+		/// <param name="getActions">The function to prepare the actions of each privilege</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public Task<bool> IsServiceModeratorAsync(RequestInfo requestInfo)
-			=> requestInfo != null
-				? requestInfo.IsServiceModeratorAsync(this.GetPrivileges, this.GetPrivilegeActions)
-				: Task.FromResult(false);
+		protected Task<bool> IsServiceModeratorAsync(RequestInfo requestInfo, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null, CancellationToken cancellationToken = default(CancellationToken))
+			=> this.IsServiceModeratorAsync(requestInfo?.Session, getPrivileges, getActions, requestInfo.CorrelationID, cancellationToken);
 		#endregion
 
 		#region Authorization (User)
-		/// <summary>
-		/// Gets the state that determines the user can perform the action or not
-		/// </summary>
-		/// <param name="user">The user information</param>
-		/// <param name="serviceName">The name of the service</param>
-		/// <param name="objectName">The name of the service's object</param>
-		/// <param name="objectIdentity">The identity of the service's object</param>
-		/// <param name="action">The action to perform on the object of this service</param>
-		/// <param name="privileges">The working privileges of the object (entity)</param>
-		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
-		/// <param name="getActions">The function to prepare the actions of each privilege</param>
-		/// <returns></returns>
-		protected virtual Task<bool> IsAuthorizedAsync(IUser user, string serviceName, string objectName, string objectIdentity, Components.Security.Action action, Privileges privileges = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
-			=> user != null
-				? user.IsAuthorizedAsync(serviceName, objectName, objectIdentity, action, privileges, getPrivileges, getActions)
-				: Task.FromResult(false);
-
-		/// <summary>
-		/// Gets the state that determines the user can perform the action or not
-		/// </summary>
-		/// <param name="requestInfo">The requesting information that contains user information</param>
-		/// <param name="action">The action to perform on the object of this service</param>
-		/// <param name="privileges">The working privileges of the object (entity)</param>
-		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
-		/// <param name="getActions">The function to prepare the actions of each privilege</param>
-		/// <returns></returns>
-		protected virtual Task<bool> IsAuthorizedAsync(RequestInfo requestInfo, Components.Security.Action action, Privileges privileges = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
-			=> requestInfo != null
-				? requestInfo.IsAuthorizedAsync(action, privileges, getPrivileges, getActions)
-				: Task.FromResult(false);
-
-		/// <summary>
-		/// Gets the state that determines the user can perform the action or not
-		/// </summary>
-		/// <param name="requestInfo">The requesting information that contains user information</param>
-		/// <param name="entity">The business entity object</param>
-		/// <param name="action">The action to perform on the object of this service</param>
-		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
-		/// <param name="getActions">The function to prepare the actions of each privilege</param>
-		/// <returns></returns>
-		protected virtual Task<bool> IsAuthorizedAsync(RequestInfo requestInfo, IBusinessEntity entity, Components.Security.Action action, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getActions = null)
-			=> requestInfo != null
-				? requestInfo.IsAuthorizedAsync(entity, action, getPrivileges, getActions)
-				: Task.FromResult(false);
-
 		/// <summary>
 		/// Gets the state that determines the user is able to manage or not
 		/// </summary>
@@ -960,12 +973,23 @@ namespace net.vieapps.Services
 		/// <param name="objectID">The identity of the object</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public virtual Task<bool> CanManageAsync(IUser user, string objectName, string systemID, string definitionID, string objectID, CancellationToken cancellationToken = default(CancellationToken))
-			=> user == null
-				? Task.FromResult(false)
-				: !string.IsNullOrWhiteSpace(systemID) && !string.IsNullOrWhiteSpace(definitionID)
-					? user.CanManageAsync(this.ServiceName, systemID, definitionID, objectID, this.GetPrivileges, this.GetPrivilegeActions, null, cancellationToken)
-					: user.CanManageAsync(this.ServiceName, objectName, objectID, this.GetPrivileges, this.GetPrivilegeActions, null, cancellationToken);
+		public virtual async Task<bool> CanManageAsync(IUser user, string objectName, string systemID, string definitionID, string objectID, CancellationToken cancellationToken = default(CancellationToken))
+		{
+			if (string.IsNullOrWhiteSpace(user?.ID))
+				return false;
+
+			if (await this.IsServiceAdministratorAsync(user, null, null, null, cancellationToken).ConfigureAwait(false))
+				return true;
+
+			Privileges privileges = null;
+			if (!string.IsNullOrWhiteSpace(systemID) && systemID.IsValidUUID() && !string.IsNullOrWhiteSpace(definitionID) && definitionID.IsValidUUID())
+			{
+				var @object = await RepositoryMediator.GetAsync(definitionID, objectID, cancellationToken).ConfigureAwait(false);
+				objectName = objectName ?? @object?.GetTypeName(true);
+				privileges = (@object as IBusinessEntity)?.WorkingPrivileges;
+			}
+			return user.IsAuthorized(this.ServiceName, objectName, objectID, Components.Security.Action.Full, privileges, this.GetPrivileges, this.GetPrivilegeActions);
+		}
 
 		/// <summary>
 		/// Gets the state that determines the user is able to manage or not
@@ -1011,12 +1035,23 @@ namespace net.vieapps.Services
 		/// <param name="objectID">The identity of the object</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public virtual Task<bool> CanModerateAsync(IUser user, string objectName, string systemID, string definitionID, string objectID, CancellationToken cancellationToken = default(CancellationToken))
-			=> user == null
-				? Task.FromResult(false)
-				: !string.IsNullOrWhiteSpace(systemID) && !string.IsNullOrWhiteSpace(definitionID)
-					? user.CanModerateAsync(this.ServiceName, systemID, definitionID, objectID, this.GetPrivileges, this.GetPrivilegeActions, null, cancellationToken)
-					: user.CanModerateAsync(this.ServiceName, objectName, objectID, this.GetPrivileges, this.GetPrivilegeActions, null, cancellationToken);
+		public virtual async Task<bool> CanModerateAsync(IUser user, string objectName, string systemID, string definitionID, string objectID, CancellationToken cancellationToken = default(CancellationToken))
+		{
+			if (string.IsNullOrWhiteSpace(user?.ID))
+				return false;
+
+			if (await this.CanManageAsync(user, objectName, systemID, definitionID, objectID, cancellationToken).ConfigureAwait(false))
+				return true;
+
+			Privileges privileges = null;
+			if (!string.IsNullOrWhiteSpace(systemID) && systemID.IsValidUUID() && !string.IsNullOrWhiteSpace(definitionID) && definitionID.IsValidUUID())
+			{
+				var @object = await RepositoryMediator.GetAsync(definitionID, objectID, cancellationToken).ConfigureAwait(false);
+				objectName = objectName ?? @object?.GetTypeName(true);
+				privileges = (@object as IBusinessEntity)?.WorkingPrivileges;
+			}
+			return user.IsAuthorized(this.ServiceName, objectName, objectID, Components.Security.Action.Approve, privileges, this.GetPrivileges, this.GetPrivilegeActions);
+		}
 
 		/// <summary>
 		/// Gets the state that determines the user is able to moderate or not
@@ -1062,12 +1097,23 @@ namespace net.vieapps.Services
 		/// <param name="objectID">The identity of the object</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public virtual Task<bool> CanEditAsync(IUser user, string objectName, string systemID, string definitionID, string objectID, CancellationToken cancellationToken = default(CancellationToken))
-			=> user == null
-				? Task.FromResult(false)
-				: !string.IsNullOrWhiteSpace(systemID) && !string.IsNullOrWhiteSpace(definitionID)
-					? user.CanEditAsync(this.ServiceName, systemID, definitionID, objectID, this.GetPrivileges, this.GetPrivilegeActions, null, cancellationToken)
-					: user.CanEditAsync(this.ServiceName, objectName, objectID, this.GetPrivileges, this.GetPrivilegeActions, null, cancellationToken);
+		public virtual async Task<bool> CanEditAsync(IUser user, string objectName, string systemID, string definitionID, string objectID, CancellationToken cancellationToken = default(CancellationToken))
+		{
+			if (string.IsNullOrWhiteSpace(user?.ID))
+				return false;
+
+			if (await this.CanModerateAsync(user, objectName, systemID, definitionID, objectID, cancellationToken).ConfigureAwait(false))
+				return true;
+
+			Privileges privileges = null;
+			if (!string.IsNullOrWhiteSpace(systemID) && systemID.IsValidUUID() && !string.IsNullOrWhiteSpace(definitionID) && definitionID.IsValidUUID())
+			{
+				var @object = await RepositoryMediator.GetAsync(definitionID, objectID, cancellationToken).ConfigureAwait(false);
+				objectName = objectName ?? @object?.GetTypeName(true);
+				privileges = (@object as IBusinessEntity)?.WorkingPrivileges;
+			}
+			return user.IsAuthorized(this.ServiceName, objectName, objectID, Components.Security.Action.Update, privileges, this.GetPrivileges, this.GetPrivilegeActions);
+		}
 
 		/// <summary>
 		/// Gets the state that determines the user is able to edit or not
@@ -1113,12 +1159,23 @@ namespace net.vieapps.Services
 		/// <param name="objectID">The identity of the object</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public virtual Task<bool> CanContributeAsync(IUser user, string objectName, string systemID, string definitionID, string objectID, CancellationToken cancellationToken = default(CancellationToken))
-			=> user == null
-				? Task.FromResult(false)
-				: !string.IsNullOrWhiteSpace(systemID) && !string.IsNullOrWhiteSpace(definitionID)
-					? user.CanContributeAsync(this.ServiceName, systemID, definitionID, objectID, this.GetPrivileges, this.GetPrivilegeActions, null, cancellationToken)
-					: user.CanContributeAsync(this.ServiceName, objectName, objectID, this.GetPrivileges, this.GetPrivilegeActions, null, cancellationToken);
+		public virtual async Task<bool> CanContributeAsync(IUser user, string objectName, string systemID, string definitionID, string objectID, CancellationToken cancellationToken = default(CancellationToken))
+		{
+			if (string.IsNullOrWhiteSpace(user?.ID))
+				return false;
+
+			if (await this.CanEditAsync(user, objectName, systemID, definitionID, objectID, cancellationToken).ConfigureAwait(false))
+				return true;
+
+			Privileges privileges = null;
+			if (!string.IsNullOrWhiteSpace(systemID) && systemID.IsValidUUID() && !string.IsNullOrWhiteSpace(definitionID) && definitionID.IsValidUUID())
+			{
+				var @object = await RepositoryMediator.GetAsync(definitionID, objectID, cancellationToken).ConfigureAwait(false);
+				objectName = objectName ?? @object?.GetTypeName(true);
+				privileges = (@object as IBusinessEntity)?.WorkingPrivileges;
+			}
+			return user.IsAuthorized(this.ServiceName, objectName, objectID, Components.Security.Action.Create, privileges, this.GetPrivileges, this.GetPrivilegeActions);
+		}
 
 		/// <summary>
 		/// Gets the state that determines the user is able to contribute or not
@@ -1164,12 +1221,23 @@ namespace net.vieapps.Services
 		/// <param name="objectID">The identity of the object</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public virtual Task<bool> CanViewAsync(IUser user, string objectName, string systemID, string definitionID, string objectID, CancellationToken cancellationToken = default(CancellationToken))
-			=> user == null
-				? Task.FromResult(false)
-				: !string.IsNullOrWhiteSpace(systemID) && !string.IsNullOrWhiteSpace(definitionID)
-					? user.CanViewAsync(this.ServiceName, systemID, definitionID, objectID, this.GetPrivileges, this.GetPrivilegeActions, null, cancellationToken)
-					: user.CanViewAsync(this.ServiceName, objectName, objectID, this.GetPrivileges, this.GetPrivilegeActions, null, cancellationToken);
+		public virtual async Task<bool> CanViewAsync(IUser user, string objectName, string systemID, string definitionID, string objectID, CancellationToken cancellationToken = default(CancellationToken))
+		{
+			if (string.IsNullOrWhiteSpace(user?.ID))
+				return false;
+
+			if (await this.CanContributeAsync(user, objectName, systemID, definitionID, objectID, cancellationToken).ConfigureAwait(false))
+				return true;
+
+			Privileges privileges = null;
+			if (!string.IsNullOrWhiteSpace(systemID) && systemID.IsValidUUID() && !string.IsNullOrWhiteSpace(definitionID) && definitionID.IsValidUUID())
+			{
+				var @object = await RepositoryMediator.GetAsync(definitionID, objectID, cancellationToken).ConfigureAwait(false);
+				objectName = objectName ?? @object?.GetTypeName(true);
+				privileges = (@object as IBusinessEntity)?.WorkingPrivileges;
+			}
+			return user.IsAuthorized(this.ServiceName, objectName, objectID, Components.Security.Action.View, privileges, this.GetPrivileges, this.GetPrivilegeActions);
+		}
 
 		/// <summary>
 		/// Gets the state that determines the user is able to view or not
@@ -1215,12 +1283,23 @@ namespace net.vieapps.Services
 		/// <param name="objectID">The identity of the object</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public virtual Task<bool> CanDownloadAsync(IUser user, string objectName, string systemID, string definitionID, string objectID, CancellationToken cancellationToken = default(CancellationToken))
-			=> user == null
-				? Task.FromResult(false)
-				: !string.IsNullOrWhiteSpace(systemID) && !string.IsNullOrWhiteSpace(definitionID)
-					? user.CanDownloadAsync(this.ServiceName, systemID, definitionID, objectID, this.GetPrivileges, this.GetPrivilegeActions, null, cancellationToken)
-					: user.CanDownloadAsync(this.ServiceName, objectName, objectID, this.GetPrivileges, this.GetPrivilegeActions, null, cancellationToken);
+		public virtual async Task<bool> CanDownloadAsync(IUser user, string objectName, string systemID, string definitionID, string objectID, CancellationToken cancellationToken = default(CancellationToken))
+		{
+			if (string.IsNullOrWhiteSpace(user?.ID))
+				return false;
+
+			if (await this.CanModerateAsync(user, objectName, systemID, definitionID, objectID, cancellationToken).ConfigureAwait(false))
+				return true;
+
+			Privileges privileges = null;
+			if (!string.IsNullOrWhiteSpace(systemID) && systemID.IsValidUUID() && !string.IsNullOrWhiteSpace(definitionID) && definitionID.IsValidUUID())
+			{
+				var @object = await RepositoryMediator.GetAsync(definitionID, objectID, cancellationToken).ConfigureAwait(false);
+				objectName = objectName ?? @object?.GetTypeName(true);
+				privileges = (@object as IBusinessEntity)?.WorkingPrivileges;
+			}
+			return user.IsAuthorized(this.ServiceName, objectName, objectID, Components.Security.Action.Download, privileges, this.GetPrivileges, this.GetPrivilegeActions);
+		}
 
 		/// <summary>
 		/// Gets the state that determines the user is able to download or not
@@ -1255,6 +1334,111 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected virtual Task<bool> CanDownloadAsync(IUser user, string systemID, string definitionID, string objectID)
 			=> this.CanDownloadAsync(user, null, systemID, definitionID, objectID, this.CancellationTokenSource.Token);
+		#endregion
+
+		#region Authorization (Special)
+		/// <summary>
+		/// Gets the state that determines the user can perform the action or not
+		/// </summary>
+		/// <param name="user">The user information</param>
+		/// <param name="objectName">The name of the service's object</param>
+		/// <param name="objectID">The identity of the service's object</param>
+		/// <param name="action">The action to perform on the object of this service</param>
+		/// <param name="privileges">The working privileges of the object (entity)</param>
+		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
+		/// <param name="getPrivilegeActions">The function to prepare the actions of each privilege</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		protected virtual async Task<bool> IsAuthorizedAsync(IUser user, string objectName, string objectID, Components.Security.Action action, Privileges privileges = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getPrivilegeActions = null, CancellationToken cancellationToken = default(CancellationToken))
+			=> user == null
+				? false
+				: await this.IsServiceAdministratorAsync(user, null, null, null, cancellationToken).ConfigureAwait(false)
+					? true
+					: user.IsAuthorized(this.ServiceName, objectName, objectID, action, privileges, getPrivileges, getPrivilegeActions);
+
+		/// <summary>
+		/// Gets the state that determines the user can perform the action or not
+		/// </summary>
+		/// <param name="session">The session that contains user information</param>
+		/// <param name="objectName">The name of the service's object</param>
+		/// <param name="objectID">The identity of the service's object</param>
+		/// <param name="action">The action to perform on the object of this service</param>
+		/// <param name="privileges">The working privileges of the object (entity)</param>
+		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
+		/// <param name="getPrivilegeActions">The function to prepare the actions of each privilege</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		protected virtual Task<bool> IsAuthorizedAsync(Session session, string objectName, string objectID, Components.Security.Action action, Privileges privileges = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getPrivilegeActions = null, CancellationToken cancellationToken = default(CancellationToken))
+			=> this.IsAuthorizedAsync(session?.User, objectName, objectID, action, privileges, getPrivileges, getPrivilegeActions, cancellationToken);
+
+		/// <summary>
+		/// Gets the state that determines the user can perform the action or not
+		/// </summary>
+		/// <param name="requestInfo">The requesting information that contains user information</param>
+		/// <param name="objectName">The name of the service's object</param>
+		/// <param name="objectID">The identity of the service's object</param>
+		/// <param name="action">The action to perform on the object of this service</param>
+		/// <param name="privileges">The working privileges of the object (entity)</param>
+		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
+		/// <param name="getPrivilegeActions">The function to prepare the actions of each privilege</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		protected virtual Task<bool> IsAuthorizedAsync(RequestInfo requestInfo, string objectName, string objectID, Components.Security.Action action, Privileges privileges = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getPrivilegeActions = null, CancellationToken cancellationToken = default(CancellationToken))
+			=> this.IsAuthorizedAsync(requestInfo?.Session, objectName, objectID, action, privileges, getPrivileges, getPrivilegeActions, cancellationToken);
+
+		/// <summary>
+		/// Gets the state that determines the user can perform the action or not
+		/// </summary>
+		/// <param name="user">The user information</param>
+		/// <param name="objectName">The name of the service's object</param>
+		/// <param name="object">The business  object</param>
+		/// <param name="action">The action to perform on the object of this service</param>
+		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
+		/// <param name="getPrivilegeActions">The function to prepare the actions of each privilege</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		protected virtual Task<bool> IsAuthorizedAsync(IUser user, string objectName, IBusinessEntity @object, Components.Security.Action action, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getPrivilegeActions = null, CancellationToken cancellationToken = default(CancellationToken))
+			=> this.IsAuthorizedAsync(user, objectName ?? @object?.GetTypeName(true), @object?.ID, action, @object?.WorkingPrivileges, getPrivileges, getPrivilegeActions, cancellationToken);
+
+		/// <summary>
+		/// Gets the state that determines the user can perform the action or not
+		/// </summary>
+		/// <param name="session">The session that contains user information</param>
+		/// <param name="objectName">The name of the service's object</param>
+		/// <param name="object">The business  object</param>
+		/// <param name="action">The action to perform on the object of this service</param>
+		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
+		/// <param name="getPrivilegeActions">The function to prepare the actions of each privilege</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		protected virtual Task<bool> IsAuthorizedAsync(Session session, string objectName, IBusinessEntity @object, Components.Security.Action action, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getPrivilegeActions = null, CancellationToken cancellationToken = default(CancellationToken))
+			=> this.IsAuthorizedAsync(session?.User, objectName, @object, action, getPrivileges, getPrivilegeActions, cancellationToken);
+
+		/// <summary>
+		/// Gets the state that determines the user can perform the action or not
+		/// </summary>
+		/// <param name="requestInfo">The requesting information that contains user information</param>
+		/// <param name="object">The business  object</param>
+		/// <param name="action">The action to perform on the object of this service</param>
+		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
+		/// <param name="getPrivilegeActions">The function to prepare the actions of each privilege</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		protected virtual Task<bool> IsAuthorizedAsync(RequestInfo requestInfo, IBusinessEntity @object, Components.Security.Action action, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getPrivilegeActions = null, CancellationToken cancellationToken = default(CancellationToken))
+			=> this.IsAuthorizedAsync(requestInfo?.Session, requestInfo.ObjectName, @object, action, getPrivileges, getPrivilegeActions, cancellationToken);
+
+		/// <summary>
+		/// Gets the state that determines the user can perform the action or not
+		/// </summary>
+		/// <param name="requestInfo">The requesting information that contains user information</param>
+		/// <param name="action">The action to perform on the object of this service</param>
+		/// <param name="privileges">The working privileges of the object (entity)</param>
+		/// <param name="getPrivileges">The function to prepare the collection of privileges</param>
+		/// <param name="getPrivilegeActions">The function to prepare the actions of each privilege</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		protected virtual Task<bool> IsAuthorizedAsync(RequestInfo requestInfo, Components.Security.Action action, Privileges privileges = null, Func<IUser, Privileges, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<string>> getPrivilegeActions = null, CancellationToken cancellationToken = default(CancellationToken))
+			=> this.IsAuthorizedAsync(requestInfo?.Session?.User, requestInfo.ObjectName, requestInfo.GetObjectIdentity(true), action, privileges, getPrivileges, getPrivilegeActions, cancellationToken);
 		#endregion
 
 		#region Files, Thumbnails & Attachments
