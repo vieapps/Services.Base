@@ -18,14 +18,6 @@ namespace net.vieapps.Services
 	public static partial class Extensions
 	{
 		/// <summary>
-		/// Gets the state that determines the user is authenticated or not
-		/// </summary>
-		/// <param name="requestInfo">The requesting information that contains user information</param>
-		/// <returns></returns>
-		public static bool IsAuthenticated(this RequestInfo requestInfo)
-			=> requestInfo != null && requestInfo.Session != null && requestInfo.Session.User != null && requestInfo.Session.User.IsAuthenticated;
-
-		/// <summary>
 		/// Gets the state that determines the user is system administrator or not
 		/// </summary>
 		/// <param name="user">The user information</param>
@@ -55,7 +47,7 @@ namespace net.vieapps.Services
 						},
 						CorrelationID = correlationID ?? UtilityService.NewUUID
 					}.CallServiceAsync(cancellationToken).ConfigureAwait(false);
-					return user.ID.IsEquals(result.Get<string>("ID")) && result.Get<bool>("IsSystemAdministrator") == true;
+					return user.ID.IsEquals(result.Get<string>("ID")) && result.Get<bool>("IsSystemAdministrator");
 				}
 				catch
 				{
@@ -350,7 +342,7 @@ namespace net.vieapps.Services
 
 			// get the permissions state
 			return @object != null && @object is IBusinessEntity
-				? user.IsAuthorized(serviceName, @object.GetType().GetTypeName(true), objectID, Components.Security.Action.Full, (@object as IBusinessEntity).WorkingPrivileges, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions)
+				? user.IsAuthorized(serviceName, @object.GetTypeName(true), objectID, Components.Security.Action.Full, (@object as IBusinessEntity).WorkingPrivileges, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions)
 				: false;
 		}
 
@@ -399,7 +391,7 @@ namespace net.vieapps.Services
 
 			// get the permissions state
 			return @object != null && @object is IBusinessEntity
-				? user.IsAuthorized(serviceName, @object.GetType().GetTypeName(true), objectID, Components.Security.Action.Approve, (@object as IBusinessEntity).WorkingPrivileges, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions)
+				? user.IsAuthorized(serviceName, @object.GetTypeName(true), objectID, Components.Security.Action.Approve, (@object as IBusinessEntity).WorkingPrivileges, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions)
 				: false;
 		}
 
@@ -448,7 +440,7 @@ namespace net.vieapps.Services
 
 			// get the permissions state
 			return @object != null && @object is IBusinessEntity
-				? user.IsAuthorized(serviceName, @object.GetType().GetTypeName(true), objectID, Components.Security.Action.Update, (@object as IBusinessEntity).WorkingPrivileges, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions)
+				? user.IsAuthorized(serviceName, @object.GetTypeName(true), objectID, Components.Security.Action.Update, (@object as IBusinessEntity).WorkingPrivileges, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions)
 				: false;
 		}
 
@@ -497,7 +489,7 @@ namespace net.vieapps.Services
 
 			// get the permissions state
 			return @object != null && @object is IBusinessEntity
-				? user.IsAuthorized(serviceName, @object.GetType().GetTypeName(true), objectID, Components.Security.Action.Create, (@object as IBusinessEntity).WorkingPrivileges, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions)
+				? user.IsAuthorized(serviceName, @object.GetTypeName(true), objectID, Components.Security.Action.Create, (@object as IBusinessEntity).WorkingPrivileges, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions)
 				: false;
 		}
 
@@ -546,7 +538,7 @@ namespace net.vieapps.Services
 
 			// get the permissions state
 			return @object != null && @object is IBusinessEntity
-				? user.IsAuthorized(serviceName, @object.GetType().GetTypeName(true), objectID, Components.Security.Action.View, (@object as IBusinessEntity).WorkingPrivileges, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions)
+				? user.IsAuthorized(serviceName, @object.GetTypeName(true), objectID, Components.Security.Action.View, (@object as IBusinessEntity).WorkingPrivileges, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions)
 				: false;
 		}
 
@@ -595,7 +587,7 @@ namespace net.vieapps.Services
 
 			// get the permissions state
 			return @object != null && @object is IBusinessEntity
-				? user.IsAuthorized(serviceName, @object.GetType().GetTypeName(true), objectID, Components.Security.Action.Download, (@object as IBusinessEntity).WorkingPrivileges, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions)
+				? user.IsAuthorized(serviceName, @object.GetTypeName(true), objectID, Components.Security.Action.Download, (@object as IBusinessEntity).WorkingPrivileges, getPrivileges ?? ((usr, privileges) => usr.GetPrivileges(privileges, serviceName)), getActions ?? Extensions.GetPrivilegeActions)
 				: false;
 		}
 	}

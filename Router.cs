@@ -301,7 +301,7 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets a service by name
 		/// </summary>
-		/// <param name="name">The string that presents name of a service</param>
+		/// <param name="name">The string that presents the name of a service</param>
 		/// <returns></returns>
 		public static async Task<IService> GetServiceAsync(string name)
 		{
@@ -331,6 +331,31 @@ namespace net.vieapps.Services
 		{
 			var service = await Router.GetServiceAsync(requestInfo?.ServiceName ?? "unknown").ConfigureAwait(false);
 			return await service.ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false);
+		}
+
+		internal static ConcurrentDictionary<string, IUniqueService> UniqueServices { get; } = new ConcurrentDictionary<string, IUniqueService>(StringComparer.OrdinalIgnoreCase);
+
+		/// <summary>
+		/// Gets an unique service by name (means a service at a specified node)
+		/// </summary>
+		/// <param name="name">The string that presents the unique name of a service</param>
+		/// <returns></returns>
+		public static async Task<IUniqueService> GetUniqueServiceAsync(string name)
+		{
+			if (string.IsNullOrWhiteSpace(name))
+				return null;
+
+			if (!Router.UniqueServices.TryGetValue(name, out var service))
+			{
+				await Router.OpenOutgoingChannelAsync().ConfigureAwait(false);
+				if (!Router.UniqueServices.TryGetValue(name, out service))
+				{
+					service = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IUniqueService>(ProxyInterceptor.Create(name));
+					Router.UniqueServices.TryAdd(name, service);
+				}
+			}
+
+			return service ?? throw new ServiceNotFoundException($"The service \"{name?.ToLower()}\" is not found");
 		}
 		#endregion
 
