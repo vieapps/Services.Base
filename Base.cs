@@ -182,7 +182,7 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
-		#region Send update messages & notifications
+		#region Send update & communicate messages
 		/// <summary>
 		/// Sends a message for updating data of client
 		/// </summary>
@@ -570,20 +570,21 @@ namespace net.vieapps.Services
 		protected async Task<JToken> CallServiceAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken), Action<RequestInfo> onStart = null, Action<RequestInfo, JToken> onSuccess = null, Action<RequestInfo, Exception> onError = null)
 		{
 			var stopwatch = Stopwatch.StartNew();
+			var objectName = this.ServiceName.IsEquals(requestInfo.ServiceName) ? "" : requestInfo.ServiceName;
 			try
 			{
 				onStart?.Invoke(requestInfo);
 				if (this.IsDebugResultsEnabled)
-					await this.WriteLogsAsync(requestInfo.CorrelationID, $"Start call service {requestInfo.Verb} {requestInfo.GetURI()} - {requestInfo.Session.AppName} ({requestInfo.Session.AppPlatform}) @ {requestInfo.Session.IP}", null, this.ServiceName, requestInfo.ServiceName);
+					await this.WriteLogsAsync(requestInfo.CorrelationID, $"Start call service {requestInfo.Verb} {requestInfo.GetURI()} - {requestInfo.Session.AppName} ({requestInfo.Session.AppPlatform}) @ {requestInfo.Session.IP}", null, this.ServiceName, objectName).ConfigureAwait(false);
 
-				var json = await requestInfo.CallServiceAsync(cancellationToken).ConfigureAwait(false);
+				var json = await Router.GetService(requestInfo.ServiceName).ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false);
 				onSuccess?.Invoke(requestInfo, json);
 
 				if (this.IsDebugResultsEnabled)
 					await this.WriteLogsAsync(requestInfo.CorrelationID, "Call service successful" + "\r\n" +
 						$"Request: {requestInfo.ToJson().ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}" + "\r\n" +
 						$"Response: {json?.ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}"
-					, null, this.ServiceName, requestInfo.ServiceName).ConfigureAwait(false);
+					, null, this.ServiceName, objectName).ConfigureAwait(false);
 
 				return json;
 			}
@@ -592,14 +593,14 @@ namespace net.vieapps.Services
 				await Task.Delay(567, cancellationToken).ConfigureAwait(false);
 				try
 				{
-					var json = await requestInfo.CallServiceAsync(cancellationToken).ConfigureAwait(false);
+					var json = await Router.GetService(requestInfo.ServiceName).ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false);
 					onSuccess?.Invoke(requestInfo, json);
 
 					if (this.IsDebugResultsEnabled)
 						await this.WriteLogsAsync(requestInfo.CorrelationID, "Re-call service successful" + "\r\n" +
 							$"Request: {requestInfo.ToJson().ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}" + "\r\n" +
 							$"Response: {json?.ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}"
-						, null, this.ServiceName, requestInfo.ServiceName).ConfigureAwait(false);
+						, null, this.ServiceName, objectName).ConfigureAwait(false);
 
 					return json;
 				}
@@ -617,7 +618,7 @@ namespace net.vieapps.Services
 			{
 				stopwatch.Stop();
 				if (this.IsDebugResultsEnabled)
-					await this.WriteLogsAsync(requestInfo.CorrelationID, $"Call service finished in {stopwatch.GetElapsedTimes()}", null, this.ServiceName, requestInfo.ServiceName).ConfigureAwait(false);
+					await this.WriteLogsAsync(requestInfo.CorrelationID, $"Call service finished in {stopwatch.GetElapsedTimes()}", null, this.ServiceName, objectName).ConfigureAwait(false);
 			}
 		}
 		#endregion
@@ -640,7 +641,6 @@ namespace net.vieapps.Services
 				},
 				CorrelationID = requestInfo.CorrelationID
 			}, cancellationToken).ConfigureAwait(false);
-
 			return (result["Sessions"] as JArray).ToList(info => new Tuple<string, string, string, bool>(info.Get<string>("SessionID"), info.Get<string>("DeviceID"), info.Get<string>("AppInfo"), info.Get<bool>("IsOnline")));
 		}
 		#endregion
@@ -797,14 +797,14 @@ namespace net.vieapps.Services
 			if (user != null && user.IsAuthenticated)
 				try
 				{
-					var response = await new RequestInfo(new Session { User = new User(user) }, "Users", "Account", "GET")
+					var response = await this.CallServiceAsync(new RequestInfo(new Session { User = new User(user) }, "Users", "Account", "GET")
 					{
 						Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 						{
 							{ "IsSystemAdministrator", "" }
 						},
 						CorrelationID = correlationID ?? UtilityService.NewUUID
-					}.CallServiceAsync(cancellationToken).ConfigureAwait(false);
+					}, cancellationToken).ConfigureAwait(false);
 					return user.ID.IsEquals(response.Get<string>("ID")) && response.Get<bool>("IsSystemAdministrator");
 				}
 				catch { }
@@ -1395,23 +1395,23 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public Task<JToken> GetThumbnailsAsync(RequestInfo requestInfo, string objectID = null, string objectTitle = null, CancellationToken cancellationToken = default(CancellationToken))
 			=> requestInfo == null || requestInfo.Session == null
-			? Task.FromResult<JToken>(null)
-			: this.CallServiceAsync(new RequestInfo(requestInfo.Session, "Files", "Thumbnail", "GET")
-			{
-				Header = requestInfo.Header,
-				Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+				? Task.FromResult<JToken>(null)
+				: this.CallServiceAsync(new RequestInfo(requestInfo.Session, "Files", "Thumbnail")
 				{
-					["object-identity"] = "search",
-					["x-object-id"] = objectID ?? requestInfo.GetObjectIdentity(),
-					["x-object-title"] = objectTitle
-				},
-				Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-				{
-					["Signature"] = (requestInfo.Header.TryGetValue("x-app-token", out var appToken) ? appToken : "").GetHMACSHA256(this.ValidationKey),
-					["SessionID"] = requestInfo.Session.SessionID.GetHMACBLAKE256(this.ValidationKey)
-				},
-				CorrelationID = requestInfo.CorrelationID
-			}, cancellationToken);
+					Header = requestInfo.Header,
+					Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+					{
+						["object-identity"] = "search",
+						["x-object-id"] = objectID ?? requestInfo.GetObjectIdentity(),
+						["x-object-title"] = objectTitle
+					},
+					Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+					{
+						["Signature"] = (requestInfo.Header.TryGetValue("x-app-token", out var appToken) ? appToken : "").GetHMACSHA256(this.ValidationKey),
+						["SessionID"] = requestInfo.Session.SessionID.GetHMACBLAKE256(this.ValidationKey)
+					},
+					CorrelationID = requestInfo.CorrelationID
+				}, cancellationToken);
 
 		/// <summary>
 		/// Gets the collection of attachments
@@ -1423,23 +1423,23 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public Task<JToken> GetAttachmentsAsync(RequestInfo requestInfo, string objectID = null, string objectTitle = null, CancellationToken cancellationToken = default(CancellationToken))
 			=> requestInfo == null || requestInfo.Session == null
-			? Task.FromResult<JToken>(null)
-			: this.CallServiceAsync(new RequestInfo(requestInfo.Session, "Files", "Attachment", "GET")
-			{
-				Header = requestInfo.Header,
-				Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+				? Task.FromResult<JToken>(null)
+				: this.CallServiceAsync(new RequestInfo(requestInfo.Session, "Files", "Attachment")
 				{
-					["object-identity"] = "search",
-					["x-object-id"] = objectID ?? requestInfo.GetObjectIdentity(),
-					["x-object-title"] = objectTitle
-				},
-				Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-				{
-					["Signature"] = (requestInfo.Header.TryGetValue("x-app-token", out var appToken) ? appToken : "").GetHMACSHA256(this.ValidationKey),
-					["SessionID"] = requestInfo.Session.SessionID.GetHMACBLAKE256(this.ValidationKey)
-				},
-				CorrelationID = requestInfo.CorrelationID
-			}, cancellationToken);
+					Header = requestInfo.Header,
+					Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+					{
+						["object-identity"] = "search",
+						["x-object-id"] = objectID ?? requestInfo.GetObjectIdentity(),
+						["x-object-title"] = objectTitle
+					},
+					Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+					{
+						["Signature"] = (requestInfo.Header.TryGetValue("x-app-token", out var appToken) ? appToken : "").GetHMACSHA256(this.ValidationKey),
+						["SessionID"] = requestInfo.Session.SessionID.GetHMACBLAKE256(this.ValidationKey)
+					},
+					CorrelationID = requestInfo.CorrelationID
+				}, cancellationToken);
 
 		/// <summary>
 		/// Gets the collection of files (thumbnails and attachment files are included)
@@ -1451,22 +1451,22 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public Task<JToken> GetFilesAsync(RequestInfo requestInfo, string objectID = null, string objectTitle = null, CancellationToken cancellationToken = default(CancellationToken))
 			=> requestInfo == null || requestInfo.Session == null
-			? Task.FromResult<JToken>(null)
-			: this.CallServiceAsync(new RequestInfo(requestInfo.Session, "Files", null, "GET")
-			{
-				Header = requestInfo.Header,
-				Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+				? Task.FromResult<JToken>(null)
+				: this.CallServiceAsync(new RequestInfo(requestInfo.Session, "Files")
 				{
-					["x-object-id"] = objectID ?? requestInfo.GetObjectIdentity(),
-					["x-object-title"] = objectTitle
-				},
-				Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-				{
-					["Signature"] = (requestInfo.Header.TryGetValue("x-app-token", out var appToken) ? appToken : "").GetHMACSHA256(this.ValidationKey),
-					["SessionID"] = requestInfo.Session.SessionID.GetHMACBLAKE256(this.ValidationKey)
-				},
-				CorrelationID = requestInfo.CorrelationID
-			}, cancellationToken);
+					Header = requestInfo.Header,
+					Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+					{
+						["x-object-id"] = objectID ?? requestInfo.GetObjectIdentity(),
+						["x-object-title"] = objectTitle
+					},
+					Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+					{
+						["Signature"] = (requestInfo.Header.TryGetValue("x-app-token", out var appToken) ? appToken : "").GetHMACSHA256(this.ValidationKey),
+						["SessionID"] = requestInfo.Session.SessionID.GetHMACBLAKE256(this.ValidationKey)
+					},
+					CorrelationID = requestInfo.CorrelationID
+				}, cancellationToken);
 
 		/// <summary>
 		/// Gets the collection of files (thumbnails and attachment files are included) as official
@@ -1480,26 +1480,26 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public Task<JToken> MarkFilesAsOfficialAsync(RequestInfo requestInfo, string systemID = null, string definitionID = null, string objectID = null, string objectTitle = null, CancellationToken cancellationToken = default(CancellationToken))
 			=> requestInfo == null || requestInfo.Session == null
-			? Task.FromResult<JToken>(null)
-			: this.CallServiceAsync(new RequestInfo(requestInfo.Session, "Files", null, "PATCH")
-			{
-				Header = requestInfo.Header,
-				Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+				? Task.FromResult<JToken>(null)
+				: this.CallServiceAsync(new RequestInfo(requestInfo.Session, "Files", null, "PATCH")
 				{
-					["x-service-name"] = requestInfo.ServiceName,
-					["x-object-name"] = requestInfo.ObjectName,
-					["x-system-id"] = systemID,
-					["x-definition-id"] = definitionID,
-					["x-object-id"] = objectID ?? requestInfo.GetObjectIdentity(),
-					["x-object-title"] = objectTitle
-				},
-				Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-				{
-					["Signature"] = (requestInfo.Header.TryGetValue("x-app-token", out var appToken) ? appToken : "").GetHMACSHA256(this.ValidationKey),
-					["SessionID"] = requestInfo.Session.SessionID.GetHMACBLAKE256(this.ValidationKey)
-				},
-				CorrelationID = requestInfo.CorrelationID
-			}, cancellationToken);
+					Header = requestInfo.Header,
+					Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+					{
+						["x-service-name"] = requestInfo.ServiceName,
+						["x-object-name"] = requestInfo.ObjectName,
+						["x-system-id"] = systemID,
+						["x-definition-id"] = definitionID,
+						["x-object-id"] = objectID ?? requestInfo.GetObjectIdentity(),
+						["x-object-title"] = objectTitle
+					},
+					Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+					{
+						["Signature"] = (requestInfo.Header.TryGetValue("x-app-token", out var appToken) ? appToken : "").GetHMACSHA256(this.ValidationKey),
+						["SessionID"] = requestInfo.Session.SessionID.GetHMACBLAKE256(this.ValidationKey)
+					},
+					CorrelationID = requestInfo.CorrelationID
+				}, cancellationToken);
 		#endregion
 
 		#region Timers
@@ -1611,7 +1611,11 @@ namespace net.vieapps.Services
 
 			// write into logs
 			stopwatch?.Stop();
-			this.WriteLogs(requestInfo, new List<string> { $"Error response: {message}{(stopwatch == null ? "" : $" - Execution times: {stopwatch.GetElapsedTimes()}")}", $"Request: {requestInfo.ToJson().ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}" }, exception);
+			this.WriteLogs(requestInfo, new List<string>
+			{
+				$"Error response: {message}{(stopwatch == null ? "" : $" - Execution times: {stopwatch.GetElapsedTimes()}")}",
+				$"Request: {requestInfo.ToJson().ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}"
+			}, exception);
 
 			// return the exception
 			if (exception is WampException)
@@ -1620,10 +1624,7 @@ namespace net.vieapps.Services
 			else
 			{
 				var details = exception != null
-					? new Dictionary<string, object>
-					{
-						{ "0", exception.StackTrace }
-					}
+					? new Dictionary<string, object> { ["0"] = exception.StackTrace }
 					: null;
 
 				var inner = exception?.InnerException;
@@ -1638,10 +1639,7 @@ namespace net.vieapps.Services
 				return new WampRpcRuntimeException(
 					details,
 					new Dictionary<string, object>(),
-					new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
-					{
-						{ "RequestInfo", requestInfo.ToJson() }
-					},
+					new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase) { ["RequestInfo"] = requestInfo.ToJson() },
 					message,
 					exception
 				);

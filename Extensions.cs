@@ -127,11 +127,17 @@ namespace net.vieapps.Services
 
 			var filter = property.Name.IsEquals("Or") ? Filters<T>.Or() : Filters<T>.And();
 			if (!property.Name.IsEquals("And") && !property.Name.IsEquals("Or"))
-				expression.ToJArray(kvp => new JObject { { kvp.Key, kvp.Value } }).ForEach(exp => filter.Add((exp as JObject).GetFilterBy<T>()));
+				expression.ToJArray(kvp => new JObject
+				{
+					{ kvp.Key, kvp.Value }
+				}).ForEach(exp => filter.Add((exp as JObject).GetFilterBy<T>()));
 			else
 			{
 				var children = property.Name.IsEquals("Or") ? expression["Or"] : expression["And"];
-				(children is JObject ? (children as JObject).ToJArray(kvp => new JObject { { kvp.Key, kvp.Value } }) : children as JArray).ForEach(exp => filter.Add(exp != null && exp is JObject ? (exp as JObject).GetFilterBy<T>() : null));
+				(children is JObject ? (children as JObject).ToJArray(kvp => new JObject
+				{
+					{ kvp.Key, kvp.Value }
+				}) : children as JArray).ForEach(exp => filter.Add(exp != null && exp is JObject ? (exp as JObject).GetFilterBy<T>() : null));
 			}
 
 			return filter != null && filter.Children.Count > 0 ? filter : null;
@@ -156,9 +162,9 @@ namespace net.vieapps.Services
 				return @operator.IsEquals("IsNull") || @operator.IsEquals("IsNotNull") || @operator.IsEquals("IsEmpty") || @operator.IsEquals("IsNotEmpty")
 					? new JValue(@operator) as JToken
 					: new JObject
-					{
-						{ @operator, serverJson["Value"] as JValue }
-					};
+						{
+							{ @operator, serverJson["Value"] as JValue }
+						};
 			}
 			else
 			{
@@ -289,9 +295,7 @@ namespace net.vieapps.Services
 		/// <param name="info"></param>
 		/// <returns></returns>
 		public static int GetTotalPages(this Tuple<long, int> info)
-		{
-			return Extensions.GetTotalPages(info.Item1, info.Item2);
-		}
+			=> Extensions.GetTotalPages(info.Item1, info.Item2);
 
 		/// <summary>
 		/// Gets the tuple of pagination from this JSON (1st element is total records, 2nd element is total pages, 3rd element is page size, 4th element is page number)
@@ -365,15 +369,13 @@ namespace net.vieapps.Services
 		/// <param name="pageNumber"></param>
 		/// <returns></returns>
 		public static JObject GetPagination(long totalRecords, int totalPages, int pageSize, int pageNumber)
-		{
-			return new JObject()
+			=> new JObject
 			{
 				{ "TotalRecords", totalRecords },
 				{ "TotalPages", totalPages},
 				{ "PageSize", pageSize },
 				{ "PageNumber", pageNumber }
 			};
-		}
 
 		/// <summary>
 		/// Gets the pagination JSON
@@ -381,9 +383,7 @@ namespace net.vieapps.Services
 		/// <param name="pagination"></param>
 		/// <returns></returns>
 		public static JObject GetPagination(this Tuple<long, int, int, int> pagination)
-		{
-			return Extensions.GetPagination(pagination.Item1, pagination.Item2, pagination.Item3, pagination.Item4);
-		}
+			=> Extensions.GetPagination(pagination.Item1, pagination.Item2, pagination.Item3, pagination.Item4);
 		#endregion
 
 		#region Exceptions
@@ -545,12 +545,9 @@ namespace net.vieapps.Services
 			correlationID = correlationID ?? UtilityService.NewUUID;
 			try
 			{
-				var response = await Router.CallServiceAsync(new RequestInfo(session, "IPLocations", "IP-Location")
+				var service = Router.GetService("IPLocations");
+				var response = await service.ProcessRequestAsync(new RequestInfo(session, "IPLocations")
 				{
-					Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-					{
-						{ "ip-address", session.IP }
-					},
 					CorrelationID = correlationID
 				}, cancellationToken).ConfigureAwait(false);
 
@@ -564,7 +561,7 @@ namespace net.vieapps.Services
 				{
 					if ("Unknown".IsEquals(Extensions.CurrentLocation))
 					{
-						response = await Router.CallServiceAsync(new RequestInfo(session, "IPLocations", "Current")
+						response = await service.ProcessRequestAsync(new RequestInfo(session, "IPLocations", "Current")
 						{
 							CorrelationID = correlationID
 						}, cancellationToken).ConfigureAwait(false);
@@ -593,7 +590,9 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
 		public static Task<string> GetLocationAsync(this RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken))
-			=> requestInfo.Session == null ? Task.FromResult("Unknown") : requestInfo.Session.GetLocationAsync(requestInfo.CorrelationID, cancellationToken);
+			=> requestInfo.Session == null
+				? Task.FromResult("Unknown")
+				: requestInfo.Session.GetLocationAsync(requestInfo.CorrelationID, cancellationToken);
 		#endregion
 
 		#region Encryption
@@ -602,48 +601,36 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="session"></param>
 		/// <param name="seeds">The seeds for hashing</param>
-		/// <param name="storage">The storage</param>
 		/// <returns></returns>
-		public static byte[] GetEncryptionKey(this Session session, byte[] seeds = null, IDictionary<object, object> storage = null)
-			=> storage != null
-				? storage.ContainsKey("EncryptionKey")
-					? storage["EncryptionKey"] as byte[]
-					: (storage["EncryptionKey"] = session.SessionID.GetHMACHash(seeds ?? CryptoService.DEFAULT_PASS_PHRASE.ToBytes(), "SHA512").GenerateHashKey(256)) as byte[]
-				: session.SessionID.GetHMACHash(seeds ?? CryptoService.DEFAULT_PASS_PHRASE.ToBytes(), "SHA512").GenerateHashKey(256);
+		public static byte[] GetEncryptionKey(this Session session, byte[] seeds = null)
+			=> session.SessionID.GetHMACHash(seeds ?? CryptoService.DEFAULT_PASS_PHRASE.ToBytes(), "SHA512").GenerateHashKey(256);
 
 		/// <summary>
 		/// Gest a key for encrypting/decrypting data with this session
 		/// </summary>
 		/// <param name="session"></param>
 		/// <param name="seeds">The seeds for hashing</param>
-		/// <param name="storage">The storage</param>
 		/// <returns></returns>
-		public static byte[] GetEncryptionKey(this Session session, string seeds, IDictionary<object, object> storage)
-			=> session.GetEncryptionKey((seeds ?? CryptoService.DEFAULT_PASS_PHRASE).ToBytes(), storage);
+		public static byte[] GetEncryptionKey(this Session session, string seeds)
+			=> session.GetEncryptionKey(seeds?.ToBytes());
 
 		/// <summary>
 		/// Gest an initialize vector for encrypting/decrypting data with this session
 		/// </summary>
 		/// <param name="session"></param>
 		/// <param name="seeds">The seeds for hashing</param>
-		/// <param name="storage">The storage</param>
 		/// <returns></returns>
-		public static byte[] GetEncryptionIV(this Session session, byte[] seeds = null, IDictionary<object, object> storage = null)
-			=> storage != null
-				? storage.ContainsKey("EncryptionIV")
-					? storage["EncryptionIV"] as byte[]
-					: (storage["EncryptionIV"] = session.SessionID.GetHMACHash(seeds ?? CryptoService.DEFAULT_PASS_PHRASE.ToBytes(), "SHA256").GenerateHashKey(128)) as byte[]
-				: session.SessionID.GetHMACHash(seeds ?? CryptoService.DEFAULT_PASS_PHRASE.ToBytes(), "SHA256").GenerateHashKey(128);
+		public static byte[] GetEncryptionIV(this Session session, byte[] seeds = null)
+			=> session.SessionID.GetHMACHash(seeds ?? CryptoService.DEFAULT_PASS_PHRASE.ToBytes(), "SHA256").GenerateHashKey(128);
 
 		/// <summary>
 		/// Gest an initialize vector for encrypting/decrypting data with this session
 		/// </summary>
 		/// <param name="session"></param>
 		/// <param name="seeds">The seeds for hashing</param>
-		/// <param name="storage">The storage</param>
 		/// <returns></returns>
-		public static byte[] GetEncryptionIV(this Session session, string seeds, IDictionary<object, object> storage)
-			=> session.GetEncryptionIV((seeds ?? CryptoService.DEFAULT_PASS_PHRASE).ToBytes(), storage);
+		public static byte[] GetEncryptionIV(this Session session, string seeds)
+			=> session.GetEncryptionIV(seeds?.ToBytes());
 
 		/// <summary>
 		/// Encrypts the identity (hexa-string)
@@ -655,7 +642,7 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static string GetEncryptedID(this Session session, string id, string keySeeds = null, string ivSeeds = null)
 			=> !string.IsNullOrWhiteSpace(id)
-				? id.HexToBytes().Encrypt(session.GetEncryptionKey(keySeeds ?? CryptoService.DEFAULT_PASS_PHRASE, null), session.GetEncryptionIV(ivSeeds ?? CryptoService.DEFAULT_PASS_PHRASE, null)).ToHex()
+				? id.HexToBytes().Encrypt(session.GetEncryptionKey(keySeeds?.ToBytes()), session.GetEncryptionIV(ivSeeds?.ToBytes())).ToHex()
 				: null;
 
 		/// <summary>
@@ -668,7 +655,7 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static string GetDecryptedID(this Session session, string id, string keySeeds = null, string ivSeeds = null)
 			=> !string.IsNullOrWhiteSpace(id)
-				? id.HexToBytes().Decrypt(session.GetEncryptionKey(keySeeds ?? CryptoService.DEFAULT_PASS_PHRASE, null), session.GetEncryptionIV(ivSeeds ?? CryptoService.DEFAULT_PASS_PHRASE, null)).ToHex()
+				? id.HexToBytes().Decrypt(session.GetEncryptionKey(keySeeds?.ToBytes()), session.GetEncryptionIV(ivSeeds?.ToBytes())).ToHex()
 				: null;
 		#endregion
 
@@ -734,7 +721,7 @@ namespace net.vieapps.Services
 			var host = "";
 			if (!IPAddress.TryParse(uri.Host, out IPAddress address))
 			{
-				address = Dns.GetHostAddresses(uri.Host).FirstOrDefault(ip => ip.AddressFamily == AddressFamily.InterNetwork);
+				address = Dns.GetHostAddresses(uri.Host).FirstOrDefault(ip => ip.AddressFamily == AddressFamily.InterNetwork || ip.AddressFamily == AddressFamily.InterNetworkV6);
 				host = address == null
 					? $" => Could not resolve host \"{host}\""
 					: $" => {uri.Scheme}://{new IPEndPoint(address, uri.Port)}{uri.PathAndQuery}";

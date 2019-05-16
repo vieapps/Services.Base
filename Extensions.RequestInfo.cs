@@ -104,7 +104,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		public static string GetURI(this RequestInfo requestInfo)
 		{
-			var uri = "/" + (requestInfo != null ? requestInfo.ServiceName : "");
+			var uri = $"/{requestInfo?.ServiceName ?? ""}";
 			if (requestInfo != null && !string.IsNullOrWhiteSpace(requestInfo.ObjectName))
 			{
 				uri += "/" + requestInfo.ObjectName;
@@ -112,7 +112,7 @@ namespace net.vieapps.Services
 				if (!string.IsNullOrWhiteSpace(id))
 				{
 					uri += "/" + id;
-					if (!id.IsValidUUID() && requestInfo.Query != null && requestInfo.Query.TryGetValue("id", out string idValue))
+					if (!id.IsValidUUID() && requestInfo.Query != null && requestInfo.Query.TryGetValue("id", out var idValue))
 						uri += "/" + idValue;
 				}
 			}

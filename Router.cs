@@ -88,28 +88,6 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Opens a channel to the API Gateway Router
 		/// </summary>
-		/// <param name="onConnectionEstablished">The action to fire when the connection is established</param>
-		/// <param name="onConnectionBroken">The action to fire when the connection is broken</param>
-		/// <param name="onConnectionError">The action to fire when the connection got any error</param>
-		/// <param name="cancellationToken">The cancellation token</param>
-		/// <returns></returns>
-		public static Task<IWampChannel> OpenAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null, CancellationToken cancellationToken = default(CancellationToken))
-		{
-			var routerInfo = Router.GetRouterInfo();
-			var address = routerInfo.Item1;
-			var realm = routerInfo.Item2;
-			var useJsonChannel = routerInfo.Item3;
-
-			var wampChannel = useJsonChannel
-				? new DefaultWampChannelFactory().CreateJsonChannel(address, realm)
-				: new DefaultWampChannelFactory().CreateMsgpackChannel(address, realm);
-
-			return wampChannel.OpenAsync(cancellationToken, onConnectionEstablished, onConnectionBroken, onConnectionError);
-		}
-
-		/// <summary>
-		/// Opens a channel to the API Gateway Router
-		/// </summary>
 		/// <param name="wampChannel"></param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <param name="onConnectionEstablished">The action to fire when the connection is established</param>
@@ -173,6 +151,28 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
+		/// Opens a channel to the API Gateway Router
+		/// </summary>
+		/// <param name="onConnectionEstablished">The action to fire when the connection is established</param>
+		/// <param name="onConnectionBroken">The action to fire when the connection is broken</param>
+		/// <param name="onConnectionError">The action to fire when the connection got any error</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		public static Task<IWampChannel> OpenAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null, CancellationToken cancellationToken = default(CancellationToken))
+		{
+			var routerInfo = Router.GetRouterInfo();
+			var address = routerInfo.Item1;
+			var realm = routerInfo.Item2;
+			var useJsonChannel = routerInfo.Item3;
+
+			var wampChannel = useJsonChannel
+				? new DefaultWampChannelFactory().CreateJsonChannel(address, realm)
+				: new DefaultWampChannelFactory().CreateMsgpackChannel(address, realm);
+
+			return wampChannel.OpenAsync(cancellationToken, onConnectionEstablished, onConnectionBroken, onConnectionError);
+		}
+
+		/// <summary>
 		/// Opens the incoming channel to the API Gateway Router
 		/// </summary>
 		/// <param name="onConnectionEstablished">The action to fire when the connection is established</param>
@@ -182,16 +182,16 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static async Task<IWampChannel> OpenIncomingChannelAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null, CancellationToken cancellationToken = default(CancellationToken))
 			=> Router.IncomingChannel ?? (Router.IncomingChannel = await Router.OpenAsync(
-					(sender, args) =>
-					{
-						Router.IncomingChannelSessionID = args.SessionId;
-						Router.ChannelsAreClosedBySystem = false;
-						onConnectionEstablished?.Invoke(sender, args);
-					},
-					onConnectionBroken,
-					onConnectionError,
-					cancellationToken
-				));
+				(sender, args) =>
+				{
+					Router.IncomingChannelSessionID = args.SessionId;
+					Router.ChannelsAreClosedBySystem = false;
+					onConnectionEstablished?.Invoke(sender, args);
+				},
+				onConnectionBroken,
+				onConnectionError,
+				cancellationToken
+			));
 
 		/// <summary>
 		/// Opens the outgoging channel to the API Gateway Router
@@ -203,16 +203,16 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static async Task<IWampChannel> OpenOutgoingChannelAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null, CancellationToken cancellationToken = default(CancellationToken))
 			=> Router.OutgoingChannel ?? (Router.OutgoingChannel = await Router.OpenAsync(
-					(sender, args) =>
-					{
-						Router.OutgoingChannelSessionID = args.SessionId;
-						Router.ChannelsAreClosedBySystem = false;
-						onConnectionEstablished?.Invoke(sender, args);
-					},
-					onConnectionBroken,
-					onConnectionError,
-					cancellationToken
-				));
+				(sender, args) =>
+				{
+					Router.OutgoingChannelSessionID = args.SessionId;
+					Router.ChannelsAreClosedBySystem = false;
+					onConnectionEstablished?.Invoke(sender, args);
+				},
+				onConnectionBroken,
+				onConnectionError,
+				cancellationToken
+			));
 		#endregion
 
 		#region Close channels
@@ -363,10 +363,8 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
-		#region Call services
+		#region Get a service
 		internal static ConcurrentDictionary<string, IService> Services { get; } = new ConcurrentDictionary<string, IService>(StringComparer.OrdinalIgnoreCase);
-
-		internal static ConcurrentDictionary<string, IUniqueService> UniqueServices { get; } = new ConcurrentDictionary<string, IUniqueService>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>
 		/// Gets a service by name
@@ -387,6 +385,8 @@ namespace net.vieapps.Services
 			return service ?? throw new ServiceNotFoundException($"The service \"{name.ToLower()}\" is not found");
 		}
 
+		internal static ConcurrentDictionary<string, IUniqueService> UniqueServices { get; } = new ConcurrentDictionary<string, IUniqueService>(StringComparer.OrdinalIgnoreCase);
+
 		/// <summary>
 		/// Gets an unique service by name (means a service at a specified node)
 		/// </summary>
@@ -405,15 +405,6 @@ namespace net.vieapps.Services
 
 			return service ?? throw new ServiceNotFoundException($"The unique service \"{name.ToLower()}\" is not found");
 		}
-
-		/// <summary>
-		/// Calls a service to process a request
-		/// </summary>
-		/// <param name="requestInfo">The requesting information</param>
-		/// <param name="cancellationToken">The cancellation token</param>
-		/// <returns></returns>
-		public static Task<JToken> CallServiceAsync(this RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken))
-			=> Router.GetService(requestInfo?.ServiceName).ProcessRequestAsync(requestInfo, cancellationToken);
 		#endregion
 
 	}
