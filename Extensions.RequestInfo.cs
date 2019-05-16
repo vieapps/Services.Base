@@ -107,13 +107,14 @@ namespace net.vieapps.Services
 			var uri = $"/{requestInfo?.ServiceName ?? ""}";
 			if (requestInfo != null && !string.IsNullOrWhiteSpace(requestInfo.ObjectName))
 			{
-				uri += "/" + requestInfo.ObjectName;
-				var id = requestInfo.GetObjectIdentity();
-				if (!string.IsNullOrWhiteSpace(id))
+				uri += $"/{requestInfo.ObjectName}";
+				var objectIdentity = requestInfo.GetObjectIdentity();
+				if (!string.IsNullOrWhiteSpace(objectIdentity))
 				{
-					uri += "/" + id;
-					if (!id.IsValidUUID() && requestInfo.Query != null && requestInfo.Query.TryGetValue("id", out var idValue))
-						uri += "/" + idValue;
+					uri += $"/{objectIdentity}";
+					var objectID = objectIdentity.IsValidUUID() ? null : requestInfo.GetQueryParameter("id") ?? requestInfo.GetQueryParameter("object-id") ?? requestInfo.GetQueryParameter("x-object-id");
+					if (!string.IsNullOrWhiteSpace(objectID))
+						uri += $"/{objectID}";
 				}
 			}
 			return uri.ToLower();
