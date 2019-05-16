@@ -62,28 +62,12 @@ namespace net.vieapps.Services
 		/// <param name="message">The message</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		protected virtual Task ProcessGatewayCommunicateMessageAsync(CommunicateMessage message, CancellationToken cancellationToken = default(CancellationToken))
-		{
-			if (message.Type.IsStartsWith("Service#UniqueInfo") && message.Type.EndsWith($"#{this.ServiceName.Trim().ToLower()}"))
-			{
-				var osPlatform = message.Data.Get<string>("OSPlatform") ?? "Windows";
-				if (!this.ServiceUniqueNames.TryGetValue(osPlatform, out var uniqueName))
-				{
-					uniqueName = message.Data.Get<string>("Name") ?? $"{this.ServiceName.Trim().ToLower()}.{UtilityService.NewUUID}";
-					this.ServiceUniqueNames.TryAdd(osPlatform, uniqueName);
-					this.Logger.LogInformation($"The unique name of related URIs is updated: {osPlatform} => services.{uniqueName}");
-				}
-			}
-			return Task.CompletedTask;
-		}
+			=> Task.CompletedTask;
 
 		#region Attributes & Properties
 		SystemEx.IAsyncDisposable ServiceInstance { get; set; } = null;
 
 		SystemEx.IAsyncDisposable ServiceUniqueInstance { get; set; } = null;
-
-		ConcurrentDictionary<string, string> ServiceUniqueNames { get; } = new ConcurrentDictionary<string, string>();
-
-		ConcurrentDictionary<string, IUniqueService> UniqueServices { get; } = new ConcurrentDictionary<string, IUniqueService>(StringComparer.OrdinalIgnoreCase);
 
 		IDisposable ServiceCommunicator { get; set; } = null;
 
@@ -635,47 +619,6 @@ namespace net.vieapps.Services
 				if (this.IsDebugResultsEnabled)
 					await this.WriteLogsAsync(requestInfo.CorrelationID, $"Call service finished in {stopwatch.GetElapsedTimes()}", null, this.ServiceName, requestInfo.ServiceName).ConfigureAwait(false);
 			}
-		}
-
-		/// <summary>
-		/// Gets a business service
-		/// </summary>
-		/// <param name="name">The string that presents name of a service</param>
-		/// <returns></returns>
-		protected Task<IService> GetServiceAsync(string name)
-			=> Router.GetServiceAsync(name);
-
-		/// <summary>
-		/// Gets the unique name of the service for a specific OS platform
-		/// </summary>
-		/// <param name="osPlatform"></param>
-		/// <returns></returns>
-		protected string GetUniqueServiceName(string osPlatform)
-			=> !string.IsNullOrWhiteSpace(osPlatform) && this.ServiceUniqueNames.TryGetValue(osPlatform, out string name)
-				? name
-				: null;
-
-		/// <summary>
-		/// Gets the unique service of a specific OS platform
-		/// </summary>
-		/// <param name="osPlatform">The string that presents name of a specifict OS Platform (Windows, Linux or macOS)</param>
-		/// <returns></returns>
-		protected async Task<IUniqueService> GetUniqueServiceAsync(string osPlatform)
-		{
-			var name = this.GetUniqueServiceName(osPlatform);
-			if (string.IsNullOrWhiteSpace(name))
-				return null;
-
-			if (!this.UniqueServices.TryGetValue(name, out IUniqueService service))
-			{
-				await Router.OpenOutgoingChannelAsync().ConfigureAwait(false);
-				if (!this.UniqueServices.TryGetValue(name, out service))
-				{
-					service = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IUniqueService>(ProxyInterceptor.Create(name));
-					this.UniqueServices.TryAdd(osPlatform, service);
-				}
-			}
-			return service ?? throw new ServiceNotFoundException($"The unique  service \"{this.ServiceURI}\" for specific OS platform ({osPlatform}) is not found");
 		}
 		#endregion
 
@@ -1840,143 +1783,118 @@ namespace net.vieapps.Services
 		protected virtual Task StartAsync(Func<ServiceBase, Task> onRegisterSuccessAsync = null, Func<Exception, Task> onRegisterErrorAsync = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
 		{
 			this.Logger.LogInformation($"Attempting to connect to API Gateway Router [{new Uri(Router.GetRouterStrInfo()).GetResolvedURI()}]");
-			return Task.WhenAll(
-				Router.OpenIncomingChannelAsync(
-					(sender, arguments) =>
+			return Router.ConnectAsync(
+				(sender, arguments) =>
+				{
+					Router.IncomingChannel.Update(arguments.SessionId, this.ServiceName, $"Incoming ({this.ServiceURI})");
+					this.Logger.LogInformation($"The incoming channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
+					if (this.State == ServiceState.Initializing)
+						this.State = ServiceState.Ready;
+
+					Task.Run(() => this.RegisterServiceAsync(onRegisterSuccessAsync, onRegisterErrorAsync)).ConfigureAwait(false);
+					try
 					{
-						this.Logger.LogInformation($"Incoming channel to API Gateway Router is established - Session ID: {Router.IncomingChannelSessionID}");
-						Task.Run(() => Router.IncomingChannel.UpdateAsync(Router.IncomingChannelSessionID, this.ServiceName, $"Incoming ({this.ServiceURI})")).ConfigureAwait(false);
-						if (this.State == ServiceState.Initializing)
-							this.State = ServiceState.Ready;
-
-						Task.Run(() => this.RegisterServiceAsync(onRegisterSuccessAsync, onRegisterErrorAsync)).ConfigureAwait(false);
-						try
-						{
-							onIncomingConnectionEstablished?.Invoke(sender, arguments);
-						}
-						catch (Exception ex)
-						{
-							this.Logger.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionEstablished)}\"action: {ex.Message}", ex);
-						}
-					},
-					(sender, arguments) =>
-					{
-						if (this.State == ServiceState.Connected)
-							this.State = ServiceState.Disconnected;
-
-						if (Router.ChannelsAreClosedBySystem || arguments.CloseType.Equals(SessionCloseType.Goodbye))
-							this.Logger.LogInformation($"The incoming channel to API Gateway Router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
-
-						else if (Router.IncomingChannel != null)
-						{
-							this.Logger.LogInformation($"The incoming channel to API Gateway Router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
-							Router.IncomingChannel.ReOpen(this.CancellationTokenSource.Token, (msg, ex) => this.Logger.LogDebug(msg, ex), "Incoming");
-						}
-
-						try
-						{
-							onIncomingConnectionBroken?.Invoke(sender, arguments);
-						}
-						catch (Exception ex)
-						{
-							this.Logger.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionBroken)}\"action: {ex.Message}", ex);
-						}
-					},
-					(sender, arguments) =>
-					{
-						this.Logger.LogDebug($"The incoming channel to API Gateway Router got an error: {arguments.Exception.Message}", arguments.Exception);
-						try
-						{
-							onIncomingConnectionError?.Invoke(sender, arguments);
-						}
-						catch (Exception ex)
-						{
-							this.Logger.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionError)}\"action: {ex.Message}", ex);
-						}
+						onIncomingConnectionEstablished?.Invoke(sender, arguments);
 					}
-				),
-				Router.OpenOutgoingChannelAsync(
-					(sender, arguments) =>
+					catch (Exception ex)
 					{
-						this.Logger.LogInformation($"Outgoing channel to API Gateway Router is established - Session ID: {Router.OutgoingChannelSessionID}");
-						Task.Run(() => Router.OutgoingChannel.UpdateAsync(Router.OutgoingChannelSessionID, this.ServiceName, $"Outgoing ({this.ServiceURI})")).ConfigureAwait(false);
-
-						try
-						{
-							this.RTUService = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IRTUService>(ProxyInterceptor.Create());
-							this.MessagingService = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IMessagingService>(ProxyInterceptor.Create());
-							this.LoggingService = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<ILoggingService>(ProxyInterceptor.Create());
-							this.Logger.LogInformation($"Helper services are{(this.State == ServiceState.Disconnected ? " re-" : " ")}initialized");
-						}
-						catch (Exception ex)
-						{
-							this.Logger.LogError($"Error occurred while{(this.State == ServiceState.Disconnected ? " re-" : " ")}initializing helper services", ex);
-						}
-
-						Task.Run(async () =>
-						{
-							try
-							{
-								while (Router.IncomingChannel == null || Router.OutgoingChannel == null)
-									await Task.Delay(UtilityService.GetRandomNumber(123, 456)).ConfigureAwait(false);
-								await this.SendInterCommunicateMessageAsync(new CommunicateMessage
-								{
-									ServiceName = "APIGateway",
-									Type = "Service#RequestUniqueInfo",
-									Data = new JObject
-									{
-										{ "Name", this.ServiceName.Trim().ToLower() }
-									}
-								}).ConfigureAwait(false);
-							}
-							catch (Exception ex)
-							{
-								this.Logger.LogError($"Error occurred while sending request of service info => {ex.Message}", ex);
-							}
-						}).ConfigureAwait(false);
-
-						try
-						{
-							onOutgoingConnectionEstablished?.Invoke(sender, arguments);
-						}
-						catch (Exception ex)
-						{
-							this.Logger.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionEstablished)}\"action: {ex.Message}", ex);
-						}
-					},
-					(sender, arguments) =>
-					{
-						if (Router.ChannelsAreClosedBySystem || arguments.CloseType.Equals(SessionCloseType.Goodbye))
-							this.Logger.LogInformation($"The outgoing channel to API Gateway Router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
-
-						else if (Router.OutgoingChannel != null)
-						{
-							this.Logger.LogInformation($"The outgoing channel to API Gateway Router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
-							Router.OutgoingChannel.ReOpen(this.CancellationTokenSource.Token, (msg, ex) => this.Logger.LogDebug(msg, ex), "Outgoing");
-						}
-
-						try
-						{
-							onOutgoingConnectionBroken?.Invoke(sender, arguments);
-						}
-						catch (Exception ex)
-						{
-							this.Logger.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionBroken)}\"action: {ex.Message}", ex);
-						}
-					},
-					(sender, arguments) =>
-					{
-						this.Logger.LogDebug($"The outgoing channel to API Gateway Router got an error: {arguments.Exception.Message}", arguments.Exception);
-						try
-						{
-							onOutgoingConnectionError?.Invoke(sender, arguments);
-						}
-						catch (Exception ex)
-						{
-							this.Logger.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionError)}\"action: {ex.Message}", ex);
-						}
+						this.Logger.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionEstablished)}\"action: {ex.Message}", ex);
 					}
-				)
+				},
+				(sender, arguments) =>
+				{
+					if (this.State == ServiceState.Connected)
+						this.State = ServiceState.Disconnected;
+
+					if (Router.ChannelsAreClosedBySystem || arguments.CloseType.Equals(SessionCloseType.Goodbye))
+						this.Logger.LogInformation($"The incoming channel to API Gateway Router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+
+					else if (Router.IncomingChannel != null)
+					{
+						this.Logger.LogInformation($"The incoming channel to API Gateway Router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+						Router.IncomingChannel.ReOpen(this.CancellationTokenSource.Token, (msg, ex) => this.Logger.LogDebug(msg, ex), "Incoming");
+					}
+
+					try
+					{
+						onIncomingConnectionBroken?.Invoke(sender, arguments);
+					}
+					catch (Exception ex)
+					{
+						this.Logger.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionBroken)}\"action: {ex.Message}", ex);
+					}
+				},
+				(sender, arguments) =>
+				{
+					this.Logger.LogError($"Got an unexpected error of the incoming channel to API Gateway Router => {arguments.Exception.Message}", arguments.Exception);
+					try
+					{
+						onIncomingConnectionError?.Invoke(sender, arguments);
+					}
+					catch (Exception ex)
+					{
+						this.Logger.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionError)}\"action: {ex.Message}", ex);
+					}
+				},
+				(sender, arguments) =>
+				{
+					Router.OutgoingChannel.Update(arguments.SessionId, this.ServiceName, $"Outgoing ({this.ServiceURI})");
+					this.Logger.LogInformation($"The outgoing channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
+
+					try
+					{
+						this.RTUService = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IRTUService>(ProxyInterceptor.Create());
+						this.MessagingService = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IMessagingService>(ProxyInterceptor.Create());
+						this.LoggingService = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<ILoggingService>(ProxyInterceptor.Create());
+						this.Logger.LogInformation($"Helper services are{(this.State == ServiceState.Disconnected ? " re-" : " ")}initialized");
+					}
+					catch (Exception ex)
+					{
+						this.Logger.LogError($"Error occurred while{(this.State == ServiceState.Disconnected ? " re-" : " ")}initializing helper services", ex);
+					}
+
+					try
+					{
+						onOutgoingConnectionEstablished?.Invoke(sender, arguments);
+					}
+					catch (Exception ex)
+					{
+						this.Logger.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionEstablished)}\"action: {ex.Message}", ex);
+					}
+				},
+				(sender, arguments) =>
+				{
+					if (Router.ChannelsAreClosedBySystem || arguments.CloseType.Equals(SessionCloseType.Goodbye))
+						this.Logger.LogInformation($"The outgoing channel to API Gateway Router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+
+					else if (Router.OutgoingChannel != null)
+					{
+						this.Logger.LogInformation($"The outgoing channel to API Gateway Router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+						Router.OutgoingChannel.ReOpen(this.CancellationTokenSource.Token, (msg, ex) => this.Logger.LogDebug(msg, ex), "Outgoing");
+					}
+
+					try
+					{
+						onOutgoingConnectionBroken?.Invoke(sender, arguments);
+					}
+					catch (Exception ex)
+					{
+						this.Logger.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionBroken)}\"action: {ex.Message}", ex);
+					}
+				},
+				(sender, arguments) =>
+				{
+					this.Logger.LogError($"Got an unexpected error of the outgoing channel to API Gateway Router => {arguments.Exception.Message}", arguments.Exception);
+					try
+					{
+						onOutgoingConnectionError?.Invoke(sender, arguments);
+					}
+					catch (Exception ex)
+					{
+						this.Logger.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionError)}\"action: {ex.Message}", ex);
+					}
+				},
+				this.CancellationTokenSource.Token
 			);
 		}
 
@@ -2106,7 +2024,7 @@ namespace net.vieapps.Services
 						this.ServiceUniqueInstance = null;
 					}
 			})
-			.ContinueWith(_ => Router.CloseChannels(), TaskContinuationOptions.OnlyOnRanToCompletion)
+			.ContinueWith(_ => Router.Disconnect(), TaskContinuationOptions.OnlyOnRanToCompletion)
 			.ContinueWith(_ => this.StopTimers(), TaskContinuationOptions.OnlyOnRanToCompletion)
 			.ContinueWith(_ => this.CancellationTokenSource.Cancel(), TaskContinuationOptions.OnlyOnRanToCompletion)
 			.ContinueWith(_ => this.Logger?.LogDebug("Stopped"), TaskContinuationOptions.OnlyOnRanToCompletion)

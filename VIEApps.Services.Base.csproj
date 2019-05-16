@@ -9,7 +9,7 @@
 		<AssemblyTitle>VIEApps NGX Service Base</AssemblyTitle>
 		<AssemblyVersion>10.2.1905.2</AssemblyVersion>
 		<FileVersion>10.2.1905.2</FileVersion>
-		<InformationalVersion>v10.2.netstandard-2+rev:2019.05.15-authorizations</InformationalVersion>
+		<InformationalVersion>v10.2.netstandard-2+rev:2019.05.16-authorizations.routers</InformationalVersion>
 		<GeneratePackageOnBuild>false</GeneratePackageOnBuild>
 		<PackageId>VIEApps.Services.Base</PackageId>
 		<Version>10.2.1905.2</Version>
@@ -22,9 +22,9 @@
 		<PackageLicense>LICENSE.md</PackageLicense>
 		<PackageOutputPath>..\..\Components</PackageOutputPath>
 		<PackageTags>services;microservices;vieapps;vieapps.components;vieapps.services;vieapps.microservices</PackageTags>
-		<PackageReleaseNotes>Initial the package with service/topic URIs</PackageReleaseNotes>
+		<PackageReleaseNotes>Restructure: service/topic URIs, authorizations, ...</PackageReleaseNotes>
+		<PackageProjectUrl>https://vieapps.net/</PackageProjectUrl>
 		<PackageIconUrl>https://github.com/vieapps/Components.Utility/raw/master/logo.png</PackageIconUrl>
-		<PackageProjectUrl>https://github.com/vieapps/Services.Base</PackageProjectUrl>
 		<RepositoryUrl>https://github.com/vieapps/Services.Base</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 	</PropertyGroup>

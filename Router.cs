@@ -28,7 +28,7 @@ namespace net.vieapps.Services
 	/// <summary>
 	/// Helper extension methods for working with API Gateway Router
 	/// </summary>
-	public static partial class Router
+	public static class Router
 	{
 
 		#region Properties
@@ -84,7 +84,7 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
-		#region Open & ReOpen
+		#region Open & ReOpen channels
 		/// <summary>
 		/// Opens a channel to the API Gateway Router
 		/// </summary>
@@ -171,9 +171,7 @@ namespace net.vieapps.Services
 				reconnector.Start();
 			}
 		}
-		#endregion
 
-		#region Open channels
 		/// <summary>
 		/// Opens the incoming channel to the API Gateway Router
 		/// </summary>
@@ -249,16 +247,6 @@ namespace net.vieapps.Services
 				}
 				catch { }
 		}
-
-		/// <summary>
-		/// Closes all API Gateway Router channels
-		/// </summary>
-		public static void CloseChannels()
-		{
-			Router.ChannelsAreClosedBySystem = true;
-			Router.CloseIncomingChannel();
-			Router.CloseOutgoingChannel();
-		}
 		#endregion
 
 		#region Update channels
@@ -293,32 +281,129 @@ namespace net.vieapps.Services
 					{ "Description", description }
 				}.ToString(Formatting.None), true).ConfigureAwait(false);
 		}
+
+		/// <summary>
+		/// Updates related information of the channel
+		/// </summary>
+		/// <param name="wampChannel"></param>
+		/// <param name="sessionID"></param>
+		/// <param name="name"></param>
+		/// <param name="description"></param>
+		public static void Update(this IWampChannel wampChannel, long sessionID, string name, string description)
+			=> Task.Run(() => wampChannel.UpdateAsync(sessionID, name, description)).ConfigureAwait(false);
+		#endregion
+
+		#region Connect & Disconnect
+		/// <summary>
+		/// Connects to API Gateway Router
+		/// </summary>
+		/// <param name="onIncomingConnectionEstablished">The action to fire when the incomming connection is established</param>
+		/// <param name="onIncomingConnectionBroken">The action to fire when the incomming connection is broken</param>
+		/// <param name="onIncomingConnectionError">The action to fire when the incomming connection got any error</param>
+		/// <param name="onOutgoingConnectionEstablished">The action to fire when the outgoing connection is established</param>
+		/// <param name="onOutgoingConnectionBroken">The action to fire when the outgoing connection is broken</param>
+		/// <param name="onOutgoingConnectionError">The action to fire when the outgoing connection got any error</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <param name="onError">The action to fire when got any error</param>
+		/// <returns></returns>
+		public static async Task ConnectAsync(
+			Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null,
+			Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null,
+			Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null,
+			Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null,
+			Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null,
+			Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null,
+			CancellationToken cancellationToken = default(CancellationToken),
+			Action<Exception> onError = null
+		)
+		{
+			Router.ChannelsAreClosedBySystem = false;
+			try
+			{
+				if (Router.IncomingChannel == null)
+					Router.IncomingChannel = await Router.OpenAsync(
+						(sender, args) =>
+						{
+							Router.IncomingChannelSessionID = args.SessionId;
+							onIncomingConnectionEstablished?.Invoke(sender, args);
+						},
+						onIncomingConnectionBroken,
+						onIncomingConnectionError,
+						cancellationToken
+					).ConfigureAwait(false);
+				if (Router.OutgoingChannel == null)
+					Router.OutgoingChannel = await Router.OpenAsync(
+						(sender, args) =>
+						{
+							Router.OutgoingChannelSessionID = args.SessionId;
+							onOutgoingConnectionEstablished?.Invoke(sender, args);
+						},
+						onOutgoingConnectionBroken,
+						onOutgoingConnectionError,
+						cancellationToken
+					).ConfigureAwait(false);
+			}
+			catch (Exception ex)
+			{
+				if (onError != null)
+					onError(ex);
+				else
+					throw ex;
+			}
+		}
+
+		/// <summary>
+		/// Disconnects from API Gateway Router
+		/// </summary>
+		public static void Disconnect()
+		{
+			Router.ChannelsAreClosedBySystem = true;
+			Router.CloseIncomingChannel();
+			Router.CloseOutgoingChannel();
+		}
 		#endregion
 
 		#region Call services
 		internal static ConcurrentDictionary<string, IService> Services { get; } = new ConcurrentDictionary<string, IService>(StringComparer.OrdinalIgnoreCase);
+
+		internal static ConcurrentDictionary<string, IUniqueService> UniqueServices { get; } = new ConcurrentDictionary<string, IUniqueService>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>
 		/// Gets a service by name
 		/// </summary>
 		/// <param name="name">The string that presents the name of a service</param>
 		/// <returns></returns>
-		public static async Task<IService> GetServiceAsync(string name)
+		public static IService GetService(string name)
 		{
 			if (string.IsNullOrWhiteSpace(name))
-				return null;
+				throw new ServiceNotFoundException($"The service name is null or empty");
 
 			if (!Router.Services.TryGetValue(name, out var service))
 			{
-				await Router.OpenOutgoingChannelAsync().ConfigureAwait(false);
-				if (!Router.Services.TryGetValue(name, out service))
-				{
-					service = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IService>(ProxyInterceptor.Create(name));
-					Router.Services.TryAdd(name, service);
-				}
+				service = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IService>(ProxyInterceptor.Create(name));
+				Router.Services.TryAdd(name, service);
 			}
 
-			return service ?? throw new ServiceNotFoundException($"The service \"{name?.ToLower()}\" is not found");
+			return service ?? throw new ServiceNotFoundException($"The service \"{name.ToLower()}\" is not found");
+		}
+
+		/// <summary>
+		/// Gets an unique service by name (means a service at a specified node)
+		/// </summary>
+		/// <param name="name">The string that presents the unique name of a service</param>
+		/// <returns></returns>
+		public static IUniqueService GetUniqueService(string name)
+		{
+			if (string.IsNullOrWhiteSpace(name))
+				throw new ServiceNotFoundException($"The unique service name is null or empty");
+
+			if (!Router.UniqueServices.TryGetValue(name, out var service))
+			{
+				service = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IUniqueService>(ProxyInterceptor.Create(name));
+				Router.UniqueServices.TryAdd(name, service);
+			}
+
+			return service ?? throw new ServiceNotFoundException($"The unique service \"{name.ToLower()}\" is not found");
 		}
 
 		/// <summary>
@@ -327,36 +412,8 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo">The requesting information</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static async Task<JToken> CallServiceAsync(this RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken))
-		{
-			var service = await Router.GetServiceAsync(requestInfo?.ServiceName ?? "unknown").ConfigureAwait(false);
-			return await service.ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false);
-		}
-
-		internal static ConcurrentDictionary<string, IUniqueService> UniqueServices { get; } = new ConcurrentDictionary<string, IUniqueService>(StringComparer.OrdinalIgnoreCase);
-
-		/// <summary>
-		/// Gets an unique service by name (means a service at a specified node)
-		/// </summary>
-		/// <param name="name">The string that presents the unique name of a service</param>
-		/// <returns></returns>
-		public static async Task<IUniqueService> GetUniqueServiceAsync(string name)
-		{
-			if (string.IsNullOrWhiteSpace(name))
-				return null;
-
-			if (!Router.UniqueServices.TryGetValue(name, out var service))
-			{
-				await Router.OpenOutgoingChannelAsync().ConfigureAwait(false);
-				if (!Router.UniqueServices.TryGetValue(name, out service))
-				{
-					service = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IUniqueService>(ProxyInterceptor.Create(name));
-					Router.UniqueServices.TryAdd(name, service);
-				}
-			}
-
-			return service ?? throw new ServiceNotFoundException($"The service \"{name?.ToLower()}\" is not found");
-		}
+		public static Task<JToken> CallServiceAsync(this RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken))
+			=> Router.GetService(requestInfo?.ServiceName).ProcessRequestAsync(requestInfo, cancellationToken);
 		#endregion
 
 	}
