@@ -1964,8 +1964,18 @@ namespace net.vieapps.Services
 							}
 							catch (Exception ex)
 							{
-								this.Logger.LogError($"Error occurred while invoking the next action: {ex.Message}", ex);
+								this.Logger.LogError($"Error occurred while invoking the next action => {ex.Message}", ex);
 							}
+
+						// register the service with API Gateway Manager
+						try
+						{
+							await this.SendServiceInfoAsync(args, true).ConfigureAwait(false);
+						}
+						catch (Exception ex)
+						{
+							this.Logger.LogError($"Error occurred while sending service info to API Gateway Manager => {ex.Message}", ex);
+						}
 					}).ConfigureAwait(false);
 				}
 				catch (Exception ex)
@@ -1975,33 +1985,51 @@ namespace net.vieapps.Services
 			}).ConfigureAwait(false);
 		}
 
+		/// <summary>
+		/// Gets the stopped state of the service
+		/// </summary>
 		protected bool Stopped { get; private set; } = false;
 
 		/// <summary>
 		/// Stops this service (unregister, disconnect from API Gateway Router and clean-up)
 		/// </summary>
-		public void Stop()
+		/// <param name="args">The arguments</param>
+		public void Stop(string[] args = null)
 		{
 			// don't process if already stopped
 			if (this.Stopped)
 				return;
 
-			// dispose communicators
+			// assign the flag
 			this.Stopped = true;
-			this.ServiceCommunicator?.Dispose();
-			this.GatewayCommunicator?.Dispose();
 
-			// dispose instances and close all
+			// dispose
 			Task.Run(async () =>
-			{
-				if (this.ServiceInstance != null)
+				{
+					try
+					{
+						await this.SendServiceInfoAsync(args, false).ConfigureAwait(false);
+					}
+					catch (Exception ex)
+					{
+						this.Logger.LogError($"Error occurred while sending service info to API Gateway Manager => {ex.Message}", ex);
+					}
+				})
+				.ContinueWith(_ =>
+				{
+					this.ServiceCommunicator?.Dispose();
+					this.GatewayCommunicator?.Dispose();
+				}, TaskContinuationOptions.OnlyOnRanToCompletion)
+				.ContinueWith(async _ =>
+				{
+					if (this.ServiceInstance != null)
 					try
 					{
 						await this.ServiceInstance.DisposeAsync().ConfigureAwait(false);
 					}
 					catch (Exception ex)
 					{
-						this.Logger?.LogError($"Error occurred while deregistering: {ex.Message}", ex);
+						this.Logger?.LogError($"Error occurred while unregistering => {ex.Message}", ex);
 					}
 					finally
 					{
@@ -2015,18 +2043,46 @@ namespace net.vieapps.Services
 					}
 					catch (Exception ex)
 					{
-						this.Logger?.LogError($"Error occurred while deregistering: {ex.Message}", ex);
+						this.Logger?.LogError($"Error occurred while unregistering => {ex.Message}", ex);
 					}
 					finally
 					{
 						this.ServiceUniqueInstance = null;
 					}
-			})
+			}, TaskContinuationOptions.OnlyOnRanToCompletion)
 			.ContinueWith(_ => Router.Disconnect(), TaskContinuationOptions.OnlyOnRanToCompletion)
 			.ContinueWith(_ => this.StopTimers(), TaskContinuationOptions.OnlyOnRanToCompletion)
 			.ContinueWith(_ => this.CancellationTokenSource.Cancel(), TaskContinuationOptions.OnlyOnRanToCompletion)
 			.ContinueWith(_ => this.Logger?.LogDebug("Stopped"), TaskContinuationOptions.OnlyOnRanToCompletion)
-			.Wait(3456);
+			.Wait(1234);
+		}
+
+		Task SendServiceInfoAsync(string[] args, bool running)
+		{
+			var arguments = (args ?? new string[] { }).Where(arg => !arg.IsStartsWith("/controller-id:")).ToArray();
+			var invokeInfo = arguments.FirstOrDefault(a => a.IsStartsWith("/call-user:")) ?? "";
+			if (!string.IsNullOrWhiteSpace(invokeInfo))
+			{
+				invokeInfo = invokeInfo.Replace(StringComparison.OrdinalIgnoreCase, "/call-user:", "").UrlDecode();
+				var host = arguments.FirstOrDefault(a => a.IsStartsWith("/call-host:"));
+				var platform = arguments.FirstOrDefault(a => a.IsStartsWith("/call-platform:"));
+				var os = arguments.FirstOrDefault(a => a.IsStartsWith("/call-os:"));
+				if (!string.IsNullOrWhiteSpace(host) && !string.IsNullOrWhiteSpace(platform) && !string.IsNullOrWhiteSpace(os))
+					invokeInfo += $" [Host: {host.Replace(StringComparison.OrdinalIgnoreCase, "/call-host:", "").UrlDecode()} - Platform: {platform.Replace(StringComparison.OrdinalIgnoreCase, "/call-platform:", "").UrlDecode()} @ {os.Replace(StringComparison.OrdinalIgnoreCase, "/call-os:", "").UrlDecode()}]";
+			}
+			return this.SendInterCommunicateMessageAsync(new CommunicateMessage("APIGateway")
+			{
+				Type = "Service#Info",
+				Data = new ServiceInfo
+				{
+					Name = this.ServiceName.ToLower(),
+					UniqueName = Extensions.GetUniqueName(this.ServiceName, arguments),
+					ControllerID = args.FirstOrDefault(arg => arg.IsStartsWith("/controller-id:"))?.Replace("/controller-id:", "") ?? "Unknown",
+					InvokeInfo = invokeInfo,
+					Available = true,
+					Running = running
+				}.ToJson()
+			});
 		}
 
 		bool Disposed { get; set; } = false;
