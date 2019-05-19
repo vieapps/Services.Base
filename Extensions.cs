@@ -456,7 +456,7 @@ namespace net.vieapps.Services
 			// cannot serialize
 			else if (exception.ErrorUri.Equals("wamp.error.invalid_argument"))
 			{
-				message = "Cannot serialize or deserialize one of argument objects (or child object)";
+				message = "Cannot serialize or deserialize one argument, all arguments must be instance of a serializable class - all interfaces are not be serialized";
 				if (exception.Arguments != null && exception.Arguments.Length > 0 && exception.Arguments[0] != null && exception.Arguments[0] is JValue)
 					message += $" => {(exception.Arguments[0] as JValue).Value}";
 				type = "SerializationException";
