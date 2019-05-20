@@ -105,16 +105,21 @@ namespace net.vieapps.Services
 		public static string GetURI(this RequestInfo requestInfo)
 		{
 			var uri = $"/{requestInfo?.ServiceName ?? ""}";
-			if (requestInfo != null && !string.IsNullOrWhiteSpace(requestInfo.ObjectName))
+			if (!string.IsNullOrWhiteSpace(requestInfo?.ObjectName))
 			{
 				uri += $"/{requestInfo.ObjectName}";
 				var objectIdentity = requestInfo.GetObjectIdentity();
 				if (!string.IsNullOrWhiteSpace(objectIdentity))
 				{
 					uri += $"/{objectIdentity}";
-					var objectID = objectIdentity.IsValidUUID() ? null : requestInfo.GetQueryParameter("id") ?? requestInfo.GetQueryParameter("object-id") ?? requestInfo.GetQueryParameter("x-object-id");
-					if (!string.IsNullOrWhiteSpace(objectID))
-						uri += $"/{objectID}";
+					if (objectIdentity.IsValidUUID())
+					{
+						var objectID = requestInfo.GetQueryParameter("id") ?? requestInfo.GetQueryParameter("object-id") ?? requestInfo.GetQueryParameter("x-object-id");
+						if (!string.IsNullOrWhiteSpace(objectID))
+							uri += $"/{objectID}";
+					}
+					else if (requestInfo.Query != null && requestInfo.Query.TryGetValue("x-request", out var request))
+						uri += $"?x-request={request}";
 				}
 			}
 			return uri.ToLower();

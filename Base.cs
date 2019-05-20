@@ -736,6 +736,23 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected virtual List<Components.Security.Action> GetActions(PrivilegeRole role)
 			=> role.GetActions();
+
+		/// <summary>
+		/// Gets the business object that specified by identity of entity definition and object
+		/// </summary>
+		/// <param name="definitionID"></param>
+		/// <param name="objectID"></param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		protected async Task<IBusinessEntity> GetBusinessObjectAsync(string definitionID, string objectID, CancellationToken cancellationToken = default(CancellationToken))
+		{
+			var @object = !string.IsNullOrWhiteSpace(definitionID) && definitionID.IsValidUUID() && !string.IsNullOrWhiteSpace(objectID) && objectID.IsValidUUID()
+				? await RepositoryMediator.GetAsync(definitionID, objectID, cancellationToken).ConfigureAwait(false)
+				: null;
+			return @object != null && @object is IBusinessEntity
+				? @object as IBusinessEntity
+				: null;
+		}
 		#endregion
 
 		#region Role-based authorizations
@@ -797,23 +814,6 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected Task<bool> IsSystemAdministratorAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken))
 			=> this.IsSystemAdministratorAsync(requestInfo?.Session, requestInfo?.CorrelationID, cancellationToken);
-
-		/// <summary>
-		/// Gets the business object that specified by identity of entity definition and object
-		/// </summary>
-		/// <param name="definitionID"></param>
-		/// <param name="objectID"></param>
-		/// <param name="cancellationToken"></param>
-		/// <returns></returns>
-		protected async Task<IBusinessEntity> GetBusinessObjectAsync(string definitionID, string objectID, CancellationToken cancellationToken = default(CancellationToken))
-		{
-			var @object = !string.IsNullOrWhiteSpace(definitionID) && definitionID.IsValidUUID() && !string.IsNullOrWhiteSpace(objectID) && objectID.IsValidUUID()
-				? await RepositoryMediator.GetAsync(definitionID, objectID, cancellationToken).ConfigureAwait(false)
-				: null;
-			return @object != null && @object is IBusinessEntity
-				? @object as IBusinessEntity
-				: null;
-		}
 
 		/// <summary>
 		/// Determines the user is administrator or not
