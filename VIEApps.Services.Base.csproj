@@ -7,12 +7,12 @@
 		<WarningLevel>3</WarningLevel>
 		<DocumentationFile>bin\$(Configuration)\netstandard2.0\VIEApps.Services.Base.xml</DocumentationFile>
 		<AssemblyTitle>VIEApps NGX Service Base</AssemblyTitle>
-		<AssemblyVersion>10.2.1905.2</AssemblyVersion>
-		<FileVersion>10.2.1905.2</FileVersion>
-		<InformationalVersion>v10.2.netstandard-2+rev:2019.05.20-privileges.authorizations.extensions</InformationalVersion>
+		<AssemblyVersion>10.2.1906.1</AssemblyVersion>
+		<FileVersion>10.2.1906.1</FileVersion>
+		<InformationalVersion>v10.2.netstandard-2+rev:2019.05.23-privileges.authorizations.extensions</InformationalVersion>
 		<GeneratePackageOnBuild>false</GeneratePackageOnBuild>
 		<PackageId>VIEApps.Services.Base</PackageId>
-		<Version>10.2.1905.2</Version>
+		<Version>10.2.1906.1</Version>
 		<Title>VIEApps NGX Base Service</Title>
 		<Description>The abstract base for all microservices in the VIEApps NGX</Description>
 		<Authors>VIEApps.net</Authors>
@@ -38,16 +38,16 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="JavaScriptEngineSwitcher.ChakraCore" Version="3.1.0" />
+		<PackageReference Include="JavaScriptEngineSwitcher.ChakraCore" Version="3.1.1" />
 		<PackageReference Include="JSPool" Version="4.0.0" />
 		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="2.2.0" />
-		<PackageReference Include="MySqlConnector" Version="0.53.0" />
-		<PackageReference Include="Npgsql" Version="4.0.6" />
+		<PackageReference Include="MySqlConnector" Version="0.54.0" />
+		<PackageReference Include="Npgsql" Version="4.0.7" />
 		<PackageReference Include="Serilog.Extensions.Logging.File" Version="1.1.0" />
-		<PackageReference Include="System.Data.SqlClient" Version="4.6.0" />
-		<PackageReference Include="VIEApps.Components.Repository" Version="10.2.1905.2" />
-		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.2.1905.2" />
-		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.2.1905.2" />
+		<PackageReference Include="System.Data.SqlClient" Version="4.6.1" />
+		<PackageReference Include="VIEApps.Components.Repository" Version="10.2.1906.1" />
+		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.2.1906.1" />
+		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.2.1906.1" />
 	</ItemGroup>
 
 </Project>
