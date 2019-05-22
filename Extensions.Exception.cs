@@ -102,6 +102,8 @@ namespace net.vieapps.Services
 			// runtime error
 			else if (exception.ErrorUri.Equals("wamp.error.runtime_error"))
 			{
+				inner = exception;
+
 				if (exception.Arguments != null && exception.Arguments.Length > 0 && exception.Arguments[0] != null && exception.Arguments[0] is JObject)
 					foreach (var info in exception.Arguments[0] as JObject)
 					{
@@ -129,7 +131,31 @@ namespace net.vieapps.Services
 					? (jsonException["Type"] as JValue).Value.ToString().ToArray('.').Last()
 					: "ServiceOperationException";
 
-				inner = exception;
+				switch (type)
+				{
+					case "FileNotFoundException":
+					case "ServiceNotFoundException":
+					case "InformationNotFoundException":
+						code = (int)HttpStatusCode.NotFound;
+						break;
+
+					case "MethodAccessException":
+						code = (int)HttpStatusCode.MethodNotAllowed;
+						break;
+
+					case "AccessDeniedException":
+						code = (int)HttpStatusCode.Forbidden;
+						break;
+
+					case "UnauthorizedException":
+						code = (int)HttpStatusCode.Unauthorized;
+						break;
+
+					default:
+						if (type.Contains("Invalid"))
+							code = (int)HttpStatusCode.BadRequest;
+						break;
+				}
 			}
 
 			// unknown
