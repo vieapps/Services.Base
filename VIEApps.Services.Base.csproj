@@ -9,7 +9,7 @@
 		<AssemblyTitle>VIEApps NGX Service Base</AssemblyTitle>
 		<AssemblyVersion>10.2.1906.1</AssemblyVersion>
 		<FileVersion>10.2.1906.1</FileVersion>
-		<InformationalVersion>v10.2.netstandard-2+rev:2019.05.23-privileges.authorizations.extensions</InformationalVersion>
+		<InformationalVersion>v10.2.netstandard-2+rev:2019.05.29-error.status.codes</InformationalVersion>
 		<GeneratePackageOnBuild>false</GeneratePackageOnBuild>
 		<PackageId>VIEApps.Services.Base</PackageId>
 		<Version>10.2.1906.1</Version>

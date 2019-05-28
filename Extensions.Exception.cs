@@ -64,7 +64,7 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static Tuple<int, string, string, string, Exception, JObject> GetDetails(this WampException exception, RequestInfo requestInfo = null)
 		{
-			var code = 500;
+			var code = (int)HttpStatusCode.InternalServerError;
 			var message = "";
 			var type = "";
 			var stack = "";
@@ -79,20 +79,19 @@ namespace net.vieapps.Services
 					message = (exception.Arguments[0] as JValue).Value.ToString();
 					var start = message.IndexOf("'");
 					var end = message.IndexOf("'", start + 1);
-					message = $"The requested service ({message.Substring(start + 1, end - start - 1).Replace("'", "")}) is unavailable";
+					message = $"The service ({message.Substring(start + 1, end - start - 1).Replace("'", "")}) is unavailable";
 				}
 				else
-					message = "The requested service is unavailable";
+					message = "The service is unavailable";
 
 				type = "ServiceUnavailableException";
 				stack = exception.StackTrace;
-				code = 503;
 			}
 
 			// cannot serialize
 			else if (exception.ErrorUri.Equals("wamp.error.invalid_argument"))
 			{
-				message = "Cannot serialize or deserialize one argument, all arguments must be instance of a serializable class - all interfaces are not be deserialized";
+				message = "Cannot serialize or deserialize one of arguments, all arguments must be instance of a serializable class - interfaces are not be deserialized";
 				if (exception.Arguments != null && exception.Arguments.Length > 0 && exception.Arguments[0] != null && exception.Arguments[0] is JValue)
 					message += $" => {(exception.Arguments[0] as JValue).Value}";
 				type = "SerializationException";
@@ -120,7 +119,7 @@ namespace net.vieapps.Services
 				}
 
 				jsonException = exception.Arguments != null && exception.Arguments.Length > 4 && exception.Arguments[4] != null && exception.Arguments[4] is JObject
-					? Extensions.GetJsonException(exception.Arguments[4] as JObject)
+					? (exception.Arguments[4] as JObject).GetJsonException()
 					: null;
 
 				message = jsonException != null
@@ -130,47 +129,54 @@ namespace net.vieapps.Services
 				type = jsonException != null
 					? (jsonException["Type"] as JValue).Value.ToString().ToArray('.').Last()
 					: "ServiceOperationException";
-
-				switch (type)
-				{
-					case "FileNotFoundException":
-					case "ServiceNotFoundException":
-					case "InformationNotFoundException":
-						code = (int)HttpStatusCode.NotFound;
-						break;
-
-					case "MethodAccessException":
-						code = (int)HttpStatusCode.MethodNotAllowed;
-						break;
-
-					case "AccessDeniedException":
-						code = (int)HttpStatusCode.Forbidden;
-						break;
-
-					case "UnauthorizedException":
-						code = (int)HttpStatusCode.Unauthorized;
-						break;
-
-					default:
-						if (type.Contains("Invalid"))
-							code = (int)HttpStatusCode.BadRequest;
-						break;
-				}
 			}
 
 			// unknown
 			else
 			{
 				message = exception.Message;
-				type = exception.GetType().GetTypeName(true);
+				type = exception.GetTypeName(true);
 				stack = exception.StackTrace;
 				inner = exception.InnerException;
+			}
+
+			// status code
+			switch (type)
+			{
+				case "FileNotFoundException":
+				case "ServiceNotFoundException":
+				case "InformationNotFoundException":
+					code = (int)HttpStatusCode.NotFound;
+					break;
+
+				case "MethodNotAllowedException":
+					code = (int)HttpStatusCode.MethodNotAllowed;
+					break;
+
+				case "NotImplementedException":
+					code = (int)HttpStatusCode.NotImplemented;
+					break;
+
+				case "AccessDeniedException":
+					code = (int)HttpStatusCode.Forbidden;
+					break;
+
+				case "UnauthorizedException":
+					code = (int)HttpStatusCode.Unauthorized;
+					break;
+
+				default:
+					if (type.Contains("Invalid"))
+						code = (int)HttpStatusCode.BadRequest;
+					else if (type.Contains("Unavailable"))
+						code = (int)HttpStatusCode.ServiceUnavailable;
+					break;
 			}
 
 			return new Tuple<int, string, string, string, Exception, JObject>(code, message, type, stack, inner, jsonException);
 		}
 
-		static JObject GetJsonException(JObject exception)
+		static JObject GetJsonException(this JToken exception)
 		{
 			var json = new JObject
 			{
@@ -183,7 +189,7 @@ namespace net.vieapps.Services
 
 			var inner = exception["InnerException"];
 			if (inner != null && inner is JObject)
-				json.Add(new JProperty("InnerException", Extensions.GetJsonException(inner as JObject)));
+				json.Add(new JProperty("InnerException", inner.GetJsonException()));
 
 			return json;
 		}
