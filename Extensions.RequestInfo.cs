@@ -86,8 +86,9 @@ namespace net.vieapps.Services
 		/// Gets the object identity (from the parameter named 'object-identity' of the query)
 		/// </summary>
 		/// <param name="requireUUID">true to require object identity is valid UUID</param>
+		/// <param name="getAlternative">true to get alternative identity via 'id', 'object-id', or 'x-object-id'</param>
 		/// <returns></returns>
-		public static string GetObjectIdentity(this RequestInfo requestInfo, bool requireUUID = false)
+		public static string GetObjectIdentity(this RequestInfo requestInfo, bool requireUUID = false, bool getAlternative = false)
 		{
 			var objectIdentity = requestInfo?.GetQueryParameter("object-identity");
 			return !string.IsNullOrWhiteSpace(objectIdentity)
@@ -95,8 +96,12 @@ namespace net.vieapps.Services
 					? objectIdentity
 					: objectIdentity.IsValidUUID()
 						? objectIdentity
-						: null
-				: null;
+						: getAlternative
+							? requestInfo.GetQueryParameter("id") ?? requestInfo.GetQueryParameter("object-id") ?? requestInfo.GetQueryParameter("x-object-id")
+							: null
+				: getAlternative
+					? requestInfo.GetQueryParameter("id") ?? requestInfo.GetQueryParameter("object-id") ?? requestInfo.GetQueryParameter("x-object-id")
+					: null;
 		}
 
 		/// <summary>
@@ -112,14 +117,17 @@ namespace net.vieapps.Services
 				if (!string.IsNullOrWhiteSpace(objectIdentity))
 				{
 					uri += $"/{objectIdentity}";
-					if (objectIdentity.IsValidUUID())
+					if (!objectIdentity.IsValidUUID())
 					{
-						var objectID = requestInfo.GetQueryParameter("id") ?? requestInfo.GetQueryParameter("object-id") ?? requestInfo.GetQueryParameter("x-object-id");
-						if (!string.IsNullOrWhiteSpace(objectID))
-							uri += $"/{objectID}";
+						if (requestInfo.Query != null && requestInfo.Query.TryGetValue("x-request", out var request))
+							uri += $"?x-request={request}";
+						else
+						{
+							var objectID = requestInfo.GetObjectIdentity(true, true);
+							if (!string.IsNullOrWhiteSpace(objectID))
+								uri += $"/{objectID}";
+						}
 					}
-					else if (requestInfo.Query != null && requestInfo.Query.TryGetValue("x-request", out var request))
-						uri += $"?x-request={request}";
 				}
 			}
 			return uri.ToLower();

@@ -72,14 +72,14 @@ namespace net.vieapps.Services
 			JObject jsonException = null;
 
 			// unavailable
-			if (exception.ErrorUri.Equals("wamp.error.no_such_procedure") || exception.ErrorUri.Equals("wamp.error.callee_unregistered"))
+			if (exception.ErrorUri.Equals("wamp.error.no_such_procedure") || exception.ErrorUri.Equals("wamp.error.no_such_registration") || exception.ErrorUri.Equals("wamp.error.callee_unregistered"))
 			{
 				if (exception.Arguments != null && exception.Arguments.Length > 0 && exception.Arguments[0] != null && exception.Arguments[0] is JValue)
 				{
 					message = (exception.Arguments[0] as JValue).Value.ToString();
-					var start = message.IndexOf("'");
-					var end = message.IndexOf("'", start + 1);
-					message = $"The service ({message.Substring(start + 1, end - start - 1).Replace("'", "")}) is unavailable";
+					var start = message.IndexOf("'") + 1;
+					var end = message.IndexOf("'", start);
+					message = $"The service ({message.Substring(start, end - start).Replace("'", "")}) is unavailable";
 				}
 				else
 					message = "The service is unavailable";
@@ -144,7 +144,6 @@ namespace net.vieapps.Services
 			switch (type)
 			{
 				case "FileNotFoundException":
-				case "ServiceNotFoundException":
 				case "InformationNotFoundException":
 					code = (int)HttpStatusCode.NotFound;
 					break;
@@ -168,7 +167,7 @@ namespace net.vieapps.Services
 				default:
 					if (type.Contains("Invalid"))
 						code = (int)HttpStatusCode.BadRequest;
-					else if (type.Contains("Unavailable"))
+					else if (type.Equals("ServiceNotFoundException") || type.Contains("Unavailable"))
 						code = (int)HttpStatusCode.ServiceUnavailable;
 					break;
 			}
