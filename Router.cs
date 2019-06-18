@@ -94,7 +94,7 @@ namespace net.vieapps.Services
 		/// <param name="onConnectionBroken">The action to fire when the connection is broken</param>
 		/// <param name="onConnectionError">The action to fire when the connection got any error</param>
 		/// <returns></returns>
-		public static async Task<IWampChannel> OpenAsync(this IWampChannel wampChannel, CancellationToken cancellationToken = default(CancellationToken), Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null)
+		public static async Task<IWampChannel> OpenAsync(this IWampChannel wampChannel, CancellationToken cancellationToken = default, Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null)
 		{
 			// asisgn event handler
 			if (onConnectionEstablished != null)
@@ -119,7 +119,7 @@ namespace net.vieapps.Services
 		/// <param name="tracker">The tracker to track the logs</param>
 		/// <param name="prefix"></param>
 		/// <param name="awatingTimes"></param>
-		public static void ReOpen(this IWampChannel wampChannel, CancellationToken cancellationToken = default(CancellationToken), Action<string, Exception> tracker = null, string prefix = null, int awatingTimes = 0)
+		public static void ReOpen(this IWampChannel wampChannel, CancellationToken cancellationToken = default, Action<string, Exception> tracker = null, string prefix = null, int awatingTimes = 0)
 		{
 			var reconnector = new WampChannelReconnector(wampChannel, async () =>
 			{
@@ -158,7 +158,7 @@ namespace net.vieapps.Services
 		/// <param name="onConnectionError">The action to fire when the connection got any error</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static Task<IWampChannel> OpenAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null, CancellationToken cancellationToken = default(CancellationToken))
+		public static Task<IWampChannel> OpenAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null, CancellationToken cancellationToken = default)
 		{
 			var routerInfo = Router.GetRouterInfo();
 			var address = routerInfo.Item1;
@@ -180,7 +180,7 @@ namespace net.vieapps.Services
 		/// <param name="onConnectionError">The action to fire when the connection got any error</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static async Task<IWampChannel> OpenIncomingChannelAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null, CancellationToken cancellationToken = default(CancellationToken))
+		public static async Task<IWampChannel> OpenIncomingChannelAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null, CancellationToken cancellationToken = default)
 			=> Router.IncomingChannel ?? (Router.IncomingChannel = await Router.OpenAsync(
 				(sender, args) =>
 				{
@@ -201,7 +201,7 @@ namespace net.vieapps.Services
 		/// <param name="onConnectionError">The action to fire when the connection got any error</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static async Task<IWampChannel> OpenOutgoingChannelAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null, CancellationToken cancellationToken = default(CancellationToken))
+		public static async Task<IWampChannel> OpenOutgoingChannelAsync(Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onConnectionError = null, CancellationToken cancellationToken = default)
 			=> Router.OutgoingChannel ?? (Router.OutgoingChannel = await Router.OpenAsync(
 				(sender, args) =>
 				{
@@ -313,7 +313,7 @@ namespace net.vieapps.Services
 			Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null,
 			Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null,
 			Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null,
-			CancellationToken cancellationToken = default(CancellationToken),
+			CancellationToken cancellationToken = default,
 			Action<Exception> onError = null
 		)
 		{

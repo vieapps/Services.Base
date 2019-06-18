@@ -37,7 +37,7 @@ namespace net.vieapps.Services
 		/// <param name="correlationID"></param>
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		public static async Task<string> GetLocationAsync(this Session session, string correlationID = null, CancellationToken cancellationToken = default(CancellationToken))
+		public static async Task<string> GetLocationAsync(this Session session, string correlationID = null, CancellationToken cancellationToken = default)
 		{
 			correlationID = correlationID ?? UtilityService.NewUUID;
 			try
@@ -86,7 +86,7 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo"></param>
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		public static Task<string> GetLocationAsync(this RequestInfo requestInfo, CancellationToken cancellationToken = default(CancellationToken))
+		public static Task<string> GetLocationAsync(this RequestInfo requestInfo, CancellationToken cancellationToken = default)
 			=> requestInfo.Session == null
 				? Task.FromResult("Unknown")
 				: requestInfo.Session.GetLocationAsync(requestInfo.CorrelationID, cancellationToken);
