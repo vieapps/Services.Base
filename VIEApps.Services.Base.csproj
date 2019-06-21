@@ -7,12 +7,12 @@
 		<WarningLevel>3</WarningLevel>
 		<DocumentationFile>bin\$(Configuration)\$(TargetFramework)\VIEApps.Services.Base.xml</DocumentationFile>
 		<AssemblyTitle>VIEApps NGX Service Base</AssemblyTitle>
-		<AssemblyVersion>10.3.1906.4</AssemblyVersion>
-		<FileVersion>10.3.1906.4</FileVersion>
-		<InformationalVersion>v10.3+rev:2019.06.20-multiple.targets</InformationalVersion>
+		<AssemblyVersion>10.3.1906.5</AssemblyVersion>
+		<FileVersion>10.3.1906.5</FileVersion>
+		<InformationalVersion>v10.3.1906+rev:2019.06.21-multiple.targets</InformationalVersion>
 		<GeneratePackageOnBuild>false</GeneratePackageOnBuild>
 		<PackageId>VIEApps.Services.Base</PackageId>
-		<Version>10.3.1906.4-preview</Version>
+		<Version>10.3.1906.5-preview</Version>
 		<Title>VIEApps NGX Base Service</Title>
 		<Description>The abstract base for all microservices in the VIEApps NGX</Description>
 		<Authors>VIEApps.net</Authors>
@@ -22,7 +22,7 @@
 		<PackageLicense>LICENSE.md</PackageLicense>
 		<PackageOutputPath>..\..\Components</PackageOutputPath>
 		<PackageTags>services;microservices;vieapps;vieapps.components;vieapps.services;vieapps.microservices</PackageTags>
-		<PackageReleaseNotes>Experimental with preview packages</PackageReleaseNotes>
+		<PackageReleaseNotes>Support .NET Standard 2.1</PackageReleaseNotes>
 		<PackageProjectUrl>https://vieapps.net/</PackageProjectUrl>
 		<PackageIconUrl>https://github.com/vieapps/Components.Utility/raw/master/logo.png</PackageIconUrl>
 		<RepositoryUrl>https://github.com/vieapps/Services.Base</RepositoryUrl>
@@ -42,24 +42,21 @@
 		<PackageReference Include="JSPool" Version="4.0.0" />
 		<PackageReference Include="MySqlConnector" Version="0.56.0" />
 		<PackageReference Include="Npgsql" Version="4.0.7" />
+		<PackageReference Include="VIEApps.Components.Repository" Version="10.3.1906.5-preview" />
+		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.3.1906.5-preview" />
+		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.3.1906.5-preview" />
 	</ItemGroup>
 
 	<ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
 		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="2.2.0" />
 		<PackageReference Include="Serilog.Extensions.Logging.File" Version="1.1.0" />
 		<PackageReference Include="System.Data.SqlClient" Version="4.6.1" />
-		<PackageReference Include="VIEApps.Components.Repository" Version="10.2.1906.2" />
-		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.2.1906.2" />
-		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.2.1906.2" />
 	</ItemGroup>
 
-	<ItemGroup Condition="'$(TargetFramework)' != 'netstandard2.0'">
+	<ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
 		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="3.0.0-preview6.19304.6" />
 		<PackageReference Include="Serilog.Extensions.Logging.File" Version="2.0.0-dev-00032" />
 		<PackageReference Include="System.Data.SqlClient" Version="4.7.0-preview6.19303.8" />
-		<PackageReference Include="VIEApps.Components.Repository" Version="10.3.1906.4-preview" />
-		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.3.1906.4-preview" />
-		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.3.1906.4-preview" />
 	</ItemGroup>
 
 </Project>
