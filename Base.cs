@@ -1964,25 +1964,25 @@ namespace net.vieapps.Services
 			this.Stopped = true;
 
 			// dispose
-			Task.Run(async () =>
+			var task = Task.Run(async () =>
+			{
+				try
 				{
-					try
-					{
-						await this.SendServiceInfoAsync(args, false).ConfigureAwait(false);
-					}
-					catch (Exception ex)
-					{
-						this.Logger.LogError($"Error occurred while sending info to API Gateway => {ex.Message}", ex);
-					}
-				})
-				.ContinueWith(_ =>
+					await this.SendServiceInfoAsync(args, false).ConfigureAwait(false);
+				}
+				catch (Exception ex)
 				{
-					this.ServiceCommunicator?.Dispose();
-					this.GatewayCommunicator?.Dispose();
-				}, TaskContinuationOptions.OnlyOnRanToCompletion)
-				.ContinueWith(async _ =>
-				{
-					if (this.ServiceInstance != null)
+					this.Logger.LogError($"Error occurred while sending info to API Gateway => {ex.Message}", ex);
+				}
+			})
+			.ContinueWith(_ =>
+			{
+				this.ServiceCommunicator?.Dispose();
+				this.GatewayCommunicator?.Dispose();
+			}, TaskContinuationOptions.OnlyOnRanToCompletion)
+			.ContinueWith(async _ =>
+			{
+				if (this.ServiceInstance != null)
 					try
 					{
 						await this.ServiceInstance.DisposeAsync().ConfigureAwait(false);
@@ -2010,11 +2010,20 @@ namespace net.vieapps.Services
 						this.ServiceUniqueInstance = null;
 					}
 			}, TaskContinuationOptions.OnlyOnRanToCompletion)
-			.ContinueWith(_ => Router.Disconnect(), TaskContinuationOptions.OnlyOnRanToCompletion)
-			.ContinueWith(_ => this.StopTimers(), TaskContinuationOptions.OnlyOnRanToCompletion)
-			.ContinueWith(_ => this.CancellationTokenSource.Cancel(), TaskContinuationOptions.OnlyOnRanToCompletion)
-			.ContinueWith(_ => this.Logger?.LogDebug("Stopped"), TaskContinuationOptions.OnlyOnRanToCompletion)
-			.Wait(1234);
+			.ContinueWith(_ => Router.Disconnect(), TaskContinuationOptions.OnlyOnRanToCompletion);
+
+			try
+			{
+				task.Wait(1234);
+			}
+			catch (Exception ex)
+			{
+				this.Logger?.LogError($"Error occurred while stopping => {ex.Message}", ex);
+			}
+
+			this.StopTimers();
+			this.CancellationTokenSource.Cancel();
+			this.Logger?.LogDebug("Stopped");
 		}
 
 		Task SendServiceInfoAsync(string[] args, bool running)
