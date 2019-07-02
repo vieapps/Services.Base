@@ -7,12 +7,12 @@
 		<WarningLevel>3</WarningLevel>
 		<DocumentationFile>bin\$(Configuration)\$(TargetFramework)\VIEApps.Services.Base.xml</DocumentationFile>
 		<AssemblyTitle>VIEApps NGX Service Base</AssemblyTitle>
-		<AssemblyVersion>10.3.1906.5</AssemblyVersion>
-		<FileVersion>10.3.1906.5</FileVersion>
-		<InformationalVersion>v10.3.1906+rev:2019.06.21-multiple.targets</InformationalVersion>
+		<AssemblyVersion>10.3.1907.1</AssemblyVersion>
+		<FileVersion>10.3.1907.1</FileVersion>
+		<InformationalVersion>10.3-$(TargetFramework)-build:03-3:03+multiple.targets</InformationalVersion>
 		<GeneratePackageOnBuild>false</GeneratePackageOnBuild>
 		<PackageId>VIEApps.Services.Base</PackageId>
-		<Version>10.3.1906.5-preview</Version>
+		<Version>10.3.1907.1-preview</Version>
 		<Title>VIEApps NGX Base Service</Title>
 		<Description>The abstract base for all microservices in the VIEApps NGX</Description>
 		<Authors>VIEApps.net</Authors>
@@ -40,11 +40,11 @@
 	<ItemGroup>
 		<PackageReference Include="JavaScriptEngineSwitcher.ChakraCore" Version="3.1.2" />
 		<PackageReference Include="JSPool" Version="4.0.0" />
-		<PackageReference Include="MySqlConnector" Version="0.56.0" />
+		<PackageReference Include="MySqlConnector" Version="0.57.0-beta3" />
 		<PackageReference Include="Npgsql" Version="4.0.7" />
-		<PackageReference Include="VIEApps.Components.Repository" Version="10.3.1906.5-preview" />
-		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.3.1906.5-preview" />
-		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.3.1906.5-preview" />
+		<PackageReference Include="VIEApps.Components.Repository" Version="10.3.1907.1-preview" />
+		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.3.1907.1-preview" />
+		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.3.1907.1-preview" />
 	</ItemGroup>
 
 	<ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
