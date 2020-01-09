@@ -349,7 +349,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		public ILogger Logger { get; private set; }
 
-		ConcurrentQueue<Tuple<string, string, string, List<string>, string>> Logs { get; } = new ConcurrentQueue<Tuple<string, string, string, List<string>, string>>();
+		ConcurrentQueue<Tuple<string, string, string, string, string, List<string>, string>> Logs { get; } = new ConcurrentQueue<Tuple<string, string, string, string, string, List<string>, string>>();
 
 		string _isDebugResultsEnabled = null, _isDebugStacksEnabled = null, _isDebugAuthorizationsEnabled = null;
 
@@ -376,7 +376,9 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
 		/// </summary>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
+		/// <param name="developerID">The identity of the developer</param>
+		/// <param name="appID">The identity of the app</param>
 		/// <param name="logger">The local logger</param>
 		/// <param name="logs">The logs</param>
 		/// <param name="exception">The exception</param>
@@ -384,7 +386,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
-		protected async Task WriteLogsAsync(string correlationID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+		protected async Task WriteLogsAsync(string correlationID, string developerID, string appID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
 		{
 			// prepare
 			correlationID = correlationID ?? UtilityService.NewUUID;
@@ -412,25 +414,55 @@ namespace net.vieapps.Services
 				logs.Add($"> Type: {exception.GetType().ToString()}");
 			}
 
-			Tuple<string, string, string, List<string>, string> log = null;
+			Tuple<string, string, string, string, string, List<string>, string> log = null;
 			try
 			{
 				while (this.Logs.TryDequeue(out log))
-					await this.LoggingService.WriteLogsAsync(log.Item1, log.Item2, log.Item3, log.Item4, log.Item5, this.CancellationTokenSource.Token).ConfigureAwait(false);
-				await this.LoggingService.WriteLogsAsync(correlationID, serviceName ?? this.ServiceName ?? "APIGateway", objectName, logs, exception.GetStack(), this.CancellationTokenSource.Token).ConfigureAwait(false);
+					await this.LoggingService.WriteLogsAsync(log.Item1, log.Item2, log.Item3, log.Item4, log.Item5, log.Item6, log.Item7, this.CancellationTokenSource.Token).ConfigureAwait(false);
+				await this.LoggingService.WriteLogsAsync(correlationID, developerID, appID, serviceName ?? this.ServiceName ?? "APIGateway", objectName, logs, exception?.GetStack() ?? "", this.CancellationTokenSource.Token).ConfigureAwait(false);
 			}
 			catch
 			{
 				if (log != null)
 					this.Logs.Enqueue(log);
-				this.Logs.Enqueue(new Tuple<string, string, string, List<string>, string>(correlationID, serviceName ?? this.ServiceName ?? "APIGateway", objectName, logs, exception.GetStack()));
+				this.Logs.Enqueue(new Tuple<string, string, string, string, string, List<string>, string>(correlationID, developerID, appID, serviceName ?? this.ServiceName ?? "APIGateway", objectName, logs, exception?.GetStack() ?? ""));
 			}
 		}
 
 		/// <summary>
+		/// Writes the logs (to centerlized logging system and local logs)
+		/// </summary>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
+		/// <param name="logger">The local logger</param>
+		/// <param name="logs">The logs</param>
+		/// <param name="exception">The exception</param>
+		/// <param name="serviceName">The name of service</param>
+		/// <param name="objectName">The name of object</param>
+		/// <param name="mode">The logging mode</param>
+		/// <returns></returns>
+		protected Task WriteLogsAsync(string correlationID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+			=> this.WriteLogsAsync(correlationID, null, null, logger, logs, exception, serviceName, objectName, mode);
+
+		/// <summary>
 		/// Writes the logs into centerlized logging system
 		/// </summary>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
+		/// <param name="developerID">The identity of the developer</param>
+		/// <param name="appID">The identity of the app</param>
+		/// <param name="logger">The local logger</param>
+		/// <param name="log">The logs</param>
+		/// <param name="exception">The error exception</param>
+		/// <param name="serviceName">The name of service</param>
+		/// <param name="objectName">The name of object</param>
+		/// <param name="mode">The logging mode</param>
+		/// <returns></returns>
+		protected Task WriteLogsAsync(string correlationID, string developerID, string appID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+			=> this.WriteLogsAsync(correlationID, developerID, appID, logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode);
+
+		/// <summary>
+		/// Writes the logs into centerlized logging system
+		/// </summary>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="logger">The local logger</param>
 		/// <param name="log">The logs</param>
 		/// <param name="exception">The error exception</param>
@@ -439,12 +471,27 @@ namespace net.vieapps.Services
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
 		protected Task WriteLogsAsync(string correlationID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> this.WriteLogsAsync(correlationID, logger, !string.IsNullOrWhiteSpace(log) ? new List<string> { log } : null, exception, serviceName, objectName, mode);
+			=> this.WriteLogsAsync(correlationID, null, null, logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode);
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
 		/// </summary>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
+		/// <param name="developerID">The identity of the developer</param>
+		/// <param name="appID">The identity of the app</param>
+		/// <param name="logs">The logs</param>
+		/// <param name="exception">The exception</param>
+		/// <param name="serviceName">The name of service</param>
+		/// <param name="objectName">The name of object</param>
+		/// <param name="mode">The logging mode</param>
+		/// <returns></returns>
+		protected Task WriteLogsAsync(string correlationID, string developerID, string appID, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+			=> this.WriteLogsAsync(correlationID, developerID, appID, this.Logger, logs, exception, serviceName, objectName, mode);
+
+		/// <summary>
+		/// Writes the logs (to centerlized logging system and local logs)
+		/// </summary>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="logs">The logs</param>
 		/// <param name="exception">The exception</param>
 		/// <param name="serviceName">The name of service</param>
@@ -452,12 +499,27 @@ namespace net.vieapps.Services
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
 		protected Task WriteLogsAsync(string correlationID, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> this.WriteLogsAsync(correlationID, this.Logger, logs, exception, serviceName, objectName, mode);
+			=> this.WriteLogsAsync(correlationID, null, null, this.Logger, logs, exception, serviceName, objectName, mode);
 
 		/// <summary>
 		/// Writes the logs into centerlized logging system
 		/// </summary>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
+		/// <param name="developerID">The identity of the developer</param>
+		/// <param name="appID">The identity of the app</param>
+		/// <param name="log">The logs</param>
+		/// <param name="exception">The error exception</param>
+		/// <param name="serviceName">The name of service</param>
+		/// <param name="objectName">The name of object</param>
+		/// <param name="mode">The logging mode</param>
+		/// <returns></returns>
+		protected Task WriteLogsAsync(string correlationID, string developerID, string appID, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+			=> this.WriteLogsAsync(correlationID, developerID, appID, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode);
+
+		/// <summary>
+		/// Writes the logs into centerlized logging system
+		/// </summary>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="log">The logs</param>
 		/// <param name="exception">The error exception</param>
 		/// <param name="serviceName">The name of service</param>
@@ -465,7 +527,7 @@ namespace net.vieapps.Services
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
 		protected Task WriteLogsAsync(string correlationID, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> this.WriteLogsAsync(correlationID, !string.IsNullOrWhiteSpace(log) ? new List<string> { log } : null, exception, serviceName, objectName, mode);
+			=> this.WriteLogsAsync(correlationID, null, null, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode);
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -476,7 +538,7 @@ namespace net.vieapps.Services
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
 		protected Task WriteLogsAsync(RequestInfo requestInfo, List<string> logs, Exception exception = null, LogLevel mode = LogLevel.Information)
-			=> this.WriteLogsAsync(requestInfo.CorrelationID, this.Logger, logs, exception, requestInfo.ServiceName, requestInfo.ObjectName, mode);
+			=> this.WriteLogsAsync(requestInfo.CorrelationID, requestInfo.Session?.DeveloperID, requestInfo.Session?.AppID, this.Logger, logs, exception, requestInfo.ServiceName, requestInfo.ObjectName, mode);
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -487,12 +549,27 @@ namespace net.vieapps.Services
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
 		protected Task WriteLogsAsync(RequestInfo requestInfo, string log, Exception exception = null, LogLevel mode = LogLevel.Information)
-			=> this.WriteLogsAsync(requestInfo, !string.IsNullOrWhiteSpace(log) ? new List<string> { log } : null, exception, mode);
+			=> this.WriteLogsAsync(requestInfo.CorrelationID, requestInfo.Session?.DeveloperID, requestInfo.Session?.AppID, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, requestInfo.ServiceName, requestInfo.ObjectName, mode);
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
 		/// </summary>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
+		/// <param name="developerID">The identity of the developer</param>
+		/// <param name="appID">The identity of the app</param>
+		/// <param name="logger">The local logger</param>
+		/// <param name="logs">The logs</param>
+		/// <param name="exception">The exception</param>
+		/// <param name="serviceName">The name of service</param>
+		/// <param name="objectName">The name of object</param>
+		/// <param name="mode">The logging mode</param>
+		protected void WriteLogs(string correlationID, string developerID, string appID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+			=> Task.Run(() => this.WriteLogsAsync(correlationID, developerID, appID, logger, logs, exception, serviceName, objectName, mode)).ConfigureAwait(false);
+
+		/// <summary>
+		/// Writes the logs (to centerlized logging system and local logs)
+		/// </summary>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="logger">The local logger</param>
 		/// <param name="logs">The logs</param>
 		/// <param name="exception">The exception</param>
@@ -500,12 +577,27 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected void WriteLogs(string correlationID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> Task.Run(() => this.WriteLogsAsync(correlationID, logger, logs, exception, serviceName, objectName, mode)).ConfigureAwait(false);
+			=> Task.Run(() => this.WriteLogsAsync(correlationID, null, null, logger, logs, exception, serviceName, objectName, mode)).ConfigureAwait(false);
 
 		/// <summary>
 		/// Writes the logs into centerlized logging system
 		/// </summary>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
+		/// <param name="developerID">The identity of the developer</param>
+		/// <param name="appID">The identity of the app</param>
+		/// <param name="logger">The local logger</param>
+		/// <param name="log">The logs</param>
+		/// <param name="exception">The error exception</param>
+		/// <param name="serviceName">The name of service</param>
+		/// <param name="objectName">The name of object</param>
+		/// <param name="mode">The logging mode</param>
+		protected void WriteLogs(string correlationID, string developerID, string appID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+			=> Task.Run(() => this.WriteLogsAsync(correlationID, developerID, appID, logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode)).ConfigureAwait(false);
+
+		/// <summary>
+		/// Writes the logs into centerlized logging system
+		/// </summary>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="logger">The local logger</param>
 		/// <param name="log">The logs</param>
 		/// <param name="exception">The error exception</param>
@@ -513,31 +605,59 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected void WriteLogs(string correlationID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> this.WriteLogs(correlationID, logger, !string.IsNullOrWhiteSpace(log) ? new List<string> { log } : null, exception, serviceName, objectName, mode);
+			=> Task.Run(() => this.WriteLogsAsync(correlationID, null, null, logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode)).ConfigureAwait(false);
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
 		/// </summary>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
+		/// <param name="developerID">The identity of the developer</param>
+		/// <param name="appID">The identity of the app</param>
+		/// <param name="logs">The logs</param>
+		/// <param name="exception">The exception</param>
+		/// <param name="serviceName">The name of service</param>
+		/// <param name="objectName">The name of object</param>
+		/// <param name="mode">The logging mode</param>
+		protected void WriteLogs(string correlationID, string developerID, string appID, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+			=> Task.Run(() => this.WriteLogsAsync(correlationID, developerID, appID, this.Logger, logs, exception, serviceName, objectName, mode)).ConfigureAwait(false);
+
+		/// <summary>
+		/// Writes the logs (to centerlized logging system and local logs)
+		/// </summary>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="logs">The logs</param>
 		/// <param name="exception">The exception</param>
 		/// <param name="serviceName">The name of service</param>
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected void WriteLogs(string correlationID, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> this.WriteLogs(correlationID, this.Logger, logs, exception, serviceName, objectName, mode);
+			=> Task.Run(() => this.WriteLogsAsync(correlationID, null, null, this.Logger, logs, exception, serviceName, objectName, mode)).ConfigureAwait(false);
 
 		/// <summary>
 		/// Writes the logs into centerlized logging system
 		/// </summary>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
+		/// <param name="developerID">The identity of the developer</param>
+		/// <param name="appID">The identity of the app</param>
+		/// <param name="log">The logs</param>
+		/// <param name="exception">The error exception</param>
+		/// <param name="serviceName">The name of service</param>
+		/// <param name="objectName">The name of object</param>
+		/// <param name="mode">The logging mode</param>
+		protected void WriteLogs(string correlationID, string developerID, string appID, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+			=> Task.Run(() => this.WriteLogsAsync(correlationID, developerID, appID, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode)).ConfigureAwait(false);
+
+		/// <summary>
+		/// Writes the logs into centerlized logging system
+		/// </summary>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="log">The logs</param>
 		/// <param name="exception">The error exception</param>
 		/// <param name="serviceName">The name of service</param>
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected void WriteLogs(string correlationID, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> this.WriteLogs(correlationID, !string.IsNullOrWhiteSpace(log) ? new List<string> { log } : null, exception, serviceName, objectName, mode);
+			=> Task.Run(() => this.WriteLogsAsync(correlationID, null, null, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode)).ConfigureAwait(false);
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -548,7 +668,7 @@ namespace net.vieapps.Services
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
 		protected void WriteLogs(RequestInfo requestInfo, List<string> logs, Exception exception = null, LogLevel mode = LogLevel.Information)
-			=> Task.Run(() => this.WriteLogsAsync(requestInfo, logs, exception, mode)).ConfigureAwait(false);
+			=> Task.Run(() => this.WriteLogsAsync(requestInfo.CorrelationID, requestInfo.Session?.DeveloperID, requestInfo.Session?.AppID, this.Logger, logs, exception, requestInfo.ServiceName, requestInfo.ObjectName, mode)).ConfigureAwait(false);
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -559,7 +679,7 @@ namespace net.vieapps.Services
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
 		protected void WriteLogs(RequestInfo requestInfo, string log, Exception exception = null, LogLevel mode = LogLevel.Information)
-			=> this.WriteLogs(requestInfo, !string.IsNullOrWhiteSpace(log) ? new List<string> { log } : null, exception, mode);
+			=> Task.Run(() => this.WriteLogsAsync(requestInfo.CorrelationID, requestInfo.Session?.DeveloperID, requestInfo.Session?.AppID, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, requestInfo.ServiceName, requestInfo.ObjectName, mode)).ConfigureAwait(false);
 		#endregion
 
 		#region Call services
@@ -760,7 +880,7 @@ namespace net.vieapps.Services
 		/// Determines the user is system administrator or not
 		/// </summary>
 		/// <param name="user">The user information</param>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected async Task<bool> IsSystemAdministratorAsync(IUser user, string correlationID = null, CancellationToken cancellationToken = default)
@@ -800,7 +920,7 @@ namespace net.vieapps.Services
 		/// Gets the state that determines the user is system administrator or not
 		/// </summary>
 		/// <param name="session">The session information</param>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected Task<bool> IsSystemAdministratorAsync(Session session, string correlationID = null, CancellationToken cancellationToken = default)
@@ -822,7 +942,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of the service's object</param>
 		/// <param name="definitionID">The identity of the entity definition</param>
 		/// <param name="objectID">The identity of the object</param>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected async Task<bool> IsAdministratorAsync(IUser user, string objectName, string definitionID, string objectID, string correlationID = null, CancellationToken cancellationToken = default)
@@ -850,7 +970,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="user">The user information</param>
 		/// <param name="objectName">The name of the service's object</param>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected Task<bool> IsAdministratorAsync(IUser user, string objectName = null, string correlationID = null, CancellationToken cancellationToken = default)
@@ -860,7 +980,7 @@ namespace net.vieapps.Services
 		/// Gets the state that determines the user is service administrator or not
 		/// </summary>
 		/// <param name="session">The session information</param>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected Task<bool> IsServiceAdministratorAsync(Session session, string correlationID = null, CancellationToken cancellationToken = default)
@@ -882,7 +1002,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of the service's object</param>
 		/// <param name="definitionID">The identity of the entity definition</param>
 		/// <param name="objectID">The identity of the object</param>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected async Task<bool> IsModeratorAsync(IUser user, string objectName, string definitionID, string objectID, string correlationID = null, CancellationToken cancellationToken = default)
@@ -914,7 +1034,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="user">The user information</param>
 		/// <param name="objectName">The name of the service's object</param>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected Task<bool> IsModeratorAsync(IUser user, string objectName = null, string correlationID = null, CancellationToken cancellationToken = default)
@@ -924,7 +1044,7 @@ namespace net.vieapps.Services
 		/// Gets the state that determines the user is service administrator or not
 		/// </summary>
 		/// <param name="user">The user information</param>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected Task<bool> IsServiceModeratorAsync(IUser user, string correlationID = null, CancellationToken cancellationToken = default)
@@ -934,7 +1054,7 @@ namespace net.vieapps.Services
 		/// Gets the state that determines the user is service administrator or not
 		/// </summary>
 		/// <param name="session">The session information</param>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected Task<bool> IsServiceModeratorAsync(Session session, string correlationID = null, CancellationToken cancellationToken = default)
@@ -956,7 +1076,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of the service's object</param>
 		/// <param name="definitionID">The identity of the entity definition</param>
 		/// <param name="objectID">The identity of the object</param>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected async Task<bool> IsEditorAsync(IUser user, string objectName, string definitionID, string objectID, string correlationID = null, CancellationToken cancellationToken = default)
@@ -988,7 +1108,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="user">The user information</param>
 		/// <param name="objectName">The name of the service's object</param>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected Task<bool> IsEditorAsync(IUser user, string objectName = null, string correlationID = null, CancellationToken cancellationToken = default)
@@ -1001,7 +1121,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of the service's object</param>
 		/// <param name="definitionID">The identity of the entity definition</param>
 		/// <param name="objectID">The identity of the object</param>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected async Task<bool> IsContributorAsync(IUser user, string objectName, string definitionID, string objectID, string correlationID = null, CancellationToken cancellationToken = default)
@@ -1033,7 +1153,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="user">The user information</param>
 		/// <param name="objectName">The name of the service's object</param>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected Task<bool> IsContributorAsync(IUser user, string objectName = null, string correlationID = null, CancellationToken cancellationToken = default)
@@ -1046,7 +1166,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of the service's object</param>
 		/// <param name="definitionID">The identity of the entity definition</param>
 		/// <param name="objectID">The identity of the object</param>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected async Task<bool> IsViewerAsync(IUser user, string objectName, string definitionID, string objectID, string correlationID = null, CancellationToken cancellationToken = default)
@@ -1078,7 +1198,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="user">The user information</param>
 		/// <param name="objectName">The name of the service's object</param>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected Task<bool> IsViewerAsync(IUser user, string objectName = null, string correlationID = null, CancellationToken cancellationToken = default)
@@ -1091,7 +1211,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of the service's object</param>
 		/// <param name="definitionID">The identity of the entity definition</param>
 		/// <param name="objectID">The identity of the object</param>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected async Task<bool> IsDownloaderAsync(IUser user, string objectName, string definitionID, string objectID, string correlationID = null, CancellationToken cancellationToken = default)
@@ -1123,7 +1243,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="user">The user information</param>
 		/// <param name="objectName">The name of the service's object</param>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected Task<bool> IsDownloaderAsync(IUser user, string objectName = null, string correlationID = null, CancellationToken cancellationToken = default)
@@ -1141,7 +1261,7 @@ namespace net.vieapps.Services
 		/// <param name="privileges">The working privileges of the service's object</param>
 		/// <param name="getPrivileges">The function to prepare the privileges when the user got empty/null privilege</param>
 		/// <param name="getActions">The function to prepare the actions when the matched privilege got empty/null action</param>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected virtual async Task<bool> IsAuthorizedAsync(IUser user, string objectName, string objectID, Components.Security.Action action, Privileges privileges, Func<IUser, string, string, List<Privilege>> getPrivileges, Func<PrivilegeRole, List<Components.Security.Action>> getActions, string correlationID = null, CancellationToken cancellationToken = default)
@@ -1174,7 +1294,7 @@ namespace net.vieapps.Services
 		/// <param name="privileges">The working privileges of the service's object</param>
 		/// <param name="getPrivileges">The function to prepare the privileges when the user got empty/null privilege</param>
 		/// <param name="getActions">The function to prepare the actions when the matched privilege got empty/null action</param>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected virtual Task<bool> IsAuthorizedAsync(Session session, string objectName, string objectID, Components.Security.Action action, Privileges privileges, Func<IUser, string, string, List<Privilege>> getPrivileges, Func<PrivilegeRole, List<Components.Security.Action>> getActions, string correlationID = null, CancellationToken cancellationToken = default)
@@ -1215,7 +1335,7 @@ namespace net.vieapps.Services
 		/// <param name="action">The action to perform on the object of this service</param>
 		/// <param name="getPrivileges">The function to prepare the privileges when the user got empty/null privilege</param>
 		/// <param name="getActions">The function to prepare the actions when the matched privilege got empty/null action</param>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected virtual Task<bool> IsAuthorizedAsync(IUser user, string objectName, IBusinessEntity @object, Components.Security.Action action, Func<IUser, string, string, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<Components.Security.Action>> getActions = null, string correlationID = null, CancellationToken cancellationToken = default)
@@ -1230,7 +1350,7 @@ namespace net.vieapps.Services
 		/// <param name="action">The action to perform on the object of this service</param>
 		/// <param name="getPrivileges">The function to prepare the privileges when the user got empty/null privilege</param>
 		/// <param name="getActions">The function to prepare the actions when the matched privilege got empty/null action</param>
-		/// <param name="correlationID">The correlation identity</param>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected virtual Task<bool> IsAuthorizedAsync(Session session, string objectName, IBusinessEntity @object, Components.Security.Action action, Func<IUser, string, string, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<Components.Security.Action>> getActions = null, string correlationID = null, CancellationToken cancellationToken = default)
@@ -1865,7 +1985,7 @@ namespace net.vieapps.Services
 			{
 				try
 				{
-					await this.StartAsync(async service =>
+					await this.StartAsync(async _ =>
 					{
 						// initialize repository
 						if (initializeRepository)
@@ -1875,24 +1995,24 @@ namespace net.vieapps.Services
 								this.Logger.LogInformation("Initializing the repository");
 								RepositoryStarter.Initialize(
 									new[] { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
-										.Where(n => !n.Name.IsStartsWith("mscorlib") && !n.Name.IsStartsWith("System") && !n.Name.IsStartsWith("Microsoft") && !n.Name.IsEquals("NETStandard")
-											&& !n.Name.IsStartsWith("Newtonsoft") && !n.Name.IsStartsWith("WampSharp") && !n.Name.IsStartsWith("Castle.") && !n.Name.IsStartsWith("StackExchange.")
-											&& !n.Name.IsStartsWith("MongoDB") && !n.Name.IsStartsWith("MySql") && !n.Name.IsStartsWith("Oracle") && !n.Name.IsStartsWith("Npgsql") && !n.Name.IsStartsWith("Serilog")
-											&& !n.Name.IsStartsWith("VIEApps.Components.") && !n.Name.IsStartsWith("VIEApps.Services.Abstractions") && !n.Name.IsStartsWith("VIEApps.Services.Base") && !n.Name.IsStartsWith("VIEApps.Services.APIGateway")
+										.Where(a => !a.Name.IsStartsWith("mscorlib") && !a.Name.IsStartsWith("System") && !a.Name.IsStartsWith("Microsoft") && !a.Name.IsEquals("NETStandard")
+											&& !a.Name.IsStartsWith("Newtonsoft") && !a.Name.IsStartsWith("WampSharp") && !a.Name.IsStartsWith("Castle.") && !a.Name.IsStartsWith("StackExchange.")
+											&& !a.Name.IsStartsWith("MongoDB") && !a.Name.IsStartsWith("MySql") && !a.Name.IsStartsWith("Oracle") && !a.Name.IsStartsWith("Npgsql") && !a.Name.IsStartsWith("Serilog")
+											&& !a.Name.IsStartsWith("VIEApps.Components.") && !a.Name.IsStartsWith("VIEApps.Services.Abstractions") && !a.Name.IsStartsWith("VIEApps.Services.Base")
 										)
-										.Select(n =>
+										.Select(assemblyName =>
 										{
 											try
 											{
-												return Assembly.Load(n);
+												return Assembly.Load(assemblyName);
 											}
 											catch (Exception ex)
 											{
-												this.Logger.LogError($"Error occurred while loading an assembly [{n.Name}] => {ex.Message}", ex);
+												this.Logger.LogError($"Error occurred while loading an assembly [{assemblyName.Name}] => {ex.Message}", ex);
 												return null;
 											}
 										})
-										.Where(a => a != null)
+										.Where(assembly => assembly != null)
 										.ToList()
 									),
 									(log, ex) =>

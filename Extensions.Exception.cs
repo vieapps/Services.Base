@@ -188,7 +188,7 @@ namespace net.vieapps.Services
 
 			var inner = exception["InnerException"];
 			if (inner != null && inner is JObject)
-				json.Add(new JProperty("InnerException", inner.GetJsonException()));
+				json["InnerException"] = inner.GetJsonException();
 
 			return json;
 		}
