@@ -707,7 +707,7 @@ namespace net.vieapps.Services
 
 				if (this.IsDebugResultsEnabled)
 					await this.WriteLogsAsync(requestInfo.CorrelationID, "Call service successful" + "\r\n" +
-						$"Request: {requestInfo.ToJson().ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}" + "\r\n" +
+						$"Request: {requestInfo.ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}" + "\r\n" +
 						$"Response: {json?.ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}"
 					, null, this.ServiceName, objectName).ConfigureAwait(false);
 
@@ -723,7 +723,7 @@ namespace net.vieapps.Services
 
 					if (this.IsDebugResultsEnabled)
 						await this.WriteLogsAsync(requestInfo.CorrelationID, "Re-call service successful" + "\r\n" +
-							$"Request: {requestInfo.ToJson().ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}" + "\r\n" +
+							$"Request: {requestInfo.ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}" + "\r\n" +
 							$"Response: {json?.ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}"
 						, null, this.ServiceName, objectName).ConfigureAwait(false);
 
@@ -1690,7 +1690,7 @@ namespace net.vieapps.Services
 			this.WriteLogs(requestInfo, new List<string>
 			{
 				$"Error response: {message}{(stopwatch == null ? "" : $" - Execution times: {stopwatch.GetElapsedTimes()}")}",
-				$"Request: {requestInfo.ToJson().ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}"
+				$"Request: {requestInfo.ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}"
 			}, exception);
 
 			// return the exception

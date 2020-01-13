@@ -9,10 +9,10 @@
 		<AssemblyTitle>VIEApps NGX Service Base</AssemblyTitle>
 		<AssemblyVersion>10.3.2001.2</AssemblyVersion>
 		<FileVersion>10.3.2001.2</FileVersion>
-		<InformationalVersion>10.3@$(TargetFramework)-build:2020.01.09+multiple.targets</InformationalVersion>
+		<InformationalVersion>10.3@$(TargetFramework)-build:2020.01.13+multiple.targets</InformationalVersion>
 		<Version>10.3.2001.2</Version>
 		<Title>VIEApps NGX Base Service</Title>
-		<Description>The base for all microservices in the VIEApps NGX</Description>
+		<Description>The base class for all microservices in the VIEApps NGX</Description>
 		<Authors>VIEApps.net</Authors>
 		<Company>VIEApps.net</Company>
 		<Product>VIEApps NGX</Product>
