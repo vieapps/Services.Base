@@ -64,10 +64,10 @@ namespace net.vieapps.Services
 		protected virtual Task ProcessGatewayCommunicateMessageAsync(CommunicateMessage message, CancellationToken cancellationToken = default)
 			=> Task.CompletedTask;
 
-		#region Attributes & Properties
-		SystemEx.IAsyncDisposable ServiceInstance { get; set; } = null;
+		#region Properties
+		IAsyncDisposable ServiceInstance { get; set; } = null;
 
-		SystemEx.IAsyncDisposable ServiceUniqueInstance { get; set; } = null;
+		IAsyncDisposable ServiceUniqueInstance { get; set; } = null;
 
 		IDisposable ServiceCommunicator { get; set; } = null;
 
