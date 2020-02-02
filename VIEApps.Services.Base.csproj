@@ -11,7 +11,7 @@
 		<FileVersion>10.3.2002.1</FileVersion>
 		<InformationalVersion>10.3@$(TargetFramework)-build:2020.02.02+multiple.targets+async.disposable</InformationalVersion>
 		<Version>10.3.2002.1</Version>
-		<Title>VIEApps NGX Base Service</Title>
+		<Title>VIEApps NGX Service Base</Title>
 		<Description>The base class for all microservices in the VIEApps NGX</Description>
 		<Authors>VIEApps.net</Authors>
 		<Company>VIEApps.net</Company>
