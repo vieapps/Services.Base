@@ -17,7 +17,7 @@ namespace net.vieapps.Services
 			=> requestInfo == null || string.IsNullOrWhiteSpace(requestInfo.Body) ? new JObject() : requestInfo.Body.ToJson();
 
 		/// <summary>
-		/// Gets the request body in dynamic object (Expando)
+		/// Gets the request body in dynamic object (ExpandoObject)
 		/// </summary>
 		/// <returns></returns>
 		public static ExpandoObject GetBodyExpando(this RequestInfo requestInfo)
@@ -31,7 +31,7 @@ namespace net.vieapps.Services
 			=> (requestInfo != null && requestInfo.Query != null && requestInfo.Query.ContainsKey("x-request") ? requestInfo.Query["x-request"].Url64Decode() : "{}").ToJson();
 
 		/// <summary>
-		/// Gets the value of the 'x-request' parameter of the query (in Base64Url) and converts to Expando
+		/// Gets the value of the 'x-request' parameter of the query (in Base64Url) and converts to ExpandoObject
 		/// </summary>
 		/// <returns></returns>
 		public static ExpandoObject GetRequestExpando(this RequestInfo requestInfo)
