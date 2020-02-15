@@ -34,9 +34,9 @@ namespace net.vieapps.Services
 			if (exception != null && exception is WampException)
 			{
 				var details = (exception as WampException).GetDetails();
-				stack = details.Item4?.Replace("\\r", "\r")?.Replace("\\n", "\n")?.Replace(@"\\", @"\");
-				if (details.Item6 != null)
-					stack = details.Item6.ToString(Formatting.Indented).Replace("\\r", "\r").Replace("\\n", "\n").Replace(@"\\", @"\");
+				stack = details.Item6 != null
+					? details.Item6.ToString(Formatting.Indented).Replace("\\r", "\r").Replace("\\n", "\n").Replace(@"\\", @"\")
+					: details.Item4?.Replace("\\r", "\r")?.Replace("\\n", "\n")?.Replace(@"\\", @"\");
 			}
 			else if (exception != null)
 			{
