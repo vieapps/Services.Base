@@ -247,7 +247,7 @@ namespace net.vieapps.Services
 
 		static void GetClientJson(this JToken serverJson, JObject clientJson)
 		{
-			clientJson[serverJson.Get<string>("Attribute")] = serverJson.Get<string>("Mode") ?? "Ascending";
+			clientJson[serverJson.Get<string>("Attribute")] = serverJson.Get("Mode", "Ascending");
 			serverJson.Get<JObject>("ThenBy")?.GetClientJson(clientJson);
 		}
 
@@ -340,17 +340,17 @@ namespace net.vieapps.Services
 		{
 			var totalRecords = pagination.Get<long>("TotalRecords", -1);
 
-			var pageSize = pagination.Get<int>("PageSize", 20);
+			var pageSize = pagination.Get("PageSize", 20);
 			pageSize = pageSize < 0 ? 10 : pageSize;
 
-			var totalPages = pagination.Get<int>("TotalPages", -1);
+			var totalPages = pagination.Get("TotalPages", -1);
 			totalPages = totalPages < 0
 				? totalRecords > 0
 					? Extensions.GetTotalPages(totalRecords, pageSize)
 					: 0
 				: totalPages;
 
-			var pageNumber = pagination.Get<int>("PageNumber", 1);
+			var pageNumber = pagination.Get("PageNumber", 1);
 			pageNumber = pageNumber < 1
 				? 1
 				: totalPages > 0 && pageNumber > totalPages
