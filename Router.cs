@@ -191,7 +191,7 @@ namespace net.vieapps.Services
 				onConnectionBroken,
 				onConnectionError,
 				cancellationToken
-			));
+			).ConfigureAwait(false));
 
 		/// <summary>
 		/// Opens the outgoging channel to the API Gateway Router
@@ -212,7 +212,7 @@ namespace net.vieapps.Services
 				onConnectionBroken,
 				onConnectionError,
 				cancellationToken
-			));
+			).ConfigureAwait(false));
 		#endregion
 
 		#region Close channels
