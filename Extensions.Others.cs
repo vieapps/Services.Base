@@ -48,11 +48,11 @@ namespace net.vieapps.Services
 					CorrelationID = correlationID
 				}, cancellationToken).ConfigureAwait(false);
 
-				var city = response.Get<string>("City");
-				var region = response.Get<string>("Region");
+				var city = response.Get("City", "N/A");
+				var region = response.Get("Region", "N/A");
 				if (region.Equals(city) && !"N/A".IsEquals(city))
 					region = "";
-				var country = response.Get<string>("Country");
+				var country = response.Get("Country", "N/A");
 
 				if ("N/A".IsEquals(city) && "N/A".IsEquals(region) && "N/A".IsEquals(country))
 				{
@@ -62,11 +62,11 @@ namespace net.vieapps.Services
 						{
 							CorrelationID = correlationID
 						}, cancellationToken).ConfigureAwait(false);
-						city = response.Get<string>("City");
-						region = response.Get<string>("Region");
+						city = response.Get("City", "N/A");
+						region = response.Get("Region", "N/A");
 						if (region.Equals(city) && !"N/A".IsEquals(city))
 							region = "";
-						country = response.Get<string>("Country");
+						country = response.Get("Country", "N/A");
 						Extensions.CurrentLocation = $"{city}, {region}, {country}".Replace(", ,", ",");
 					}
 					return Extensions.CurrentLocation;
@@ -170,7 +170,8 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static string GetRuntimePlatform(bool getFrameworkDescription = true)
 			=> (getFrameworkDescription ? $"{RuntimeInformation.FrameworkDescription} @ " : "")
-			+ $"{Extensions.GetRuntimeOS()} {RuntimeInformation.OSArchitecture.ToString().ToLower()} ({(RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "Macintosh; Intel Mac OS X; " : "")}{RuntimeInformation.OSDescription.Trim()})";
+				+ $"{Extensions.GetRuntimeOS()} {RuntimeInformation.OSArchitecture.ToString().ToLower()} "
+				+ $"({(RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "Macintosh; Intel Mac OS X; " : "")}{RuntimeInformation.OSDescription.Trim()})";
 		#endregion
 
 		#region Get unique name & end-point
