@@ -185,14 +185,7 @@ namespace net.vieapps.Services
 		/// <param name="os">The string that presents name of the operating system that runs the process of the business service</param>
 		/// <returns>The string that presents unique name of a business service at a host</returns>
 		public static string GetUniqueName(string name, string user, string host, string platform, string os)
-		{
-			name = (name ?? "unknown").Trim().ToLower();
-			user = (user ?? Environment.UserName).Trim().ToLower();
-			host = (host ?? Environment.MachineName).Trim().ToLower();
-			platform = (platform ?? RuntimeInformation.FrameworkDescription).Trim();
-			os = os ?? Extensions.GetRuntimeOS();
-			return $"{name}.{user}-{host}-" + $"{platform} @ {os}".GenerateUUID();
-		}
+			=> $"{(name ?? "unknown").Trim().ToLower()}.{(user ?? Environment.UserName).Trim().ToLower()}-{(host ?? Environment.MachineName).Trim().ToLower()}-" + $"{(platform ?? RuntimeInformation.FrameworkDescription).Trim()} @ {os ?? Extensions.GetRuntimeOS()}".GenerateUUID();
 
 		/// <summary>
 		/// Gets the unique name of a business service
@@ -217,7 +210,7 @@ namespace net.vieapps.Services
 		public static string GetResolvedURI(this Uri uri)
 		{
 			var host = "";
-			if (!IPAddress.TryParse(uri.Host, out IPAddress address))
+			if (!IPAddress.TryParse(uri.Host, out var address))
 			{
 				address = Dns.GetHostAddresses(uri.Host).FirstOrDefault(ip => ip.AddressFamily == AddressFamily.InterNetwork || ip.AddressFamily == AddressFamily.InterNetworkV6);
 				host = address == null
