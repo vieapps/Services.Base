@@ -9,7 +9,7 @@
 		<AssemblyTitle>VIEApps NGX Service Base</AssemblyTitle>
 		<AssemblyVersion>10.3.2002.5</AssemblyVersion>
 		<FileVersion>10.3.2002.5</FileVersion>
-		<InformationalVersion>10.3@$(TargetFramework)-so.excited.4.lover+build:2020.02.20+lts.targets</InformationalVersion>
+		<InformationalVersion>10.3@$(TargetFramework)-so.excited.4.lover+build:2020.02.21+lts.targets</InformationalVersion>
 		<Version>10.3.2002.5</Version>
 		<Title>VIEApps NGX Service Base</Title>
 		<Description>The base class for all microservices in the VIEApps NGX</Description>
@@ -28,7 +28,7 @@
 		<PackageIcon>Icon.png</PackageIcon>
 		<PackageOutputPath>../../Components</PackageOutputPath>
 		<PackageTags>services;microservices;vieapps;vieapps.components;vieapps.services;vieapps.microservices</PackageTags>
-		<PackageReleaseNotes>Do some little code refactoring</PackageReleaseNotes>
+		<PackageReleaseNotes>Improvement: add extention methods for working with WebSocket</PackageReleaseNotes>
 		<PackageProjectUrl>https://vieapps.net</PackageProjectUrl>
 		<RepositoryUrl>https://github.com/vieapps/Services.Base</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>

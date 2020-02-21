@@ -2,12 +2,10 @@
 using System;
 using System.Linq;
 using System.Collections.Generic;
-
 using JSPool;
 using JavaScriptEngineSwitcher.Core;
 using JavaScriptEngineSwitcher.ChakraCore;
 using Newtonsoft.Json.Linq;
-
 using net.vieapps.Components.Utility;
 #endregion
 

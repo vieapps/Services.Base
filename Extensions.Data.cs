@@ -1,17 +1,10 @@
 ﻿#region Related components
 using System;
-using System.Net;
-using System.Net.Sockets;
 using System.Linq;
 using System.Dynamic;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
-using WampSharp.V2.Core.Contracts;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Microsoft.Extensions.Logging;
 using net.vieapps.Components.Utility;
 using net.vieapps.Components.Repository;
 #endregion
