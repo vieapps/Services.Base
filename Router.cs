@@ -28,7 +28,7 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the incoming channel of the API Gateway Router
 		/// </summary>
-		public static IWampChannel IncomingChannel { get; internal set; } = null;
+		public static IWampChannel IncomingChannel { get; internal set; }
 
 		/// <summary>
 		/// Gets the session's identity of the incoming channel of the API Gateway Router
@@ -38,7 +38,7 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the outgoing channel of the API Gateway Router
 		/// </summary>
-		public static IWampChannel OutgoingChannel { get; internal set; } = null;
+		public static IWampChannel OutgoingChannel { get; internal set; }
 
 		/// <summary>
 		/// Gets the session's identity of the outgoing channel of the API Gateway Router
@@ -63,7 +63,7 @@ namespace net.vieapps.Services
 			(
 				UtilityService.GetAppSetting("Router:Uri", "ws://127.0.0.1:16429/"),
 				UtilityService.GetAppSetting("Router:Realm", "VIEAppsRealm"),
-				"json".IsEquals(UtilityService.GetAppSetting("Router:ChannelsMode", "MsgPack"))
+				"json".IsEquals(UtilityService.GetAppSetting("Router:ChannelsMode", "MessagePack"))
 			);
 
 		/// <summary>
@@ -213,32 +213,38 @@ namespace net.vieapps.Services
 		/// Closes the incoming channel of the API Gateway Router
 		/// </summary>
 		/// <param name="message">The message to send to API Gateway Router before closing the channel</param>
-		public static void CloseIncomingChannel(string message = null)
+		public static async Task CloseIncomingChannelAsync(string message = null)
 		{
 			if (Router.IncomingChannel != null)
 				try
 				{
-					Router.IncomingChannel.Close(message ?? "Disconnected", new GoodbyeDetails());
-					Router.IncomingChannel = null;
-					Router.IncomingChannelSessionID = 0;
+					await Router.IncomingChannel.Close(message ?? "Disconnected", new GoodbyeDetails
+					{
+						Message = message ?? "Disconnected"
+					}).ConfigureAwait(false);
 				}
 				catch { }
+			Router.IncomingChannel = null;
+			Router.IncomingChannelSessionID = 0;
 		}
 
 		/// <summary>
 		/// Closes the outgoing channel of the API Gateway Router
 		/// </summary>
 		/// <param name="message">The message to send to API Gateway Router before closing the channel</param>
-		public static void CloseOutgoingChannel(string message = null)
+		public static async Task CloseOutgoingChannelAsync(string message = null)
 		{
 			if (Router.OutgoingChannel != null)
 				try
 				{
-					Router.OutgoingChannel.Close(message ?? "Disconnected", new GoodbyeDetails());
-					Router.OutgoingChannel = null;
-					Router.OutgoingChannelSessionID = 0;
+					await Router.OutgoingChannel.Close(message ?? "Disconnected", new GoodbyeDetails
+					{
+						Message = message ?? "Disconnected"
+					}).ConfigureAwait(false);
 				}
 				catch { }
+			Router.OutgoingChannel = null;
+			Router.OutgoingChannelSessionID = 0;
 		}
 		#endregion
 
@@ -348,11 +354,15 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Disconnects from API Gateway Router
 		/// </summary>
-		public static void Disconnect()
+		/// <param name="waitingTimes">Times (miliseconds) for waiting to disconnect</param>
+		public static void Disconnect(int waitingTimes = 1234)
 		{
 			Router.ChannelsAreClosedBySystem = true;
-			Router.CloseIncomingChannel();
-			Router.CloseOutgoingChannel();
+			Task.WaitAll(new[]
+			{
+				Router.CloseIncomingChannelAsync(),
+				Router.CloseOutgoingChannelAsync()
+			}, waitingTimes > 0 ? waitingTimes : 1234);
 		}
 		#endregion
 
