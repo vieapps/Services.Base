@@ -31,17 +31,17 @@ using net.vieapps.Components.Repository;
 namespace net.vieapps.Services
 {
 	/// <summary>
-	/// Base of all business services
+	/// Base of all microservices
 	/// </summary>
 	public abstract class ServiceBase : IService, IUniqueService, IServiceComponent, IDisposable
 	{
 		/// <summary>
-		/// Gets the name for working with related URIs
+		/// Gets the name of the service (for working with related URIs)
 		/// </summary>
 		public abstract string ServiceName { get; }
 
 		/// <summary>
-		/// Process the request
+		/// Process the request of the service
 		/// </summary>
 		/// <param name="requestInfo">The requesting information</param>
 		/// <param name="cancellationToken">The cancellation token</param>
@@ -49,7 +49,7 @@ namespace net.vieapps.Services
 		public abstract Task<JToken> ProcessRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default);
 
 		/// <summary>
-		/// Process the inter-communicate message
+		/// Processes the inter-communicate messages between the services' instances
 		/// </summary>
 		/// <param name="message">The message</param>
 		/// <param name="cancellationToken">The cancellation token</param>
@@ -57,7 +57,7 @@ namespace net.vieapps.Services
 			=> Task.CompletedTask;
 
 		/// <summary>
-		/// Process the inter-communicate message of API Gateway
+		/// Processes the inter-communicate messages between the service and API Gateway
 		/// </summary>
 		/// <param name="message">The message</param>
 		/// <param name="cancellationToken">The cancellation token</param>
@@ -73,16 +73,34 @@ namespace net.vieapps.Services
 
 		IDisposable GatewayCommunicator { get; set; } = null;
 
-		IRTUService RTUService { get; set; } = null;
+		/// <summary>
+		/// Gets or sets the real-time updater (RTU) service
+		/// </summary>
+		protected IRTUService RTUService { get; set; } = null;
 
-		ILoggingService LoggingService { get; set; } = null;
+		/// <summary>
+		/// Gets or sets the logging service
+		/// </summary>
+		protected ILoggingService LoggingService { get; set; } = null;
 
-		IMessagingService MessagingService { get; set; } = null;
+		/// <summary>
+		/// Gets or sets the messaging service
+		/// </summary>
+		protected IMessagingService MessagingService { get; set; } = null;
 
+		/// <summary>
+		/// Gets the cancellation token source
+		/// </summary>
 		internal protected CancellationTokenSource CancellationTokenSource { get; } = new CancellationTokenSource();
 
+		/// <summary>
+		/// Gets the collection of timers
+		/// </summary>
 		internal protected List<IDisposable> Timers { get; private set; } = new List<IDisposable>();
 
+		/// <summary>
+		/// Gets the state of the service
+		/// </summary>
 		internal protected ServiceState State { get; private set; } = ServiceState.Initializing;
 
 		/// <summary>
@@ -108,14 +126,17 @@ namespace net.vieapps.Services
 
 		#region Register the service
 		/// <summary>
-		/// Registers the service with API Gateway Router
+		/// Registers the service with API Gateway
 		/// </summary>
-		/// <param name="onSuccessAsync"></param>
-		/// <param name="onErrorAsync"></param>
+		/// <param name="recomputeServiceUniqueName">true to recompute unique name of the service</param>
+		/// <param name="onSuccessAsync">The action to run when register successfully</param>
+		/// <param name="onErrorAsync">The action to run when got any error</param>
 		/// <returns></returns>
-		protected async Task RegisterServiceAsync(Func<ServiceBase, Task> onSuccessAsync = null, Func<Exception, Task> onErrorAsync = null)
+		protected async Task RegisterServiceAsync(bool recomputeServiceUniqueName = false, Func<ServiceBase, Task> onSuccessAsync = null, Func<Exception, Task> onErrorAsync = null)
 		{
 			var name = this.ServiceName.Trim().ToLower();
+			if (recomputeServiceUniqueName)
+				this.ServiceUniqueName = Extensions.GetUniqueName(this.ServiceName, null, null, null, null);
 
 			async Task registerCalleesAsync()
 			{
@@ -141,14 +162,14 @@ namespace net.vieapps.Services
 						throw;
 					}
 				}
-				this.Logger.LogInformation($"The service is{(this.State == ServiceState.Disconnected ? " re-" : " ")}registered successful");
+				this.Logger?.LogDebug($"The service is{(this.State == ServiceState.Disconnected ? " re-" : " ")}registered successful");
 
 				this.ServiceCommunicator?.Dispose();
 				this.ServiceCommunicator = Router.IncomingChannel.RealmProxy.Services
 					.GetSubject<CommunicateMessage>($"messages.services.{name}")
 					.Subscribe(
 						async message => await this.ProcessInterCommunicateMessageAsync(message).ConfigureAwait(false),
-						exception => this.Logger.LogError($"Error occurred while fetching an inter-communicate message => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
+						exception => this.Logger?.LogError($"Error occurred while fetching an inter-communicate message => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
 					);
 
 				this.GatewayCommunicator?.Dispose();
@@ -156,26 +177,58 @@ namespace net.vieapps.Services
 					.GetSubject<CommunicateMessage>("messages.services.apigateway")
 					.Subscribe(
 						async message => await this.ProcessGatewayCommunicateMessageAsync(message).ConfigureAwait(false),
-						exception => this.Logger.LogError($"Error occurred while fetching an inter-communicate message of API Gateway => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
+						exception => this.Logger?.LogError($"Error occurred while fetching an inter-communicate message of API Gateway => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
 					);
 
-				this.Logger.LogInformation($"The inter-communicate message updater is{(this.State == ServiceState.Disconnected ? " re-" : " ")}subscribed successful");
+				this.Logger?.LogDebug($"The inter-communicate message updater is{(this.State == ServiceState.Disconnected ? " re-" : " ")}subscribed successful");
 			}
 
 			try
 			{
+				while (Router.IncomingChannel == null)
+					await Task.Delay(UtilityService.GetRandomNumber(234, 567)).ConfigureAwait(false);
+
 				await registerServiceAsync().ConfigureAwait(false);
 
 				if (this.State == ServiceState.Disconnected)
-					this.Logger.LogInformation($"The service is re-started successful - PID: {Process.GetCurrentProcess().Id} - URI: {this.ServiceURI}");
-				else if (onSuccessAsync != null)
-					await onSuccessAsync(this).ConfigureAwait(false);
+					this.Logger?.LogDebug($"The service is re-started successful - PID: {Process.GetCurrentProcess().Id} - URI: {this.ServiceURI}");
 
 				this.State = ServiceState.Connected;
+				if (onSuccessAsync != null)
+					await onSuccessAsync(this).ConfigureAwait(false);
 			}
 			catch (Exception ex)
 			{
-				this.Logger.LogError($"Cannot{(this.State == ServiceState.Disconnected ? " re-" : " ")}register the service => {ex.Message}", ex);
+				this.Logger?.LogError($"Cannot{(this.State == ServiceState.Disconnected ? " re-" : " ")}register the service => {ex.Message}", ex);
+				if (onErrorAsync != null)
+					await onErrorAsync(ex).ConfigureAwait(false);
+			}
+		}
+
+		/// <summary>
+		/// Initializes the helper services
+		/// </summary>
+		/// <param name="onSuccessAsync">The action to run when initialize successfully</param>
+		/// <param name="onErrorAsync">The action to run when got any error</param>
+		/// <returns></returns>
+		protected async Task InitializeHelperServicesAsync(Func<ServiceBase, Task> onSuccessAsync = null, Func<Exception, Task> onErrorAsync = null)
+		{
+			try
+			{
+				while (Router.OutgoingChannel == null)
+					await Task.Delay(UtilityService.GetRandomNumber(234, 567)).ConfigureAwait(false);
+
+				this.RTUService = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IRTUService>(ProxyInterceptor.Create());
+				this.MessagingService = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IMessagingService>(ProxyInterceptor.Create());
+				this.LoggingService = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<ILoggingService>(ProxyInterceptor.Create());
+				this.Logger?.LogDebug($"The helper services are{(this.State == ServiceState.Disconnected ? " re-" : " ")}initialized");
+
+				if (onSuccessAsync != null)
+					await onSuccessAsync(this).ConfigureAwait(false);
+			}
+			catch (Exception ex)
+			{
+				this.Logger?.LogError($"Error occurred while{(this.State == ServiceState.Disconnected ? " re-" : " ")}initializing the helper services", ex);
 				if (onErrorAsync != null)
 					await onErrorAsync(ex).ConfigureAwait(false);
 			}
@@ -184,7 +237,7 @@ namespace net.vieapps.Services
 
 		#region Send update & communicate messages
 		/// <summary>
-		/// Sends a message for updating data of client
+		/// Sends a message for updating data to all connected clients
 		/// </summary>
 		/// <param name="message">The message</param>
 		/// <param name="cancellationToken">The cancellation token</param>
@@ -193,7 +246,7 @@ namespace net.vieapps.Services
 			=> this.RTUService.SendUpdateMessageAsync(message, cancellationToken);
 
 		/// <summary>
-		/// Sends updating messages to client
+		/// Sends the updating messages to all connected clients
 		/// </summary>
 		/// <param name="messages">The messages</param>
 		/// <param name="cancellationToken">The cancellation token</param>
@@ -202,7 +255,7 @@ namespace net.vieapps.Services
 			=> messages.ForEachAsync((message, token) => this.RTUService.SendUpdateMessageAsync(message, token), cancellationToken);
 
 		/// <summary>
-		/// Sends updating messages to client
+		/// Sends the updating messages to all connected clients
 		/// </summary>
 		/// <param name="messages">The collection of messages</param>
 		/// <param name="deviceID">The string that presents a client's device identity for receiving the messages</param>
@@ -223,7 +276,7 @@ namespace net.vieapps.Services
 			=> this.RTUService.SendInterCommunicateMessageAsync(serviceName, message, cancellationToken);
 
 		/// <summary>
-		/// Send a message for communicating with  of other services
+		/// Send a message for communicating of other services
 		/// </summary>
 		/// <param name="message">The message</param>
 		/// <param name="cancellationToken">The cancellation token</param>
@@ -242,13 +295,52 @@ namespace net.vieapps.Services
 			=> this.RTUService.SendInterCommunicateMessagesAsync(serviceName, messages, cancellationToken);
 
 		/// <summary>
-		/// Send a message for communicating with  of other services
+		/// Send a message for communicating of other services
 		/// </summary>
 		/// <param name="messages">The collection of messages</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected Task SendInterCommunicateMessagesAsync(List<CommunicateMessage> messages, CancellationToken cancellationToken = default)
 			=> this.RTUService.SendInterCommunicateMessagesAsync(messages, cancellationToken);
+
+		/// <summary>
+		/// Sends the service information to API Gateway
+		/// </summary>
+		/// <param name="args">The arguments</param>
+		/// <param name="running">The running state</param>
+		/// <param name="available">The available state</param>
+		/// <returns></returns>
+		protected Task SendServiceInfoAsync(string[] args, bool running, bool available = true)
+		{
+			var arguments = (args ?? new string[] { }).Where(arg => !arg.IsStartsWith("/controller-id:")).ToArray();
+			var invokeInfo = arguments.FirstOrDefault(a => a.IsStartsWith("/call-user:")) ?? "";
+
+			if (!string.IsNullOrWhiteSpace(invokeInfo))
+			{
+				invokeInfo = invokeInfo.Replace(StringComparison.OrdinalIgnoreCase, "/call-user:", "").UrlDecode();
+				var host = arguments.FirstOrDefault(a => a.IsStartsWith("/call-host:"));
+				var platform = arguments.FirstOrDefault(a => a.IsStartsWith("/call-platform:"));
+				var os = arguments.FirstOrDefault(a => a.IsStartsWith("/call-os:"));
+				if (!string.IsNullOrWhiteSpace(host) && !string.IsNullOrWhiteSpace(platform) && !string.IsNullOrWhiteSpace(os))
+					invokeInfo += $" [Host: {host.Replace(StringComparison.OrdinalIgnoreCase, "/call-host:", "").UrlDecode()} - Platform: {platform.Replace(StringComparison.OrdinalIgnoreCase, "/call-platform:", "").UrlDecode()} @ {os.Replace(StringComparison.OrdinalIgnoreCase, "/call-os:", "").UrlDecode()}]";
+			}
+			else
+				invokeInfo = $"{Environment.UserName.ToLower()} [Host: {Environment.MachineName.ToLower()} - Platform: {Extensions.GetRuntimePlatform()}]";
+
+			return this.SendInterCommunicateMessageAsync(new CommunicateMessage("APIGateway")
+			{
+				Type = "Service#Info",
+				Data = new ServiceInfo
+				{
+					Name = this.ServiceName.ToLower(),
+					UniqueName = Extensions.GetUniqueName(this.ServiceName, arguments),
+					ControllerID = args.FirstOrDefault(arg => arg.IsStartsWith("/controller-id:"))?.Replace("/controller-id:", "") ?? "Unknown",
+					InvokeInfo = invokeInfo,
+					Available = available,
+					Running = running
+				}.ToJson()
+			});
+		}
 		#endregion
 
 		#region Send email & web hook messages
@@ -1643,20 +1735,20 @@ namespace net.vieapps.Services
 		/// Clears the related data from the cache storage
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
-		/// <param name="cache">The cache storage</param>
+		/// <param name="cache">The caching storage</param>
 		/// <param name="filter">The filtering expression</param>
 		/// <param name="sort">The sorting expression</param>
-		protected void ClearRelatedCache<T>(Cache cache, IFilterBy<T> filter, SortBy<T> sort) where T : class
+		protected void ClearRelatedCache<T>(ICache cache, IFilterBy<T> filter, SortBy<T> sort) where T : class
 			=> cache?.Remove(this.GetRelatedCacheKeys(filter, sort));
 
 		/// <summary>
 		/// Clears the related data from the cache storage
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
-		/// <param name="cache">The cache storage</param>
+		/// <param name="cache">The caching storage</param>
 		/// <param name="filter">The filtering expression</param>
 		/// <param name="sort">The sorting expression</param>
-		protected Task ClearRelatedCacheAsync<T>(Cache cache, IFilterBy<T> filter, SortBy<T> sort) where T : class
+		protected Task ClearRelatedCacheAsync<T>(ICache cache, IFilterBy<T> filter, SortBy<T> sort) where T : class
 			=> cache != null
 				? cache.RemoveAsync(this.GetRelatedCacheKeys(filter, sort))
 				: Task.CompletedTask;
@@ -1843,7 +1935,7 @@ namespace net.vieapps.Services
 
 		#region Start & Stop
 		/// <summary>
-		/// Starts the service (the short way - connect to API Gateway Router and register the service)
+		/// Starts the service (the short way - connect to API Gateway and register the service)
 		/// </summary>
 		/// <param name="onRegisterSuccessAsync"></param>
 		/// <param name="onRegisterErrorAsync"></param>
@@ -1856,23 +1948,24 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected virtual Task StartAsync(Func<ServiceBase, Task> onRegisterSuccessAsync = null, Func<Exception, Task> onRegisterErrorAsync = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
 		{
-			this.Logger.LogInformation($"Attempting to connect to API Gateway Router [{new Uri(Router.GetRouterStrInfo()).GetResolvedURI()}]");
+			this.Logger?.LogInformation($"Attempting to connect to API Gateway Router [{new Uri(Router.GetRouterStrInfo()).GetResolvedURI()}]");
 			return Router.ConnectAsync(
 				(sender, arguments) =>
 				{
 					Router.IncomingChannel.Update(arguments.SessionId, this.ServiceName, $"Incoming ({this.ServiceURI})");
-					this.Logger.LogInformation($"The incoming channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
+					this.Logger?.LogInformation($"The incoming channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
 					if (this.State == ServiceState.Initializing)
 						this.State = ServiceState.Ready;
 
-					Task.Run(() => this.RegisterServiceAsync(onRegisterSuccessAsync, onRegisterErrorAsync)).ConfigureAwait(false);
+					Task.WaitAll(new[] { this.RegisterServiceAsync(false, onRegisterSuccessAsync, onRegisterErrorAsync) });
+
 					try
 					{
 						onIncomingConnectionEstablished?.Invoke(sender, arguments);
 					}
 					catch (Exception ex)
 					{
-						this.Logger.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionEstablished)}\"action: {ex.Message}", ex);
+						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionEstablished)}\"action: {ex.Message}", ex);
 					}
 				},
 				(sender, arguments) =>
@@ -1881,12 +1974,12 @@ namespace net.vieapps.Services
 						this.State = ServiceState.Disconnected;
 
 					if (Router.ChannelsAreClosedBySystem || arguments.CloseType.Equals(SessionCloseType.Goodbye))
-						this.Logger.LogInformation($"The incoming channel to API Gateway Router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+						this.Logger?.LogDebug($"The incoming channel to API Gateway Router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
 
 					else if (Router.IncomingChannel != null)
 					{
-						this.Logger.LogInformation($"The incoming channel to API Gateway Router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
-						Router.IncomingChannel.ReOpen(this.CancellationTokenSource.Token, (msg, ex) => this.Logger.LogDebug(msg, ex), "Incoming");
+						this.Logger?.LogDebug($"The incoming channel to API Gateway Router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+						Router.IncomingChannel.ReOpen(this.CancellationTokenSource.Token, (msg, ex) => this.Logger?.LogDebug(msg, ex), "Incoming");
 					}
 
 					try
@@ -1895,37 +1988,27 @@ namespace net.vieapps.Services
 					}
 					catch (Exception ex)
 					{
-						this.Logger.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionBroken)}\"action: {ex.Message}", ex);
+						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionBroken)}\"action: {ex.Message}", ex);
 					}
 				},
 				(sender, arguments) =>
 				{
-					this.Logger.LogError($"Got an unexpected error of the incoming channel to API Gateway Router => {arguments.Exception.Message}", arguments.Exception);
+					this.Logger?.LogError($"Got an unexpected error of the incoming channel to API Gateway Router => {arguments.Exception.Message}", arguments.Exception);
 					try
 					{
 						onIncomingConnectionError?.Invoke(sender, arguments);
 					}
 					catch (Exception ex)
 					{
-						this.Logger.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionError)}\"action: {ex.Message}", ex);
+						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionError)}\"action: {ex.Message}", ex);
 					}
 				},
 				(sender, arguments) =>
 				{
 					Router.OutgoingChannel.Update(arguments.SessionId, this.ServiceName, $"Outgoing ({this.ServiceURI})");
-					this.Logger.LogInformation($"The outgoing channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
+					this.Logger?.LogInformation($"The outgoing channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
 
-					try
-					{
-						this.RTUService = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IRTUService>(ProxyInterceptor.Create());
-						this.MessagingService = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IMessagingService>(ProxyInterceptor.Create());
-						this.LoggingService = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<ILoggingService>(ProxyInterceptor.Create());
-						this.Logger.LogInformation($"Helper services are{(this.State == ServiceState.Disconnected ? " re-" : " ")}initialized");
-					}
-					catch (Exception ex)
-					{
-						this.Logger.LogError($"Error occurred while{(this.State == ServiceState.Disconnected ? " re-" : " ")}initializing helper services", ex);
-					}
+					Task.WaitAll(new[] { this.InitializeHelperServicesAsync() });
 
 					try
 					{
@@ -1933,18 +2016,18 @@ namespace net.vieapps.Services
 					}
 					catch (Exception ex)
 					{
-						this.Logger.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionEstablished)}\"action: {ex.Message}", ex);
+						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionEstablished)}\"action: {ex.Message}", ex);
 					}
 				},
 				(sender, arguments) =>
 				{
 					if (Router.ChannelsAreClosedBySystem || arguments.CloseType.Equals(SessionCloseType.Goodbye))
-						this.Logger.LogInformation($"The outgoing channel to API Gateway Router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+						this.Logger?.LogDebug($"The outgoing channel to API Gateway Router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
 
 					else if (Router.OutgoingChannel != null)
 					{
-						this.Logger.LogInformation($"The outgoing channel to API Gateway Router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
-						Router.OutgoingChannel.ReOpen(this.CancellationTokenSource.Token, (msg, ex) => this.Logger.LogDebug(msg, ex), "Outgoing");
+						this.Logger?.LogDebug($"The outgoing channel to API Gateway Router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+						Router.OutgoingChannel.ReOpen(this.CancellationTokenSource.Token, (msg, ex) => this.Logger?.LogDebug(msg, ex), "Outgoing");
 					}
 
 					try
@@ -1953,19 +2036,19 @@ namespace net.vieapps.Services
 					}
 					catch (Exception ex)
 					{
-						this.Logger.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionBroken)}\"action: {ex.Message}", ex);
+						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionBroken)}\"action: {ex.Message}", ex);
 					}
 				},
 				(sender, arguments) =>
 				{
-					this.Logger.LogError($"Got an unexpected error of the outgoing channel to API Gateway Router => {arguments.Exception.Message}", arguments.Exception);
+					this.Logger?.LogError($"Got an unexpected error of the outgoing channel to API Gateway Router => {arguments.Exception.Message}", arguments.Exception);
 					try
 					{
 						onOutgoingConnectionError?.Invoke(sender, arguments);
 					}
 					catch (Exception ex)
 					{
-						this.Logger.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionError)}\"action: {ex.Message}", ex);
+						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionError)}\"action: {ex.Message}", ex);
 					}
 				},
 				this.CancellationTokenSource.Token
@@ -1973,7 +2056,7 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Starts the service
+		/// Starts the service (the short way - connect to API Gateway and register the service)
 		/// </summary>
 		/// <param name="args">The arguments</param>
 		/// <param name="initializeRepository">true to initialize the repository of the service</param>
@@ -1992,7 +2075,7 @@ namespace net.vieapps.Services
 							try
 							{
 								await Task.Delay(UtilityService.GetRandomNumber(123, 456)).ConfigureAwait(false);
-								this.Logger.LogInformation("Initializing the repository");
+								this.Logger?.LogInformation("Initializing the repository");
 								RepositoryStarter.Initialize(
 									new[] { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
 										.Where(a => !a.Name.IsStartsWith("mscorlib") && !a.Name.IsStartsWith("System") && !a.Name.IsStartsWith("Microsoft") && !a.Name.IsEquals("NETStandard")
@@ -2008,33 +2091,30 @@ namespace net.vieapps.Services
 											}
 											catch (Exception ex)
 											{
-												this.Logger.LogError($"Error occurred while loading an assembly [{assemblyName.Name}] => {ex.Message}", ex);
+												this.Logger?.LogError($"Error occurred while loading an assembly [{assemblyName.Name}] => {ex.Message}", ex);
 												return null;
 											}
 										})
 										.Where(assembly => assembly != null)
 										.ToList()
 									),
-									(log, ex) =>
+									(msg, ex) =>
 									{
-										if (!this.IsDebugLogEnabled)
-										{
-											if (ex != null)
-												this.Logger.LogError(log, ex);
-											else
-												this.Logger.LogInformation(log);
-										}
+										if (ex != null)
+											this.Logger?.LogError(msg, ex);
+										else if (!this.IsDebugLogEnabled)
+											this.Logger?.LogDebug(msg);
 									}
 								);
 							}
 							catch (Exception ex)
 							{
-								this.Logger.LogError($"Error occurred while initializing the repository: {ex.Message}", ex);
+								this.Logger?.LogError($"Error occurred while initializing the repository: {ex.Message}", ex);
 							}
 
 						// default privileges
 						if (this.IsDebugLogEnabled)
-							this.Logger.LogInformation($"Default working privileges: {this.Privileges?.ToJson()}");
+							this.Logger?.LogDebug($"Default working privileges: {this.Privileges?.ToJson()}");
 
 						// run the next action
 						if (nextAsync != null)
@@ -2044,23 +2124,23 @@ namespace net.vieapps.Services
 							}
 							catch (Exception ex)
 							{
-								this.Logger.LogError($"Error occurred while invoking the next action => {ex.Message}", ex);
+								this.Logger?.LogError($"Error occurred while invoking the next action => {ex.Message}", ex);
 							}
 
-						// register the service with API Gateway
+						// send the service information to API Gateway
 						try
 						{
 							await this.SendServiceInfoAsync(args, true).ConfigureAwait(false);
 						}
 						catch (Exception ex)
 						{
-							this.Logger.LogError($"Error occurred while sending info to API Gateway => {ex.Message}", ex);
+							this.Logger?.LogError($"Error occurred while sending info to API Gateway => {ex.Message}", ex);
 						}
 					}).ConfigureAwait(false);
 				}
 				catch (Exception ex)
 				{
-					this.Logger.LogError($"Error occurred while starting the service: {ex.Message}", ex);
+					this.Logger?.LogError($"Error occurred while starting the service: {ex.Message}", ex);
 				}
 			}).ConfigureAwait(false);
 		}
@@ -2071,10 +2151,13 @@ namespace net.vieapps.Services
 		protected bool Stopped { get; private set; } = false;
 
 		/// <summary>
-		/// Stops this service (unregister, disconnect from API Gateway Router and clean-up)
+		/// Stops the service (unregister/disconnect from API Gateway and do the clean-up tasks)
 		/// </summary>
 		/// <param name="args">The arguments</param>
-		public void Stop(string[] args = null)
+		/// <param name="available">true to mark this service still available</param>
+		/// <param name="disconnectRouter">true to disconnect from API Gateway Router</param>
+		/// <param name="onNext">The next action to run when the service was stopped</param>
+		protected void Stop(string[] args, bool available = true, bool disconnectRouter = true, Action<ServiceBase> onNext = null)
 		{
 			// don't process if already stopped
 			if (this.Stopped)
@@ -2088,11 +2171,11 @@ namespace net.vieapps.Services
 			{
 				try
 				{
-					await this.SendServiceInfoAsync(args, false).ConfigureAwait(false);
+					await this.SendServiceInfoAsync(args, false, available).ConfigureAwait(false);
 				}
 				catch (Exception ex)
 				{
-					this.Logger.LogError($"Error occurred while sending info to API Gateway => {ex.Message}", ex);
+					this.Logger?.LogError($"Error occurred while sending info to API Gateway => {ex.Message}", ex);
 				}
 			})
 			.ContinueWith(_ =>
@@ -2129,8 +2212,7 @@ namespace net.vieapps.Services
 					{
 						this.ServiceUniqueInstance = null;
 					}
-			}, TaskContinuationOptions.OnlyOnRanToCompletion)
-			.ContinueWith(_ => Router.Disconnect(), TaskContinuationOptions.OnlyOnRanToCompletion);
+			}, TaskContinuationOptions.OnlyOnRanToCompletion);
 
 			try
 			{
@@ -2143,39 +2225,32 @@ namespace net.vieapps.Services
 
 			this.StopTimers();
 			this.CancellationTokenSource.Cancel();
-			this.Logger?.LogDebug("Stopped");
+			if (disconnectRouter)
+				Router.Disconnect();
+			this.Logger?.LogDebug($"The {this.ServiceName} service was stopped");
+
+			try
+			{
+				onNext?.Invoke(this);
+			}
+			catch (Exception ex)
+			{
+				this.Logger?.LogError($"Error occurred while running next action => {ex.Message}", ex);
+			}
 		}
 
-		Task SendServiceInfoAsync(string[] args, bool running)
-		{
-			var arguments = (args ?? new string[] { }).Where(arg => !arg.IsStartsWith("/controller-id:")).ToArray();
-			var invokeInfo = arguments.FirstOrDefault(a => a.IsStartsWith("/call-user:")) ?? "";
-			if (!string.IsNullOrWhiteSpace(invokeInfo))
-			{
-				invokeInfo = invokeInfo.Replace(StringComparison.OrdinalIgnoreCase, "/call-user:", "").UrlDecode();
-				var host = arguments.FirstOrDefault(a => a.IsStartsWith("/call-host:"));
-				var platform = arguments.FirstOrDefault(a => a.IsStartsWith("/call-platform:"));
-				var os = arguments.FirstOrDefault(a => a.IsStartsWith("/call-os:"));
-				if (!string.IsNullOrWhiteSpace(host) && !string.IsNullOrWhiteSpace(platform) && !string.IsNullOrWhiteSpace(os))
-					invokeInfo += $" [Host: {host.Replace(StringComparison.OrdinalIgnoreCase, "/call-host:", "").UrlDecode()} - Platform: {platform.Replace(StringComparison.OrdinalIgnoreCase, "/call-platform:", "").UrlDecode()} @ {os.Replace(StringComparison.OrdinalIgnoreCase, "/call-os:", "").UrlDecode()}]";
-			}
-			return this.SendInterCommunicateMessageAsync(new CommunicateMessage("APIGateway")
-			{
-				Type = "Service#Info",
-				Data = new ServiceInfo
-				{
-					Name = this.ServiceName.ToLower(),
-					UniqueName = Extensions.GetUniqueName(this.ServiceName, arguments),
-					ControllerID = args.FirstOrDefault(arg => arg.IsStartsWith("/controller-id:"))?.Replace("/controller-id:", "") ?? "Unknown",
-					InvokeInfo = invokeInfo,
-					Available = true,
-					Running = running
-				}.ToJson()
-			});
-		}
+		/// <summary>
+		/// Stops the service (unregister/disconnect from API Gateway and do the clean-up tasks)
+		/// </summary>
+		/// <param name="args">The arguments</param>
+		public void Stop(string[] args = null)
+			=> this.Stop(args, true, true);
 
 		bool Disposed { get; set; } = false;
 
+		/// <summary>
+		/// Disposes the service
+		/// </summary>
 		public virtual void Dispose()
 		{
 			if (!this.Disposed)
@@ -2183,12 +2258,13 @@ namespace net.vieapps.Services
 				this.Disposed = true;
 				this.Stop();
 				this.CancellationTokenSource.Dispose();
-				this.Logger?.LogDebug("Disposed");
 				GC.SuppressFinalize(this);
+				this.Logger?.LogDebug($"The {this.ServiceName} service was disposed");
 			}
 		}
 
-		~ServiceBase() => this.Dispose();
+		~ServiceBase()
+			=> this.Dispose();
 		#endregion
 
 	}
