@@ -784,7 +784,13 @@ namespace net.vieapps.Services
 		/// <param name="onSuccess">The action to run when success</param>
 		/// <param name="onError">The action to run when got an error</param>
 		/// <returns>A <see cref="JObject">JSON</see> object that presents the results of the business service</returns>
-		protected async Task<JToken> CallServiceAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default, Action<RequestInfo> onStart = null, Action<RequestInfo, JToken> onSuccess = null, Action<RequestInfo, Exception> onError = null)
+		protected async Task<JToken> CallServiceAsync(
+			RequestInfo requestInfo,
+			CancellationToken cancellationToken = default,
+			Action<RequestInfo> onStart = null,
+			Action<RequestInfo, JToken> onSuccess = null,
+			Action<RequestInfo, Exception> onError = null
+		)
 		{
 			var stopwatch = Stopwatch.StartNew();
 			var objectName = this.ServiceName.IsEquals(requestInfo.ServiceName) ? "" : requestInfo.ServiceName;
@@ -1356,7 +1362,17 @@ namespace net.vieapps.Services
 		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected virtual async Task<bool> IsAuthorizedAsync(IUser user, string objectName, string objectID, Components.Security.Action action, Privileges privileges, Func<IUser, string, string, List<Privilege>> getPrivileges, Func<PrivilegeRole, List<Components.Security.Action>> getActions, string correlationID = null, CancellationToken cancellationToken = default)
+		protected virtual async Task<bool> IsAuthorizedAsync(
+			IUser user,
+			string objectName,
+			string objectID,
+			Components.Security.Action action,
+			Privileges privileges,
+			Func<IUser, string, string, List<Privilege>> getPrivileges,
+			Func<PrivilegeRole, List<Components.Security.Action>> getActions,
+			string correlationID = null,
+			CancellationToken cancellationToken = default
+		)
 		{
 			correlationID = correlationID ?? UtilityService.NewUUID;
 			var @is = false;
@@ -1689,7 +1705,7 @@ namespace net.vieapps.Services
 				}
 				catch (Exception ex)
 				{
-					this.WriteLogs(UtilityService.NewUUID, $"Error occurred while invoking a timer action: {ex.Message}", ex, this.ServiceName, "Timers");
+					this.WriteLogs(UtilityService.NewUUID, $"Error occurred while invoking a timer action => {ex.Message}", ex, this.ServiceName, "Timers");
 				}
 			});
 			this.Timers.Add(timer);
@@ -1946,7 +1962,16 @@ namespace net.vieapps.Services
 		/// <param name="onIncomingConnectionError"></param>
 		/// <param name="onOutgoingConnectionError"></param>
 		/// <returns></returns>
-		protected virtual Task StartAsync(Func<ServiceBase, Task> onRegisterSuccessAsync = null, Func<Exception, Task> onRegisterErrorAsync = null, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null, Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null, Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null, Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null, Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null)
+		protected virtual Task StartAsync(
+			Func<ServiceBase, Task> onRegisterSuccessAsync = null,
+			Func<Exception, Task> onRegisterErrorAsync = null,
+			Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null,
+			Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null,
+			Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null,
+			Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null,
+			Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null,
+			Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null
+		)
 		{
 			this.Logger?.LogInformation($"Attempting to connect to API Gateway Router [{new Uri(Router.GetRouterStrInfo()).GetResolvedURI()}]");
 			return Router.ConnectAsync(
@@ -2154,10 +2179,10 @@ namespace net.vieapps.Services
 		/// Stops the service (unregister/disconnect from API Gateway and do the clean-up tasks)
 		/// </summary>
 		/// <param name="args">The arguments</param>
-		/// <param name="available">true to mark this service still available</param>
+		/// <param name="available">true to mark the service still available</param>
 		/// <param name="disconnect">true to disconnect from API Gateway Router</param>
-		/// <param name="onNext">The next action to run when the service was stopped</param>
-		protected void Stop(string[] args, bool available = true, bool disconnect = true, Action<ServiceBase> onNext = null)
+		/// <param name="next">The next action to run when the service was stopped</param>
+		protected void Stop(string[] args, bool available = true, bool disconnect = true, Action<ServiceBase> next = null)
 		{
 			// don't process if already stopped
 			if (this.Stopped)
@@ -2231,7 +2256,7 @@ namespace net.vieapps.Services
 
 			try
 			{
-				onNext?.Invoke(this);
+				next?.Invoke(this);
 			}
 			catch (Exception ex)
 			{
