@@ -128,14 +128,14 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Registers the service with API Gateway
 		/// </summary>
-		/// <param name="recomputeServiceUniqueName">true to recompute unique name of the service</param>
+		/// <param name="recomputeUniqueName">true to recompute unique name of the service</param>
 		/// <param name="onSuccessAsync">The action to run when register successfully</param>
 		/// <param name="onErrorAsync">The action to run when got any error</param>
 		/// <returns></returns>
-		protected async Task RegisterServiceAsync(bool recomputeServiceUniqueName = false, Func<ServiceBase, Task> onSuccessAsync = null, Func<Exception, Task> onErrorAsync = null)
+		protected async Task RegisterServiceAsync(bool recomputeUniqueName = false, Func<ServiceBase, Task> onSuccessAsync = null, Func<Exception, Task> onErrorAsync = null)
 		{
 			var name = this.ServiceName.Trim().ToLower();
-			if (recomputeServiceUniqueName)
+			if (recomputeUniqueName)
 				this.ServiceUniqueName = Extensions.GetUniqueName(this.ServiceName, null, null, null, null);
 
 			async Task registerCalleesAsync()
@@ -162,7 +162,7 @@ namespace net.vieapps.Services
 						throw;
 					}
 				}
-				this.Logger?.LogDebug($"The service is{(this.State == ServiceState.Disconnected ? " re-" : " ")}registered successful");
+				this.Logger?.LogDebug($"The service was{(this.State == ServiceState.Disconnected ? " re-" : " ")}registered successful");
 
 				this.ServiceCommunicator?.Dispose();
 				this.ServiceCommunicator = Router.IncomingChannel.RealmProxy.Services
@@ -180,7 +180,7 @@ namespace net.vieapps.Services
 						exception => this.Logger?.LogError($"Error occurred while fetching an inter-communicate message of API Gateway => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
 					);
 
-				this.Logger?.LogDebug($"The inter-communicate message updater is{(this.State == ServiceState.Disconnected ? " re-" : " ")}subscribed successful");
+				this.Logger?.LogDebug($"The inter-communicate message updater was{(this.State == ServiceState.Disconnected ? " re-" : " ")}subscribed successful");
 			}
 
 			try
@@ -191,7 +191,7 @@ namespace net.vieapps.Services
 				await registerServiceAsync().ConfigureAwait(false);
 
 				if (this.State == ServiceState.Disconnected)
-					this.Logger?.LogDebug($"The service is re-started successful - PID: {Process.GetCurrentProcess().Id} - URI: {this.ServiceURI}");
+					this.Logger?.LogDebug($"The service was re-started successful - PID: {Process.GetCurrentProcess().Id} - URI: {this.ServiceURI}");
 
 				this.State = ServiceState.Connected;
 				if (onSuccessAsync != null)
@@ -1965,7 +1965,7 @@ namespace net.vieapps.Services
 					}
 					catch (Exception ex)
 					{
-						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionEstablished)}\"action: {ex.Message}", ex);
+						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionEstablished)}\" => {ex.Message}", ex);
 					}
 				},
 				(sender, arguments) =>
@@ -1988,7 +1988,7 @@ namespace net.vieapps.Services
 					}
 					catch (Exception ex)
 					{
-						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionBroken)}\"action: {ex.Message}", ex);
+						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionBroken)}\" => {ex.Message}", ex);
 					}
 				},
 				(sender, arguments) =>
@@ -2000,7 +2000,7 @@ namespace net.vieapps.Services
 					}
 					catch (Exception ex)
 					{
-						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionError)}\"action: {ex.Message}", ex);
+						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionError)}\" => {ex.Message}", ex);
 					}
 				},
 				(sender, arguments) =>
@@ -2016,7 +2016,7 @@ namespace net.vieapps.Services
 					}
 					catch (Exception ex)
 					{
-						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionEstablished)}\"action: {ex.Message}", ex);
+						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionEstablished)}\" => {ex.Message}", ex);
 					}
 				},
 				(sender, arguments) =>
@@ -2036,7 +2036,7 @@ namespace net.vieapps.Services
 					}
 					catch (Exception ex)
 					{
-						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionBroken)}\"action: {ex.Message}", ex);
+						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionBroken)}\" => {ex.Message}", ex);
 					}
 				},
 				(sender, arguments) =>
@@ -2048,7 +2048,7 @@ namespace net.vieapps.Services
 					}
 					catch (Exception ex)
 					{
-						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionError)}\"action: {ex.Message}", ex);
+						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionError)}\" => {ex.Message}", ex);
 					}
 				},
 				this.CancellationTokenSource.Token
@@ -2155,9 +2155,9 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="args">The arguments</param>
 		/// <param name="available">true to mark this service still available</param>
-		/// <param name="disconnectRouter">true to disconnect from API Gateway Router</param>
+		/// <param name="disconnect">true to disconnect from API Gateway Router</param>
 		/// <param name="onNext">The next action to run when the service was stopped</param>
-		protected void Stop(string[] args, bool available = true, bool disconnectRouter = true, Action<ServiceBase> onNext = null)
+		protected void Stop(string[] args, bool available = true, bool disconnect = true, Action<ServiceBase> onNext = null)
 		{
 			// don't process if already stopped
 			if (this.Stopped)
@@ -2225,7 +2225,7 @@ namespace net.vieapps.Services
 
 			this.StopTimers();
 			this.CancellationTokenSource.Cancel();
-			if (disconnectRouter)
+			if (disconnect)
 				Router.Disconnect();
 			this.Logger?.LogDebug($"The {this.ServiceName} service was stopped");
 
@@ -2235,7 +2235,7 @@ namespace net.vieapps.Services
 			}
 			catch (Exception ex)
 			{
-				this.Logger?.LogError($"Error occurred while running next action => {ex.Message}", ex);
+				this.Logger?.LogError($"Error occurred while invoking the next action => {ex.Message}", ex);
 			}
 		}
 
@@ -2246,7 +2246,10 @@ namespace net.vieapps.Services
 		public void Stop(string[] args = null)
 			=> this.Stop(args, true, true);
 
-		bool Disposed { get; set; } = false;
+		/// <summary>
+		/// Gets the disposed state of the service
+		/// </summary>
+		protected bool Disposed { get; private set; } = false;
 
 		/// <summary>
 		/// Disposes the service

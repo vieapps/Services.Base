@@ -81,13 +81,13 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static async Task PrepareConnectionInfoAsync(this ManagedWebSocket websocket, string correlationID = null, Session session = null, CancellationToken cancellationToken = default, ILogger logger = null)
 		{
+			correlationID = correlationID ?? UtilityService.NewUUID;
 			session = session ?? websocket.Get<Session>("Session");
 			var account = "Visitor";
 			if (!string.IsNullOrWhiteSpace(session?.User?.ID))
 				try
 				{
-					var requestInfo = new RequestInfo(session, "Users", "Profile", "GET") { CorrelationID = correlationID ?? UtilityService.NewUUID };
-					var json = await Router.GetService(requestInfo.ServiceName).ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false);
+					var json = await Router.GetService("Users").ProcessRequestAsync(new RequestInfo(session, "Users", "Profile", "GET") { CorrelationID = correlationID }, cancellationToken).ConfigureAwait(false);
 					account = $"{json?.Get<string>("Name") ?? "Unknown"} ({session.User.ID})";
 				}
 				catch (Exception ex)
