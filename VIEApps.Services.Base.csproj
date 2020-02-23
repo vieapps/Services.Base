@@ -7,10 +7,10 @@
 		<WarningLevel>3</WarningLevel>
 		<DocumentationFile>bin/$(Configuration)/$(TargetFramework)/VIEApps.Services.Base.xml</DocumentationFile>
 		<AssemblyTitle>VIEApps NGX Service Base</AssemblyTitle>
-		<AssemblyVersion>10.3.2002.6</AssemblyVersion>
-		<FileVersion>10.3.2002.6</FileVersion>
+		<AssemblyVersion>10.3.2002.7</AssemblyVersion>
+		<FileVersion>10.3.2002.7</FileVersion>
 		<InformationalVersion>10.3@$(TargetFramework)-loving.4+2020.02.23+lts.targets</InformationalVersion>
-		<Version>10.3.2002.6</Version>
+		<Version>10.3.2002.7</Version>
 		<Title>VIEApps NGX Service Base</Title>
 		<Description>The base class for all microservices in the VIEApps NGX</Description>
 		<Authors>VIEApps.net</Authors>
@@ -28,7 +28,7 @@
 		<PackageIcon>Icon.png</PackageIcon>
 		<PackageOutputPath>../../Components</PackageOutputPath>
 		<PackageTags>services;microservices;vieapps;vieapps.components;vieapps.services;vieapps.microservices</PackageTags>
-		<PackageReleaseNotes>Restructure: register/initialize/stop and add more extention methods</PackageReleaseNotes>
+		<PackageReleaseNotes>Fix bugs of dead-lock</PackageReleaseNotes>
 		<PackageProjectUrl>https://vieapps.net</PackageProjectUrl>
 		<RepositoryUrl>https://github.com/vieapps/Services.Base</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
@@ -53,7 +53,7 @@
 		<PackageReference Include="System.Data.SqlClient" Version="4.8.1" />
 		<PackageReference Include="VIEApps.Components.Repository" Version="10.3.2002.5" />
 		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.3.2002.5" />
-		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.3.2002.6" />
+		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.3.2002.7" />
 	</ItemGroup>
 
 </Project>

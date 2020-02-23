@@ -1972,14 +1972,14 @@ namespace net.vieapps.Services
 		{
 			this.Logger?.LogInformation($"Attempting to connect to API Gateway Router [{new Uri(Router.GetRouterStrInfo()).GetResolvedURI()}]");
 			return Router.ConnectAsync(
-				(sender, arguments) =>
+				async (sender, arguments) =>
 				{
 					Router.IncomingChannel.Update(arguments.SessionId, this.ServiceName, $"Incoming ({this.ServiceURI})");
 					this.Logger?.LogInformation($"The incoming channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
 					if (this.State == ServiceState.Initializing)
 						this.State = ServiceState.Ready;
 
-					Task.WaitAll(new[] { this.RegisterServiceAsync(onRegisterSuccessAsync, onRegisterErrorAsync) });
+					await this.RegisterServiceAsync(onRegisterSuccessAsync, onRegisterErrorAsync).ConfigureAwait(false);
 
 					try
 					{
@@ -2025,12 +2025,12 @@ namespace net.vieapps.Services
 						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionError)}\" => {ex.Message}", ex);
 					}
 				},
-				(sender, arguments) =>
+				async (sender, arguments) =>
 				{
 					Router.OutgoingChannel.Update(arguments.SessionId, this.ServiceName, $"Outgoing ({this.ServiceURI})");
 					this.Logger?.LogInformation($"The outgoing channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
 
-					Task.WaitAll(new[] { this.InitializeHelperServicesAsync() });
+					await this.InitializeHelperServicesAsync().ConfigureAwait(false);
 
 					try
 					{
@@ -2073,7 +2073,8 @@ namespace net.vieapps.Services
 						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionError)}\" => {ex.Message}", ex);
 					}
 				},
-				this.CancellationTokenSource.Token
+				this.CancellationTokenSource.Token,
+				exception => this.Logger?.LogError($"Error occurred while connecting to API Gateway Router => {exception.Message}", exception)
 			);
 		}
 
@@ -2084,85 +2085,75 @@ namespace net.vieapps.Services
 		/// <param name="initializeRepository">true to initialize the repository of the service</param>
 		/// <param name="nextAsync">The next action to run</param>
 		public virtual void Start(string[] args = null, bool initializeRepository = true, Func<IService, Task> nextAsync = null)
-			=> Task.Run(async () =>
+			=> Task.WaitAll(new[] { this.StartAsync(async _ =>
 			{
+				// initialize repository
+				if (initializeRepository)
+					try
+					{
+						await Task.Delay(UtilityService.GetRandomNumber(123, 456)).ConfigureAwait(false);
+						this.Logger?.LogInformation("Initializing the repository");
+						RepositoryStarter.Initialize(
+							new[] { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
+								.Where(a => !a.Name.IsStartsWith("mscorlib") && !a.Name.IsStartsWith("System") && !a.Name.IsStartsWith("Microsoft") && !a.Name.IsEquals("NETStandard")
+									&& !a.Name.IsStartsWith("Newtonsoft") && !a.Name.IsStartsWith("WampSharp") && !a.Name.IsStartsWith("Castle.") && !a.Name.IsStartsWith("StackExchange.")
+									&& !a.Name.IsStartsWith("MongoDB") && !a.Name.IsStartsWith("MySql") && !a.Name.IsStartsWith("Oracle") && !a.Name.IsStartsWith("Npgsql") && !a.Name.IsStartsWith("Serilog")
+									&& !a.Name.IsStartsWith("VIEApps.Components.") && !a.Name.IsStartsWith("VIEApps.Services.Abstractions") && !a.Name.IsStartsWith("VIEApps.Services.Base")
+								)
+								.Select(assemblyName =>
+								{
+									try
+									{
+										return Assembly.Load(assemblyName);
+									}
+									catch (Exception ex)
+									{
+										this.Logger?.LogError($"Error occurred while loading an assembly [{assemblyName.Name}] => {ex.Message}", ex);
+										return null;
+									}
+								})
+								.Where(assembly => assembly != null)
+								.ToList()
+							),
+							(msg, ex) =>
+							{
+								if (ex != null)
+									this.Logger?.LogError(msg, ex);
+								else if (!this.IsDebugLogEnabled)
+									this.Logger?.LogDebug(msg);
+							}
+						);
+					}
+					catch (Exception ex)
+					{
+						this.Logger?.LogError($"Error occurred while initializing the repository: {ex.Message}", ex);
+					}
+
+				// default privileges
+				if (this.IsDebugLogEnabled)
+					this.Logger?.LogDebug($"Default working privileges: {this.Privileges?.ToJson()}");
+
+				// run the next action
+				if (nextAsync != null)
+					try
+					{
+						await nextAsync(this).WithCancellationToken(this.CancellationTokenSource.Token).ConfigureAwait(false);
+					}
+					catch (Exception ex)
+					{
+						this.Logger?.LogError($"Error occurred while invoking the next action => {ex.Message}", ex);
+					}
+
+				// send the service information to API Gateway
 				try
 				{
-					await this.StartAsync(async _ =>
-					{
-						// initialize repository
-						if (initializeRepository)
-							try
-							{
-								await Task.Delay(UtilityService.GetRandomNumber(123, 456)).ConfigureAwait(false);
-								this.Logger?.LogInformation("Initializing the repository");
-								RepositoryStarter.Initialize(
-									new[] { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
-										.Where(a => !a.Name.IsStartsWith("mscorlib") && !a.Name.IsStartsWith("System") && !a.Name.IsStartsWith("Microsoft") && !a.Name.IsEquals("NETStandard")
-											&& !a.Name.IsStartsWith("Newtonsoft") && !a.Name.IsStartsWith("WampSharp") && !a.Name.IsStartsWith("Castle.") && !a.Name.IsStartsWith("StackExchange.")
-											&& !a.Name.IsStartsWith("MongoDB") && !a.Name.IsStartsWith("MySql") && !a.Name.IsStartsWith("Oracle") && !a.Name.IsStartsWith("Npgsql") && !a.Name.IsStartsWith("Serilog")
-											&& !a.Name.IsStartsWith("VIEApps.Components.") && !a.Name.IsStartsWith("VIEApps.Services.Abstractions") && !a.Name.IsStartsWith("VIEApps.Services.Base")
-										)
-										.Select(assemblyName =>
-										{
-											try
-											{
-												return Assembly.Load(assemblyName);
-											}
-											catch (Exception ex)
-											{
-												this.Logger?.LogError($"Error occurred while loading an assembly [{assemblyName.Name}] => {ex.Message}", ex);
-												return null;
-											}
-										})
-										.Where(assembly => assembly != null)
-										.ToList()
-									),
-									(msg, ex) =>
-									{
-										if (ex != null)
-											this.Logger?.LogError(msg, ex);
-										else if (!this.IsDebugLogEnabled)
-											this.Logger?.LogDebug(msg);
-									}
-								);
-							}
-							catch (Exception ex)
-							{
-								this.Logger?.LogError($"Error occurred while initializing the repository: {ex.Message}", ex);
-							}
-
-						// default privileges
-						if (this.IsDebugLogEnabled)
-							this.Logger?.LogDebug($"Default working privileges: {this.Privileges?.ToJson()}");
-
-						// run the next action
-						if (nextAsync != null)
-							try
-							{
-								await nextAsync(this).WithCancellationToken(this.CancellationTokenSource.Token).ConfigureAwait(false);
-							}
-							catch (Exception ex)
-							{
-								this.Logger?.LogError($"Error occurred while invoking the next action => {ex.Message}", ex);
-							}
-
-						// send the service information to API Gateway
-						try
-						{
-							await this.SendServiceInfoAsync(args, true).ConfigureAwait(false);
-						}
-						catch (Exception ex)
-						{
-							this.Logger?.LogError($"Error occurred while sending info to API Gateway => {ex.Message}", ex);
-						}
-					}).ConfigureAwait(false);
+					await this.SendServiceInfoAsync(args, true).ConfigureAwait(false);
 				}
 				catch (Exception ex)
 				{
-					this.Logger?.LogError($"Error occurred while starting the service: {ex.Message}", ex);
+					this.Logger?.LogError($"Error occurred while sending info to API Gateway => {ex.Message}", ex);
 				}
-			}).ConfigureAwait(false);
+			}) });
 
 		/// <summary>
 		/// Gets the stopped state of the service
