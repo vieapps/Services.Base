@@ -65,28 +65,28 @@ namespace net.vieapps.Services
 			=> Task.CompletedTask;
 
 		#region Properties
-		IAsyncDisposable ServiceInstance { get; set; } = null;
+		IAsyncDisposable ServiceInstance { get; set; }
 
-		IAsyncDisposable ServiceUniqueInstance { get; set; } = null;
+		IAsyncDisposable ServiceUniqueInstance { get; set; }
 
-		IDisposable ServiceCommunicator { get; set; } = null;
+		IDisposable ServiceCommunicator { get; set; }
 
-		IDisposable GatewayCommunicator { get; set; } = null;
-
-		/// <summary>
-		/// Gets or sets the real-time updater (RTU) service
-		/// </summary>
-		protected IRTUService RTUService { get; set; } = null;
+		IDisposable GatewayCommunicator { get; set; }
 
 		/// <summary>
-		/// Gets or sets the logging service
+		/// Gets the real-time updater (RTU) service
 		/// </summary>
-		protected ILoggingService LoggingService { get; set; } = null;
+		protected IRTUService RTUService { get; private set; }
 
 		/// <summary>
-		/// Gets or sets the messaging service
+		/// Gets the logging service
 		/// </summary>
-		protected IMessagingService MessagingService { get; set; } = null;
+		protected ILoggingService LoggingService { get; private set; }
+
+		/// <summary>
+		/// Gets the messaging service
+		/// </summary>
+		protected IMessagingService MessagingService { get; private set; }
 
 		/// <summary>
 		/// Gets the cancellation token source
@@ -128,19 +128,16 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Registers the service with API Gateway
 		/// </summary>
-		/// <param name="recomputeUniqueName">true to recompute unique name of the service</param>
 		/// <param name="onSuccessAsync">The action to run when register successfully</param>
 		/// <param name="onErrorAsync">The action to run when got any error</param>
 		/// <returns></returns>
-		protected async Task RegisterServiceAsync(bool recomputeUniqueName = false, Func<ServiceBase, Task> onSuccessAsync = null, Func<Exception, Task> onErrorAsync = null)
+		protected async Task RegisterServiceAsync(Func<ServiceBase, Task> onSuccessAsync = null, Func<Exception, Task> onErrorAsync = null)
 		{
-			var name = this.ServiceName.Trim().ToLower();
-			if (recomputeUniqueName)
-				this.ServiceUniqueName = Extensions.GetUniqueName(this.ServiceName, null, null, null, null);
+			this.ServiceUniqueName = this.ServiceUniqueName ?? Extensions.GetUniqueName(this.ServiceName);
 
 			async Task registerCalleesAsync()
 			{
-				this.ServiceInstance = await Router.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(name)).ConfigureAwait(false);
+				this.ServiceInstance = await Router.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(this.ServiceName)).ConfigureAwait(false);
 				this.ServiceUniqueInstance = await Router.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(this.ServiceUniqueName, WampInvokePolicy.Single)).ConfigureAwait(false);
 			}
 
@@ -166,7 +163,7 @@ namespace net.vieapps.Services
 
 				this.ServiceCommunicator?.Dispose();
 				this.ServiceCommunicator = Router.IncomingChannel.RealmProxy.Services
-					.GetSubject<CommunicateMessage>($"messages.services.{name}")
+					.GetSubject<CommunicateMessage>($"messages.services.{this.ServiceName.Trim().ToLower()}")
 					.Subscribe(
 						async message => await this.ProcessInterCommunicateMessageAsync(message).ConfigureAwait(false),
 						exception => this.Logger?.LogError($"Error occurred while fetching an inter-communicate message => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
@@ -1982,7 +1979,7 @@ namespace net.vieapps.Services
 					if (this.State == ServiceState.Initializing)
 						this.State = ServiceState.Ready;
 
-					Task.WaitAll(new[] { this.RegisterServiceAsync(false, onRegisterSuccessAsync, onRegisterErrorAsync) });
+					Task.WaitAll(new[] { this.RegisterServiceAsync(onRegisterSuccessAsync, onRegisterErrorAsync) });
 
 					try
 					{
@@ -2087,9 +2084,7 @@ namespace net.vieapps.Services
 		/// <param name="initializeRepository">true to initialize the repository of the service</param>
 		/// <param name="nextAsync">The next action to run</param>
 		public virtual void Start(string[] args = null, bool initializeRepository = true, Func<IService, Task> nextAsync = null)
-		{
-			this.ServiceUniqueName = Extensions.GetUniqueName(this.ServiceName, args);
-			Task.Run(async () =>
+			=> Task.Run(async () =>
 			{
 				try
 				{
@@ -2168,7 +2163,6 @@ namespace net.vieapps.Services
 					this.Logger?.LogError($"Error occurred while starting the service: {ex.Message}", ex);
 				}
 			}).ConfigureAwait(false);
-		}
 
 		/// <summary>
 		/// Gets the stopped state of the service

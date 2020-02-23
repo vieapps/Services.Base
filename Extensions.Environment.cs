@@ -44,7 +44,7 @@ namespace net.vieapps.Services
 		/// <param name="platform">The string that presents name of the platform that runs the process of the business service</param>
 		/// <param name="os">The string that presents name of the operating system that runs the process of the business service</param>
 		/// <returns>The string that presents unique name of a business service at a host</returns>
-		public static string GetUniqueName(string name, string user, string host, string platform, string os)
+		public static string GetUniqueName(string name, string user = null, string host = null, string platform = null, string os = null)
 			=> $"{(name ?? "unknown").Trim().ToLower()}.{(user ?? Environment.UserName).Trim().ToLower()}-{(host ?? Environment.MachineName).Trim().ToLower()}-" + $"{(platform ?? RuntimeInformation.FrameworkDescription).Trim()} @ {os ?? Extensions.GetRuntimeOS()}".GenerateUUID();
 
 		/// <summary>
@@ -53,7 +53,7 @@ namespace net.vieapps.Services
 		/// <param name="name">The string that presents name of a business service</param>
 		/// <param name="args">The starting arguments</param>
 		/// <returns>The string that presents unique name of a business service at a host</returns>
-		public static string GetUniqueName(string name, string[] args = null)
+		public static string GetUniqueName(string name, string[] args)
 		{
 			var user = args?.FirstOrDefault(a => a.IsStartsWith("/run-user:"));
 			var host = args?.FirstOrDefault(a => a.IsStartsWith("/run-host:"));
