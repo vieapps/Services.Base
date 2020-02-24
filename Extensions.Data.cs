@@ -154,10 +154,7 @@ namespace net.vieapps.Services
 				name = serverJson.Get<string>("Attribute");
 				return @operator.IsEquals("IsNull") || @operator.IsEquals("IsNotNull") || @operator.IsEquals("IsEmpty") || @operator.IsEquals("IsNotEmpty")
 					? new JValue(@operator) as JToken
-					: new JObject
-						{
-							{ @operator, serverJson["Value"] as JValue }
-						};
+					: new JObject { { @operator, serverJson["Value"] as JValue } };
 			}
 			else
 			{
@@ -216,7 +213,8 @@ namespace net.vieapps.Services
 			expression.ForEach(kvp =>
 			{
 				var attribute = kvp.Key;
-				var mode = ((kvp.Value as JValue).Value?.ToString() ?? "Ascending").ToEnum<SortMode>();
+				if (!((kvp.Value as JValue).Value?.ToString() ?? "Ascending").TryToEnum(out SortMode mode))
+					mode = SortMode.Ascending;
 
 				sort = sort != null
 					? mode.Equals(SortMode.Ascending)
