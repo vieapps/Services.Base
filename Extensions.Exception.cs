@@ -19,7 +19,7 @@ namespace net.vieapps.Services
 	public static partial class Extensions
 	{
 		/// <summary>
-		/// Gets the stack trace of this error exception
+		/// Gets the stack trace of the error exception
 		/// </summary>
 		/// <param name="exception"></param>
 		/// <returns></returns>
@@ -52,7 +52,7 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Gets the details of a WAMP exception
+		/// Gets the details of the WAMP exception
 		/// </summary>
 		/// <param name="exception"></param>
 		/// <param name="requestInfo"></param>
