@@ -2240,7 +2240,7 @@ namespace net.vieapps.Services
 		/// <param name="disconnect">true to disconnect from API Gateway Router and close all WAMP channels</param>
 		/// <param name="next">The next action to run when the service was stopped</param>
 		protected virtual void Stop(string[] args, bool available = true, bool disconnect = true, Action<ServiceBase> next = null)
-			=> Task.WaitAll(this.StopAsync(args, available, disconnect, next));
+			=> this.StopAsync(args, available, disconnect, next).Wait();
 
 		/// <summary>
 		/// Stops the service (unregister/disconnect from API Gateway and do the clean-up tasks)
