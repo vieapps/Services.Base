@@ -5,7 +5,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using net.vieapps.Components.Utility;
@@ -79,7 +78,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken"></param>
 		/// <param name="logger"></param>
 		/// <returns></returns>
-		public static async Task PrepareConnectionInfoAsync(this ManagedWebSocket websocket, string correlationID = null, Session session = null, CancellationToken cancellationToken = default, ILogger logger = null)
+		public static async Task PrepareConnectionInfoAsync(this ManagedWebSocket websocket, string correlationID = null, Session session = null, CancellationToken cancellationToken = default, Microsoft.Extensions.Logging.ILogger logger = null)
 		{
 			correlationID = correlationID ?? UtilityService.NewUUID;
 			session = session ?? websocket.Get<Session>("Session");
