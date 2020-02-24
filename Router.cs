@@ -280,16 +280,19 @@ namespace net.vieapps.Services
 		public static async Task UpdateAsync(this IWampChannel wampChannel, long sessionID, string name, string description)
 		{
 			if (Router.StatisticsWebSocket == null)
+			{
 				Router.StatisticsWebSocket = new WebSocket(null, null, CancellationToken.None);
+				Router.StatisticsWebSocketState = "initializing";
+			}
 
-			if (Router.StatisticsWebSocketState == null)
+			if (Router.StatisticsWebSocketState == null || Router.StatisticsWebSocketState == "initializing")
 			{
 				Router.StatisticsWebSocketState = "connecting";
 				var uri = new Uri(Router.GetRouterStrInfo());
 				Router.StatisticsWebSocket.Connect($"{uri.Scheme}://{uri.Host}:56429/", websocket => Router.StatisticsWebSocketState = "connected", exception => Router.StatisticsWebSocketState = "closed");
 			}
 
-			while (Router.StatisticsWebSocketState == "connecting")
+			while (Router.StatisticsWebSocketState == null || Router.StatisticsWebSocketState == "initializing" || Router.StatisticsWebSocketState == "connecting")
 				await Task.Delay(UtilityService.GetRandomNumber(234, 567)).ConfigureAwait(false);
 
 			if (Router.StatisticsWebSocketState == "connected")
@@ -373,18 +376,20 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Disconnects from API Gateway Router
+		/// Disconnects from API Gateway Router (means close all WAMP channels)
+		/// </summary>
+		public static Task DisconnectAsync()
+		{
+			Router.ChannelsAreClosedBySystem = true;
+			return Task.WhenAll(Router.CloseIncomingChannelAsync(), Router.CloseOutgoingChannelAsync());
+		}
+
+		/// <summary>
+		/// Disconnects from API Gateway Router and close all WAMP channels
 		/// </summary>
 		/// <param name="waitingTimes">Times (miliseconds) for waiting to disconnect</param>
 		public static void Disconnect(int waitingTimes = 1234)
-		{
-			Router.ChannelsAreClosedBySystem = true;
-			Task.WaitAll(new[]
-			{
-				Router.CloseIncomingChannelAsync(),
-				Router.CloseOutgoingChannelAsync()
-			}, waitingTimes > 0 ? waitingTimes : 1234);
-		}
+			=> Router.DisconnectAsync().Wait(waitingTimes > 0 ? waitingTimes : 1234);
 		#endregion
 
 		#region Get a service

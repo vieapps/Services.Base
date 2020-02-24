@@ -131,7 +131,7 @@ namespace net.vieapps.Services
 		/// <param name="onSuccessAsync">The action to run when register successfully</param>
 		/// <param name="onErrorAsync">The action to run when got any error</param>
 		/// <returns></returns>
-		protected async Task RegisterServiceAsync(Func<ServiceBase, Task> onSuccessAsync = null, Func<Exception, Task> onErrorAsync = null)
+		protected virtual async Task RegisterServiceAsync(Func<ServiceBase, Task> onSuccessAsync = null, Func<Exception, Task> onErrorAsync = null)
 		{
 			this.ServiceUniqueName = this.ServiceUniqueName ?? Extensions.GetUniqueName(this.ServiceName);
 
@@ -208,7 +208,7 @@ namespace net.vieapps.Services
 		/// <param name="onSuccessAsync">The action to run when initialize successfully</param>
 		/// <param name="onErrorAsync">The action to run when got any error</param>
 		/// <returns></returns>
-		protected async Task InitializeHelperServicesAsync(Func<ServiceBase, Task> onSuccessAsync = null, Func<Exception, Task> onErrorAsync = null)
+		protected virtual async Task InitializeHelperServicesAsync(Func<ServiceBase, Task> onSuccessAsync = null, Func<Exception, Task> onErrorAsync = null)
 		{
 			try
 			{
@@ -1969,12 +1969,10 @@ namespace net.vieapps.Services
 			Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null,
 			Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null
 		)
-		{
-			this.Logger?.LogInformation($"Attempting to connect to API Gateway Router [{new Uri(Router.GetRouterStrInfo()).GetResolvedURI()}]");
-			return Router.ConnectAsync(
+			=> Task.Run(() => this.Logger?.LogInformation($"Attempting to connect to API Gateway Router [{new Uri(Router.GetRouterStrInfo()).GetResolvedURI()}]")).ContinueWith(async _ => await Router.ConnectAsync(
 				async (sender, arguments) =>
 				{
-					Router.IncomingChannel.Update(arguments.SessionId, this.ServiceName, $"Incoming ({this.ServiceURI})");
+					await Router.IncomingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Incoming ({this.ServiceURI})").ConfigureAwait(false);
 					this.Logger?.LogInformation($"The incoming channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
 					if (this.State == ServiceState.Initializing)
 						this.State = ServiceState.Ready;
@@ -2027,7 +2025,7 @@ namespace net.vieapps.Services
 				},
 				async (sender, arguments) =>
 				{
-					Router.OutgoingChannel.Update(arguments.SessionId, this.ServiceName, $"Outgoing ({this.ServiceURI})");
+					await Router.OutgoingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Outgoing ({this.ServiceURI})").ConfigureAwait(false);
 					this.Logger?.LogInformation($"The outgoing channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
 
 					await this.InitializeHelperServicesAsync().ConfigureAwait(false);
@@ -2075,8 +2073,7 @@ namespace net.vieapps.Services
 				},
 				this.CancellationTokenSource.Token,
 				exception => this.Logger?.LogError($"Error occurred while connecting to API Gateway Router => {exception.Message}", exception)
-			);
-		}
+			).ConfigureAwait(false), TaskContinuationOptions.OnlyOnRanToCompletion);
 
 		/// <summary>
 		/// Starts the service (the short way - connect to API Gateway and register the service)
@@ -2085,7 +2082,7 @@ namespace net.vieapps.Services
 		/// <param name="initializeRepository">true to initialize the repository of the service</param>
 		/// <param name="nextAsync">The next action to run</param>
 		public virtual void Start(string[] args = null, bool initializeRepository = true, Func<IService, Task> nextAsync = null)
-			=> Task.WaitAll(new[] { this.StartAsync(async _ =>
+			=> this.StartAsync(async _ =>
 			{
 				// initialize repository
 				if (initializeRepository)
@@ -2153,7 +2150,8 @@ namespace net.vieapps.Services
 				{
 					this.Logger?.LogError($"Error occurred while sending info to API Gateway => {ex.Message}", ex);
 				}
-			}) });
+			})
+			.Wait();
 
 		/// <summary>
 		/// Gets the stopped state of the service
@@ -2165,9 +2163,9 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="args">The arguments</param>
 		/// <param name="available">true to mark the service still available</param>
-		/// <param name="disconnect">true to disconnect from API Gateway Router</param>
+		/// <param name="disconnect">true to disconnect from API Gateway Router and close all WAMP channels</param>
 		/// <param name="next">The next action to run when the service was stopped</param>
-		protected void Stop(string[] args, bool available = true, bool disconnect = true, Action<ServiceBase> next = null)
+		protected virtual async Task StopAsync(string[] args, bool available = true, bool disconnect = true, Action<ServiceBase> next = null)
 		{
 			// don't process if already stopped
 			if (this.Stopped)
@@ -2176,69 +2174,54 @@ namespace net.vieapps.Services
 			// assign the flag
 			this.Stopped = true;
 
-			// dispose
-			var task = Task.Run(async () =>
-			{
-				try
-				{
-					await this.SendServiceInfoAsync(args, false, available).ConfigureAwait(false);
-				}
-				catch (Exception ex)
-				{
-					this.Logger?.LogError($"Error occurred while sending info to API Gateway => {ex.Message}", ex);
-				}
-			})
-			.ContinueWith(_ =>
-			{
-				this.ServiceCommunicator?.Dispose();
-				this.GatewayCommunicator?.Dispose();
-			}, TaskContinuationOptions.OnlyOnRanToCompletion)
-			.ContinueWith(async _ =>
-			{
-				if (this.ServiceInstance != null)
-					try
-					{
-						await this.ServiceInstance.DisposeAsync().ConfigureAwait(false);
-					}
-					catch (Exception ex)
-					{
-						this.Logger?.LogError($"Error occurred while unregistering => {ex.Message}", ex);
-					}
-					finally
-					{
-						this.ServiceInstance = null;
-					}
-
-				if (this.ServiceUniqueInstance != null)
-					try
-					{
-						await this.ServiceUniqueInstance.DisposeAsync().ConfigureAwait(false);
-					}
-					catch (Exception ex)
-					{
-						this.Logger?.LogError($"Error occurred while unregistering => {ex.Message}", ex);
-					}
-					finally
-					{
-						this.ServiceUniqueInstance = null;
-					}
-			}, TaskContinuationOptions.OnlyOnRanToCompletion);
-
+			// send information to API Gateway
 			try
 			{
-				task.Wait(1234);
+				await this.SendServiceInfoAsync(args, false, available).ConfigureAwait(false);
 			}
 			catch (Exception ex)
 			{
-				this.Logger?.LogError($"Error occurred while stopping => {ex.Message}", ex);
+				this.Logger?.LogError($"Error occurred while sending info to API Gateway => {ex.Message}", ex);
 			}
 
+			// dispose all instances
+			if (this.ServiceInstance != null)
+				try
+				{
+					await this.ServiceInstance.DisposeAsync().ConfigureAwait(false);
+				}
+				catch (Exception ex)
+				{
+					this.Logger?.LogError($"Error occurred while disposing the service instance => {ex.Message}", ex);
+				}
+				finally
+				{
+					this.ServiceInstance = null;
+				}
+
+			if (this.ServiceUniqueInstance != null)
+				try
+				{
+					await this.ServiceUniqueInstance.DisposeAsync().ConfigureAwait(false);
+				}
+				catch (Exception ex)
+				{
+					this.Logger?.LogError($"Error occurred while disposing the unique service instance => {ex.Message}", ex);
+				}
+				finally
+				{
+					this.ServiceUniqueInstance = null;
+				}
+
+			// clean-up
 			this.StopTimers();
 			this.CancellationTokenSource.Cancel();
-			if (disconnect)
-				Router.Disconnect();
-			this.Logger?.LogDebug($"The {this.ServiceName} service was stopped");
 
+			// disconnect from API Gateway Router
+			await (disconnect ? Router.DisconnectAsync() : Task.CompletedTask).ConfigureAwait(false);
+			this.Logger?.LogDebug($"The service was stopped");
+
+			// run the next action
 			try
 			{
 				next?.Invoke(this);
@@ -2253,7 +2236,17 @@ namespace net.vieapps.Services
 		/// Stops the service (unregister/disconnect from API Gateway and do the clean-up tasks)
 		/// </summary>
 		/// <param name="args">The arguments</param>
-		public void Stop(string[] args = null)
+		/// <param name="available">true to mark the service still available</param>
+		/// <param name="disconnect">true to disconnect from API Gateway Router and close all WAMP channels</param>
+		/// <param name="next">The next action to run when the service was stopped</param>
+		protected virtual void Stop(string[] args, bool available = true, bool disconnect = true, Action<ServiceBase> next = null)
+			=> Task.WaitAll(this.StopAsync(args, available, disconnect, next));
+
+		/// <summary>
+		/// Stops the service (unregister/disconnect from API Gateway and do the clean-up tasks)
+		/// </summary>
+		/// <param name="args">The arguments</param>
+		public virtual void Stop(string[] args = null)
 			=> this.Stop(args, true, true);
 
 		/// <summary>
@@ -2272,7 +2265,7 @@ namespace net.vieapps.Services
 				this.Stop();
 				this.CancellationTokenSource.Dispose();
 				GC.SuppressFinalize(this);
-				this.Logger?.LogDebug($"The {this.ServiceName} service was disposed");
+				this.Logger?.LogDebug($"The service was disposed");
 			}
 		}
 
