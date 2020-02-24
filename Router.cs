@@ -120,7 +120,7 @@ namespace net.vieapps.Services
 		/// <param name="awatingTimes"></param>
 		public static void ReOpen(this IWampChannel wampChannel, CancellationToken cancellationToken = default, Action<string, Exception> tracker = null, string prefix = null, int awatingTimes = 0)
 		{
-			var reconnector = new WampChannelReconnector(wampChannel, async () =>
+			using (var reconnector = new WampChannelReconnector(wampChannel, async () =>
 			{
 				try
 				{
@@ -141,9 +141,7 @@ namespace net.vieapps.Services
 				{
 					tracker?.Invoke($"{(string.IsNullOrWhiteSpace(prefix) ? "" : $"[{prefix}] => ")}Reconnect error: {ex.Message}", ex is System.Net.WebSockets.WebSocketException || ex is ArgumentException || ex is OperationCanceledException ? null : ex);
 				}
-			});
-
-			using (reconnector)
+			}))
 			{
 				reconnector.Start();
 			}
@@ -368,9 +366,8 @@ namespace net.vieapps.Services
 			}
 			catch (Exception ex)
 			{
-				if (onError != null)
-					onError(ex);
-				else
+				onError?.Invoke(ex);
+				if (onError == null)
 					throw ex;
 			}
 		}
