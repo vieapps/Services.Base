@@ -95,14 +95,14 @@ namespace net.vieapps.Services
 		public static Task SendServiceInfoAsync(this IRTUService rtuService, string serviceName, string[] args, bool running, bool available = true)
 		{
 			var arguments = (args ?? new string[] { }).Where(arg => !arg.IsStartsWith("/controller-id:")).ToArray();
-			var invokeInfo = arguments.FirstOrDefault(a => a.IsStartsWith("/call-user:")) ?? "";
+			var invokeInfo = arguments.FirstOrDefault(arg => arg.IsStartsWith("/call-user:")) ?? "";
 
 			if (!string.IsNullOrWhiteSpace(invokeInfo))
 			{
 				invokeInfo = invokeInfo.Replace(StringComparison.OrdinalIgnoreCase, "/call-user:", "").UrlDecode();
-				var host = arguments.FirstOrDefault(a => a.IsStartsWith("/call-host:"));
-				var platform = arguments.FirstOrDefault(a => a.IsStartsWith("/call-platform:"));
-				var os = arguments.FirstOrDefault(a => a.IsStartsWith("/call-os:"));
+				var host = arguments.FirstOrDefault(arg => arg.IsStartsWith("/call-host:"));
+				var platform = arguments.FirstOrDefault(arg => arg.IsStartsWith("/call-platform:"));
+				var os = arguments.FirstOrDefault(arg => arg.IsStartsWith("/call-os:"));
 				if (!string.IsNullOrWhiteSpace(host) && !string.IsNullOrWhiteSpace(platform) && !string.IsNullOrWhiteSpace(os))
 					invokeInfo += $" [Host: {host.Replace(StringComparison.OrdinalIgnoreCase, "/call-host:", "").UrlDecode()} - Platform: {platform.Replace(StringComparison.OrdinalIgnoreCase, "/call-platform:", "").UrlDecode()} @ {os.Replace(StringComparison.OrdinalIgnoreCase, "/call-os:", "").UrlDecode()}]";
 			}
