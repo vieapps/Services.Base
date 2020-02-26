@@ -3,6 +3,7 @@ using System;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
@@ -91,8 +92,9 @@ namespace net.vieapps.Services
 		/// <param name="args">The services' arguments (for prepare the unique name)</param>
 		/// <param name="running">The running state</param>
 		/// <param name="available">The available state</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static Task SendServiceInfoAsync(this IRTUService rtuService, string serviceName, string[] args, bool running, bool available = true)
+		public static Task SendServiceInfoAsync(this IRTUService rtuService, string serviceName, string[] args, bool running, bool available = true, CancellationToken cancellationToken = default)
 		{
 			var arguments = (args ?? new string[] { }).Where(arg => !arg.IsStartsWith("/controller-id:")).ToArray();
 			var invokeInfo = arguments.FirstOrDefault(arg => arg.IsStartsWith("/call-user:")) ?? "";
@@ -109,19 +111,21 @@ namespace net.vieapps.Services
 			else
 				invokeInfo = $"{Environment.UserName.ToLower()} [Host: {Environment.MachineName.ToLower()} - Platform: {Extensions.GetRuntimePlatform()}]";
 
-			return rtuService.SendInterCommunicateMessageAsync(new CommunicateMessage("APIGateway")
-			{
-				Type = "Service#Info",
-				Data = new ServiceInfo
+			return rtuService == null || string.IsNullOrWhiteSpace(serviceName)
+				? Task.CompletedTask
+				: rtuService.SendInterCommunicateMessageAsync(new CommunicateMessage("APIGateway")
 				{
-					Name = serviceName.ToLower(),
-					UniqueName = Extensions.GetUniqueName(serviceName, arguments),
-					ControllerID = args?.FirstOrDefault(arg => arg.IsStartsWith("/controller-id:"))?.Replace("/controller-id:", "") ?? "Unknown",
-					InvokeInfo = invokeInfo,
-					Available = available,
-					Running = running
-				}.ToJson()
-			});
+					Type = "Service#Info",
+					Data = new ServiceInfo
+					{
+						Name = serviceName.ToLower(),
+						UniqueName = Extensions.GetUniqueName(serviceName, arguments),
+						ControllerID = args?.FirstOrDefault(arg => arg.IsStartsWith("/controller-id:"))?.Replace("/controller-id:", "") ?? "Unknown",
+						InvokeInfo = invokeInfo,
+						Available = available,
+						Running = running
+					}.ToJson()
+				}, cancellationToken);
 		}
 		#endregion
 
