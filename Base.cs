@@ -339,36 +339,7 @@ namespace net.vieapps.Services
 		/// <param name="available">The available state</param>
 		/// <returns></returns>
 		protected virtual Task SendServiceInfoAsync(string[] args, bool running, bool available = true)
-		{
-			var arguments = (args ?? new string[] { }).Where(arg => !arg.IsStartsWith("/controller-id:")).ToArray();
-			var invokeInfo = arguments.FirstOrDefault(a => a.IsStartsWith("/call-user:")) ?? "";
-
-			if (!string.IsNullOrWhiteSpace(invokeInfo))
-			{
-				invokeInfo = invokeInfo.Replace(StringComparison.OrdinalIgnoreCase, "/call-user:", "").UrlDecode();
-				var host = arguments.FirstOrDefault(a => a.IsStartsWith("/call-host:"));
-				var platform = arguments.FirstOrDefault(a => a.IsStartsWith("/call-platform:"));
-				var os = arguments.FirstOrDefault(a => a.IsStartsWith("/call-os:"));
-				if (!string.IsNullOrWhiteSpace(host) && !string.IsNullOrWhiteSpace(platform) && !string.IsNullOrWhiteSpace(os))
-					invokeInfo += $" [Host: {host.Replace(StringComparison.OrdinalIgnoreCase, "/call-host:", "").UrlDecode()} - Platform: {platform.Replace(StringComparison.OrdinalIgnoreCase, "/call-platform:", "").UrlDecode()} @ {os.Replace(StringComparison.OrdinalIgnoreCase, "/call-os:", "").UrlDecode()}]";
-			}
-			else
-				invokeInfo = $"{Environment.UserName.ToLower()} [Host: {Environment.MachineName.ToLower()} - Platform: {Extensions.GetRuntimePlatform()}]";
-
-			return this.SendInterCommunicateMessageAsync(new CommunicateMessage("APIGateway")
-			{
-				Type = "Service#Info",
-				Data = new ServiceInfo
-				{
-					Name = this.ServiceName.ToLower(),
-					UniqueName = Extensions.GetUniqueName(this.ServiceName, arguments),
-					ControllerID = args.FirstOrDefault(arg => arg.IsStartsWith("/controller-id:"))?.Replace("/controller-id:", "") ?? "Unknown",
-					InvokeInfo = invokeInfo,
-					Available = available,
-					Running = running
-				}.ToJson()
-			});
-		}
+			=> this.RTUService.SendServiceInfoAsync(this.ServiceName, args, running, available);
 		#endregion
 
 		#region Send email & web hook messages
