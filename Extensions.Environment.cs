@@ -116,7 +116,7 @@ namespace net.vieapps.Services
 				{
 					Name = serviceName.ToLower(),
 					UniqueName = Extensions.GetUniqueName(serviceName, arguments),
-					ControllerID = args.FirstOrDefault(arg => arg.IsStartsWith("/controller-id:"))?.Replace("/controller-id:", "") ?? "Unknown",
+					ControllerID = args?.FirstOrDefault(arg => arg.IsStartsWith("/controller-id:"))?.Replace("/controller-id:", "") ?? "Unknown",
 					InvokeInfo = invokeInfo,
 					Available = available,
 					Running = running
