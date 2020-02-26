@@ -18,22 +18,34 @@ namespace net.vieapps.Services
 	public static partial class Extensions
 	{
 
-		#region Get platform & environment info
+		#region Get information of os/platform/environment
 		/// <summary>
 		/// Gets the name of the runtime OS platform
 		/// </summary>
 		/// <returns></returns>
 		public static string GetRuntimeOS()
-			=> RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "macOS" : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "Linux" : "Windows";
+			=> RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
+				? "macOS"
+				: RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
+					? "Linux"
+					: "Windows";
 
 		/// <summary>
 		/// Gets the information of the runtime platform
 		/// </summary>
 		/// <returns></returns>
 		public static string GetRuntimePlatform(bool getFrameworkDescription = true)
-			=> (getFrameworkDescription ? $"{RuntimeInformation.FrameworkDescription} @ " : "")
+			=> (getFrameworkDescription ? $"{RuntimeInformation.FrameworkDescription.Trim()} @ " : "")
 				+ $"{Extensions.GetRuntimeOS()} {RuntimeInformation.OSArchitecture.ToString().ToLower()} "
 				+ $"({(RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "Macintosh; Intel Mac OS X; " : "")}{RuntimeInformation.OSDescription.Trim()})";
+
+		/// <summary>
+		/// Gets the runtime environment information
+		/// </summary>
+		/// <param name="seperator"></param>
+		/// <returns></returns>
+		public static string GetRuntimeEnvironment(string seperator = "\r\n\t")
+			=> $"- User: {Environment.UserName.ToLower()} @ {Environment.MachineName.ToLower()}{seperator ?? "\r\n\t"}- Platform: {Extensions.GetRuntimePlatform()}";
 		#endregion
 
 		#region Get unique name & end-point
