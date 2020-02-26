@@ -76,32 +76,32 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the real-time updater (RTU) service
 		/// </summary>
-		protected IRTUService RTUService { get; private set; }
+		protected virtual IRTUService RTUService { get; private set; }
 
 		/// <summary>
 		/// Gets the logging service
 		/// </summary>
-		protected ILoggingService LoggingService { get; private set; }
+		protected virtual ILoggingService LoggingService { get; private set; }
 
 		/// <summary>
 		/// Gets the messaging service
 		/// </summary>
-		protected IMessagingService MessagingService { get; private set; }
+		protected virtual IMessagingService MessagingService { get; private set; }
 
 		/// <summary>
 		/// Gets the cancellation token source
 		/// </summary>
-		internal protected CancellationTokenSource CancellationTokenSource { get; } = new CancellationTokenSource();
+		internal protected virtual CancellationTokenSource CancellationTokenSource { get; } = new CancellationTokenSource();
 
 		/// <summary>
 		/// Gets the collection of timers
 		/// </summary>
-		internal protected List<IDisposable> Timers { get; private set; } = new List<IDisposable>();
+		internal protected virtual List<IDisposable> Timers { get; private set; } = new List<IDisposable>();
 
 		/// <summary>
 		/// Gets the state of the service
 		/// </summary>
-		internal protected ServiceState State { get; private set; } = ServiceState.Initializing;
+		internal protected virtual ServiceState State { get; private set; } = ServiceState.Initializing;
 
 		/// <summary>
 		/// Gets the full URI of this service
@@ -124,7 +124,7 @@ namespace net.vieapps.Services
 		public static ServiceBase ServiceComponent { get; set; }
 		#endregion
 
-		#region Register the service
+		#region Register/Unregister the service
 		/// <summary>
 		/// Registers the service with API Gateway
 		/// </summary>
@@ -191,14 +191,47 @@ namespace net.vieapps.Services
 					this.Logger?.LogDebug($"The service was re-started successful - PID: {Process.GetCurrentProcess().Id} - URI: {this.ServiceURI}");
 
 				this.State = ServiceState.Connected;
-				if (onSuccessAsync != null)
-					await onSuccessAsync(this).ConfigureAwait(false);
+				await (onSuccessAsync != null ? onSuccessAsync(this) : Task.CompletedTask).ConfigureAwait(false);
 			}
 			catch (Exception ex)
 			{
 				this.Logger?.LogError($"Cannot{(this.State == ServiceState.Disconnected ? " re-" : " ")}register the service => {ex.Message}", ex);
-				if (onErrorAsync != null)
-					await onErrorAsync(ex).ConfigureAwait(false);
+				await (onErrorAsync != null ? onErrorAsync(ex) : Task.CompletedTask).ConfigureAwait(false);
+			}
+		}
+
+		/// <summary>
+		/// Stops the service (unregister/disconnect from API Gateway and do the clean-up tasks)
+		/// </summary>
+		/// <param name="args">The arguments</param>
+		/// <param name="available">true to mark the service still available</param>
+		protected virtual async Task UnregisterServiceAsync(string[] args, bool available = true)
+		{
+			// send information to API Gateway
+			try
+			{
+				await this.SendServiceInfoAsync(args, false, available).ConfigureAwait(false);
+			}
+			catch (Exception ex)
+			{
+				this.Logger?.LogError($"Error occurred while sending info to API Gateway => {ex.Message}", ex);
+			}
+
+			// dispose all instances
+			try
+			{
+				await Task.WhenAll(
+					(this.ServiceInstance != null ? this.ServiceInstance.DisposeAsync().AsTask() : Task.CompletedTask),
+					(this.ServiceUniqueInstance != null ? this.ServiceUniqueInstance.DisposeAsync().AsTask() : Task.CompletedTask)
+				).ConfigureAwait(false);
+			}
+			catch (Exception ex)
+			{
+				this.Logger?.LogError($"Error occurred while disposing the service instances => {ex.Message}", ex);
+			}
+			finally
+			{
+				this.ServiceInstance = null;
 			}
 		}
 
@@ -220,14 +253,12 @@ namespace net.vieapps.Services
 				this.LoggingService = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<ILoggingService>(ProxyInterceptor.Create());
 				this.Logger?.LogDebug($"The helper services are{(this.State == ServiceState.Disconnected ? " re-" : " ")}initialized");
 
-				if (onSuccessAsync != null)
-					await onSuccessAsync(this).ConfigureAwait(false);
+				await (onSuccessAsync != null ? onSuccessAsync(this) : Task.CompletedTask).ConfigureAwait(false);
 			}
 			catch (Exception ex)
 			{
 				this.Logger?.LogError($"Error occurred while{(this.State == ServiceState.Disconnected ? " re-" : " ")}initializing the helper services", ex);
-				if (onErrorAsync != null)
-					await onErrorAsync(ex).ConfigureAwait(false);
+				await (onErrorAsync != null ? onErrorAsync(ex) : Task.CompletedTask).ConfigureAwait(false);
 			}
 		}
 		#endregion
@@ -239,7 +270,7 @@ namespace net.vieapps.Services
 		/// <param name="message">The message</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task SendUpdateMessageAsync(UpdateMessage message, CancellationToken cancellationToken = default)
+		protected virtual Task SendUpdateMessageAsync(UpdateMessage message, CancellationToken cancellationToken = default)
 			=> this.RTUService.SendUpdateMessageAsync(message, cancellationToken);
 
 		/// <summary>
@@ -248,7 +279,7 @@ namespace net.vieapps.Services
 		/// <param name="messages">The messages</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task SendUpdateMessagesAsync(List<UpdateMessage> messages, CancellationToken cancellationToken = default)
+		protected virtual Task SendUpdateMessagesAsync(List<UpdateMessage> messages, CancellationToken cancellationToken = default)
 			=> messages.ForEachAsync((message, token) => this.RTUService.SendUpdateMessageAsync(message, token), cancellationToken);
 
 		/// <summary>
@@ -259,7 +290,7 @@ namespace net.vieapps.Services
 		/// <param name="excludedDeviceID">The string that presents identity of a device to be excluded</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task SendUpdateMessagesAsync(List<BaseMessage> messages, string deviceID, string excludedDeviceID = null, CancellationToken cancellationToken = default)
+		protected virtual Task SendUpdateMessagesAsync(List<BaseMessage> messages, string deviceID, string excludedDeviceID = null, CancellationToken cancellationToken = default)
 			=> this.RTUService.SendUpdateMessagesAsync(messages, deviceID, excludedDeviceID, cancellationToken);
 
 		/// <summary>
@@ -269,7 +300,7 @@ namespace net.vieapps.Services
 		/// <param name="message">The message</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task SendInterCommunicateMessageAsync(string serviceName, BaseMessage message, CancellationToken cancellationToken = default)
+		protected virtual Task SendInterCommunicateMessageAsync(string serviceName, BaseMessage message, CancellationToken cancellationToken = default)
 			=> this.RTUService.SendInterCommunicateMessageAsync(serviceName, message, cancellationToken);
 
 		/// <summary>
@@ -278,7 +309,7 @@ namespace net.vieapps.Services
 		/// <param name="message">The message</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task SendInterCommunicateMessageAsync(CommunicateMessage message, CancellationToken cancellationToken = default)
+		protected virtual Task SendInterCommunicateMessageAsync(CommunicateMessage message, CancellationToken cancellationToken = default)
 			=> this.RTUService.SendInterCommunicateMessageAsync(message, cancellationToken);
 
 		/// <summary>
@@ -288,7 +319,7 @@ namespace net.vieapps.Services
 		/// <param name="messages">The collection of messages</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task SendInterCommunicateMessagesAsync(string serviceName, List<BaseMessage> messages, CancellationToken cancellationToken = default)
+		protected virtual Task SendInterCommunicateMessagesAsync(string serviceName, List<BaseMessage> messages, CancellationToken cancellationToken = default)
 			=> this.RTUService.SendInterCommunicateMessagesAsync(serviceName, messages, cancellationToken);
 
 		/// <summary>
@@ -297,7 +328,7 @@ namespace net.vieapps.Services
 		/// <param name="messages">The collection of messages</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task SendInterCommunicateMessagesAsync(List<CommunicateMessage> messages, CancellationToken cancellationToken = default)
+		protected virtual Task SendInterCommunicateMessagesAsync(List<CommunicateMessage> messages, CancellationToken cancellationToken = default)
 			=> this.RTUService.SendInterCommunicateMessagesAsync(messages, cancellationToken);
 
 		/// <summary>
@@ -307,7 +338,7 @@ namespace net.vieapps.Services
 		/// <param name="running">The running state</param>
 		/// <param name="available">The available state</param>
 		/// <returns></returns>
-		protected Task SendServiceInfoAsync(string[] args, bool running, bool available = true)
+		protected virtual Task SendServiceInfoAsync(string[] args, bool running, bool available = true)
 		{
 			var arguments = (args ?? new string[] { }).Where(arg => !arg.IsStartsWith("/controller-id:")).ToArray();
 			var invokeInfo = arguments.FirstOrDefault(a => a.IsStartsWith("/call-user:")) ?? "";
@@ -347,7 +378,7 @@ namespace net.vieapps.Services
 		/// <param name="message">The email message for sending</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task SendEmailAsync(EmailMessage message, CancellationToken cancellationToken = default)
+		protected virtual Task SendEmailAsync(EmailMessage message, CancellationToken cancellationToken = default)
 			=> this.MessagingService.SendEmailAsync(message, cancellationToken);
 
 		/// <summary>
@@ -367,7 +398,7 @@ namespace net.vieapps.Services
 		/// <param name="smtpPassword"></param>
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		protected Task SendEmailAsync(string from, string replyTo, string to, string cc, string bcc, string subject, string body, string smtpServer, int smtpServerPort, bool smtpServerEnableSsl, string smtpUsername, string smtpPassword, CancellationToken cancellationToken = default)
+		protected virtual Task SendEmailAsync(string from, string replyTo, string to, string cc, string bcc, string subject, string body, string smtpServer, int smtpServerPort, bool smtpServerEnableSsl, string smtpUsername, string smtpPassword, CancellationToken cancellationToken = default)
 			=> this.SendEmailAsync(new EmailMessage
 			{
 				From = from,
@@ -398,7 +429,7 @@ namespace net.vieapps.Services
 		/// <param name="smtpPassword"></param>
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		protected Task SendEmailAsync(string from, string to, string subject, string body, string smtpServer, int smtpServerPort, bool smtpServerEnableSsl, string smtpUsername, string smtpPassword, CancellationToken cancellationToken = default)
+		protected virtual Task SendEmailAsync(string from, string to, string subject, string body, string smtpServer, int smtpServerPort, bool smtpServerEnableSsl, string smtpUsername, string smtpPassword, CancellationToken cancellationToken = default)
 			=> this.SendEmailAsync(from, null, to, null, null, subject, body, smtpServer, smtpServerPort, smtpServerEnableSsl, smtpUsername, smtpPassword, cancellationToken);
 
 		/// <summary>
@@ -409,7 +440,7 @@ namespace net.vieapps.Services
 		/// <param name="body"></param>
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		protected Task SendEmailAsync(string to, string subject, string body, CancellationToken cancellationToken = default)
+		protected virtual Task SendEmailAsync(string to, string subject, string body, CancellationToken cancellationToken = default)
 			=> this.SendEmailAsync(null, to, subject, body, null, 0, false, null, null, cancellationToken);
 
 		/// <summary>
@@ -418,7 +449,7 @@ namespace net.vieapps.Services
 		/// <param name="message"></param>
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		protected Task SendWebHookAsync(WebHookMessage message, CancellationToken cancellationToken = default)
+		protected virtual Task SendWebHookAsync(WebHookMessage message, CancellationToken cancellationToken = default)
 			=> this.MessagingService.SendWebHookAsync(message, cancellationToken);
 
 		#endregion
@@ -475,7 +506,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
-		protected async Task WriteLogsAsync(string correlationID, string developerID, string appID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+		protected virtual async Task WriteLogsAsync(string correlationID, string developerID, string appID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
 		{
 			// prepare
 			correlationID = correlationID ?? UtilityService.NewUUID;
@@ -529,7 +560,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
-		protected Task WriteLogsAsync(string correlationID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+		protected virtual Task WriteLogsAsync(string correlationID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
 			=> this.WriteLogsAsync(correlationID, null, null, logger, logs, exception, serviceName, objectName, mode);
 
 		/// <summary>
@@ -545,7 +576,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
-		protected Task WriteLogsAsync(string correlationID, string developerID, string appID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+		protected virtual Task WriteLogsAsync(string correlationID, string developerID, string appID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
 			=> this.WriteLogsAsync(correlationID, developerID, appID, logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode);
 
 		/// <summary>
@@ -559,7 +590,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
-		protected Task WriteLogsAsync(string correlationID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+		protected virtual Task WriteLogsAsync(string correlationID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
 			=> this.WriteLogsAsync(correlationID, null, null, logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode);
 
 		/// <summary>
@@ -574,7 +605,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
-		protected Task WriteLogsAsync(string correlationID, string developerID, string appID, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+		protected virtual Task WriteLogsAsync(string correlationID, string developerID, string appID, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
 			=> this.WriteLogsAsync(correlationID, developerID, appID, this.Logger, logs, exception, serviceName, objectName, mode);
 
 		/// <summary>
@@ -587,7 +618,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
-		protected Task WriteLogsAsync(string correlationID, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+		protected virtual Task WriteLogsAsync(string correlationID, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
 			=> this.WriteLogsAsync(correlationID, null, null, this.Logger, logs, exception, serviceName, objectName, mode);
 
 		/// <summary>
@@ -602,7 +633,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
-		protected Task WriteLogsAsync(string correlationID, string developerID, string appID, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+		protected virtual Task WriteLogsAsync(string correlationID, string developerID, string appID, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
 			=> this.WriteLogsAsync(correlationID, developerID, appID, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode);
 
 		/// <summary>
@@ -615,7 +646,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
-		protected Task WriteLogsAsync(string correlationID, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+		protected virtual Task WriteLogsAsync(string correlationID, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
 			=> this.WriteLogsAsync(correlationID, null, null, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode);
 
 		/// <summary>
@@ -626,7 +657,7 @@ namespace net.vieapps.Services
 		/// <param name="exception">The exception</param>
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
-		protected Task WriteLogsAsync(RequestInfo requestInfo, List<string> logs, Exception exception = null, LogLevel mode = LogLevel.Information)
+		protected virtual Task WriteLogsAsync(RequestInfo requestInfo, List<string> logs, Exception exception = null, LogLevel mode = LogLevel.Information)
 			=> this.WriteLogsAsync(requestInfo.CorrelationID, requestInfo.Session?.DeveloperID, requestInfo.Session?.AppID, this.Logger, logs, exception, requestInfo.ServiceName, requestInfo.ObjectName, mode);
 
 		/// <summary>
@@ -637,7 +668,7 @@ namespace net.vieapps.Services
 		/// <param name="exception">The exception</param>
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
-		protected Task WriteLogsAsync(RequestInfo requestInfo, string log, Exception exception = null, LogLevel mode = LogLevel.Information)
+		protected virtual Task WriteLogsAsync(RequestInfo requestInfo, string log, Exception exception = null, LogLevel mode = LogLevel.Information)
 			=> this.WriteLogsAsync(requestInfo.CorrelationID, requestInfo.Session?.DeveloperID, requestInfo.Session?.AppID, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, requestInfo.ServiceName, requestInfo.ObjectName, mode);
 
 		/// <summary>
@@ -652,7 +683,7 @@ namespace net.vieapps.Services
 		/// <param name="serviceName">The name of service</param>
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
-		protected void WriteLogs(string correlationID, string developerID, string appID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+		protected virtual void WriteLogs(string correlationID, string developerID, string appID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
 			=> Task.Run(() => this.WriteLogsAsync(correlationID, developerID, appID, logger, logs, exception, serviceName, objectName, mode)).ConfigureAwait(false);
 
 		/// <summary>
@@ -665,7 +696,7 @@ namespace net.vieapps.Services
 		/// <param name="serviceName">The name of service</param>
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
-		protected void WriteLogs(string correlationID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+		protected virtual void WriteLogs(string correlationID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
 			=> Task.Run(() => this.WriteLogsAsync(correlationID, null, null, logger, logs, exception, serviceName, objectName, mode)).ConfigureAwait(false);
 
 		/// <summary>
@@ -680,7 +711,7 @@ namespace net.vieapps.Services
 		/// <param name="serviceName">The name of service</param>
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
-		protected void WriteLogs(string correlationID, string developerID, string appID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+		protected virtual void WriteLogs(string correlationID, string developerID, string appID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
 			=> Task.Run(() => this.WriteLogsAsync(correlationID, developerID, appID, logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode)).ConfigureAwait(false);
 
 		/// <summary>
@@ -693,7 +724,7 @@ namespace net.vieapps.Services
 		/// <param name="serviceName">The name of service</param>
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
-		protected void WriteLogs(string correlationID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+		protected virtual void WriteLogs(string correlationID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
 			=> Task.Run(() => this.WriteLogsAsync(correlationID, null, null, logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode)).ConfigureAwait(false);
 
 		/// <summary>
@@ -707,7 +738,7 @@ namespace net.vieapps.Services
 		/// <param name="serviceName">The name of service</param>
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
-		protected void WriteLogs(string correlationID, string developerID, string appID, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+		protected virtual void WriteLogs(string correlationID, string developerID, string appID, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
 			=> Task.Run(() => this.WriteLogsAsync(correlationID, developerID, appID, this.Logger, logs, exception, serviceName, objectName, mode)).ConfigureAwait(false);
 
 		/// <summary>
@@ -719,7 +750,7 @@ namespace net.vieapps.Services
 		/// <param name="serviceName">The name of service</param>
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
-		protected void WriteLogs(string correlationID, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+		protected virtual void WriteLogs(string correlationID, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
 			=> Task.Run(() => this.WriteLogsAsync(correlationID, null, null, this.Logger, logs, exception, serviceName, objectName, mode)).ConfigureAwait(false);
 
 		/// <summary>
@@ -733,7 +764,7 @@ namespace net.vieapps.Services
 		/// <param name="serviceName">The name of service</param>
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
-		protected void WriteLogs(string correlationID, string developerID, string appID, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+		protected virtual void WriteLogs(string correlationID, string developerID, string appID, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
 			=> Task.Run(() => this.WriteLogsAsync(correlationID, developerID, appID, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode)).ConfigureAwait(false);
 
 		/// <summary>
@@ -745,7 +776,7 @@ namespace net.vieapps.Services
 		/// <param name="serviceName">The name of service</param>
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
-		protected void WriteLogs(string correlationID, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+		protected virtual void WriteLogs(string correlationID, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
 			=> Task.Run(() => this.WriteLogsAsync(correlationID, null, null, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode)).ConfigureAwait(false);
 
 		/// <summary>
@@ -756,7 +787,7 @@ namespace net.vieapps.Services
 		/// <param name="exception">The exception</param>
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
-		protected void WriteLogs(RequestInfo requestInfo, List<string> logs, Exception exception = null, LogLevel mode = LogLevel.Information)
+		protected virtual void WriteLogs(RequestInfo requestInfo, List<string> logs, Exception exception = null, LogLevel mode = LogLevel.Information)
 			=> Task.Run(() => this.WriteLogsAsync(requestInfo.CorrelationID, requestInfo.Session?.DeveloperID, requestInfo.Session?.AppID, this.Logger, logs, exception, requestInfo.ServiceName, requestInfo.ObjectName, mode)).ConfigureAwait(false);
 
 		/// <summary>
@@ -767,7 +798,7 @@ namespace net.vieapps.Services
 		/// <param name="exception">The exception</param>
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
-		protected void WriteLogs(RequestInfo requestInfo, string log, Exception exception = null, LogLevel mode = LogLevel.Information)
+		protected virtual void WriteLogs(RequestInfo requestInfo, string log, Exception exception = null, LogLevel mode = LogLevel.Information)
 			=> Task.Run(() => this.WriteLogsAsync(requestInfo.CorrelationID, requestInfo.Session?.DeveloperID, requestInfo.Session?.AppID, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, requestInfo.ServiceName, requestInfo.ObjectName, mode)).ConfigureAwait(false);
 		#endregion
 
@@ -781,7 +812,7 @@ namespace net.vieapps.Services
 		/// <param name="onSuccess">The action to run when success</param>
 		/// <param name="onError">The action to run when got an error</param>
 		/// <returns>A <see cref="JObject">JSON</see> object that presents the results of the business service</returns>
-		protected async Task<JToken> CallServiceAsync(
+		protected virtual async Task<JToken> CallServiceAsync(
 			RequestInfo requestInfo,
 			CancellationToken cancellationToken = default,
 			Action<RequestInfo> onStart = null,
@@ -851,7 +882,7 @@ namespace net.vieapps.Services
 		/// <param name="userID"></param>
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		protected async Task<List<Tuple<string, string, string, bool>>> GetSessionsAsync(RequestInfo requestInfo, string userID = null, CancellationToken cancellationToken = default)
+		protected virtual async Task<List<Tuple<string, string, string, bool>>> GetSessionsAsync(RequestInfo requestInfo, string userID = null, CancellationToken cancellationToken = default)
 		{
 			var result = await this.CallServiceAsync(new RequestInfo(requestInfo.Session, "Users", "Account", "HEAD")
 			{
@@ -869,12 +900,12 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the key for encrypting/decrypting data with AES
 		/// </summary>
-		protected string EncryptionKey => this.GetKey("Encryption", "VIEApps-59EF0859-NGX-BC1A-Services-4088-Encryption-9743-Key-51663AB720EF");
+		protected virtual string EncryptionKey => this.GetKey("Encryption", "VIEApps-59EF0859-NGX-BC1A-Services-4088-Encryption-9743-Key-51663AB720EF");
 
 		/// <summary>
 		/// Gets the key for validating data
 		/// </summary>
-		protected string ValidationKey => this.GetKey("Validation", "VIEApps-D6C8C563-NGX-26CC-Services-43AC-Validation-9040-Key-E803AF0F36E4");
+		protected virtual string ValidationKey => this.GetKey("Validation", "VIEApps-D6C8C563-NGX-26CC-Services-43AC-Validation-9040-Key-E803AF0F36E4");
 
 		/// <summary>
 		/// Gets a key from app settings
@@ -882,7 +913,7 @@ namespace net.vieapps.Services
 		/// <param name="name"></param>
 		/// <param name="defaultKey"></param>
 		/// <returns></returns>
-		protected string GetKey(string name, string defaultKey)
+		protected virtual string GetKey(string name, string defaultKey)
 			=> UtilityService.GetAppSetting("Keys:" + name, defaultKey);
 
 		/// <summary>
@@ -891,7 +922,7 @@ namespace net.vieapps.Services
 		/// <param name="name"></param>
 		/// <param name="defaultURI"></param>
 		/// <returns></returns>
-		protected string GetHttpURI(string name, string defaultURI)
+		protected virtual string GetHttpURI(string name, string defaultURI)
 			=> UtilityService.GetAppSetting($"HttpUri:{name}", defaultURI);
 
 		/// <summary>
@@ -900,7 +931,7 @@ namespace net.vieapps.Services
 		/// <param name="name"></param>
 		/// <param name="defaultPath"></param>
 		/// <returns></returns>
-		protected string GetPath(string name, string defaultPath = null)
+		protected virtual string GetPath(string name, string defaultPath = null)
 			=> UtilityService.GetAppSetting($"Path:{name}", defaultPath);
 		#endregion
 
@@ -910,7 +941,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="session">The session that contains user information</param>
 		/// <returns></returns>
-		protected bool IsAuthenticated(Session session)
+		protected virtual bool IsAuthenticated(Session session)
 			=> session != null && session.User != null && session.User.IsAuthenticated;
 
 		/// <summary>
@@ -918,7 +949,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="requestInfo">The requesting information that contains user information</param>
 		/// <returns></returns>
-		protected bool IsAuthenticated(RequestInfo requestInfo)
+		protected virtual bool IsAuthenticated(RequestInfo requestInfo)
 			=> this.IsAuthenticated(requestInfo?.Session);
 		#endregion
 
@@ -959,7 +990,7 @@ namespace net.vieapps.Services
 		/// <param name="objectID"></param>
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		protected async Task<IBusinessEntity> GetBusinessObjectAsync(string definitionID, string objectID, CancellationToken cancellationToken = default)
+		protected virtual async Task<IBusinessEntity> GetBusinessObjectAsync(string definitionID, string objectID, CancellationToken cancellationToken = default)
 		{
 			var @object = !string.IsNullOrWhiteSpace(definitionID) && definitionID.IsValidUUID() && !string.IsNullOrWhiteSpace(objectID) && objectID.IsValidUUID()
 				? await RepositoryMediator.GetAsync(definitionID, objectID, cancellationToken).ConfigureAwait(false)
@@ -978,7 +1009,7 @@ namespace net.vieapps.Services
 		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected async Task<bool> IsSystemAdministratorAsync(IUser user, string correlationID = null, CancellationToken cancellationToken = default)
+		protected virtual async Task<bool> IsSystemAdministratorAsync(IUser user, string correlationID = null, CancellationToken cancellationToken = default)
 		{
 			if (user != null && user.IsAuthenticated)
 			{
@@ -1018,7 +1049,7 @@ namespace net.vieapps.Services
 		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task<bool> IsSystemAdministratorAsync(Session session, string correlationID = null, CancellationToken cancellationToken = default)
+		protected virtual Task<bool> IsSystemAdministratorAsync(Session session, string correlationID = null, CancellationToken cancellationToken = default)
 			=> this.IsSystemAdministratorAsync(session?.User, correlationID, cancellationToken);
 
 		/// <summary>
@@ -1027,7 +1058,7 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo">The requesting information that contains user information</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task<bool> IsSystemAdministratorAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
+		protected virtual Task<bool> IsSystemAdministratorAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
 			=> this.IsSystemAdministratorAsync(requestInfo?.Session, requestInfo?.CorrelationID, cancellationToken);
 
 		/// <summary>
@@ -1040,7 +1071,7 @@ namespace net.vieapps.Services
 		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected async Task<bool> IsAdministratorAsync(IUser user, string objectName, string definitionID, string objectID, string correlationID = null, CancellationToken cancellationToken = default)
+		protected virtual async Task<bool> IsAdministratorAsync(IUser user, string objectName, string definitionID, string objectID, string correlationID = null, CancellationToken cancellationToken = default)
 		{
 			correlationID = correlationID ?? UtilityService.NewUUID;
 			Privileges privileges = null;
@@ -1068,7 +1099,7 @@ namespace net.vieapps.Services
 		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task<bool> IsAdministratorAsync(IUser user, string objectName = null, string correlationID = null, CancellationToken cancellationToken = default)
+		protected virtual Task<bool> IsAdministratorAsync(IUser user, string objectName = null, string correlationID = null, CancellationToken cancellationToken = default)
 			=> this.IsAdministratorAsync(user, objectName, null, null, correlationID, cancellationToken);
 
 		/// <summary>
@@ -1078,7 +1109,7 @@ namespace net.vieapps.Services
 		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task<bool> IsServiceAdministratorAsync(Session session, string correlationID = null, CancellationToken cancellationToken = default)
+		protected virtual Task<bool> IsServiceAdministratorAsync(Session session, string correlationID = null, CancellationToken cancellationToken = default)
 			=> this.IsAdministratorAsync(session?.User, null, correlationID, cancellationToken);
 
 		/// <summary>
@@ -1087,7 +1118,7 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo">The requesting information that contains user information and related service</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task<bool> IsServiceAdministratorAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
+		protected virtual Task<bool> IsServiceAdministratorAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
 			=> this.IsServiceAdministratorAsync(requestInfo?.Session, requestInfo?.CorrelationID, cancellationToken);
 
 		/// <summary>
@@ -1100,7 +1131,7 @@ namespace net.vieapps.Services
 		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected async Task<bool> IsModeratorAsync(IUser user, string objectName, string definitionID, string objectID, string correlationID = null, CancellationToken cancellationToken = default)
+		protected virtual async Task<bool> IsModeratorAsync(IUser user, string objectName, string definitionID, string objectID, string correlationID = null, CancellationToken cancellationToken = default)
 		{
 			correlationID = correlationID ?? UtilityService.NewUUID;
 			Privileges privileges = null;
@@ -1132,7 +1163,7 @@ namespace net.vieapps.Services
 		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task<bool> IsModeratorAsync(IUser user, string objectName = null, string correlationID = null, CancellationToken cancellationToken = default)
+		protected virtual Task<bool> IsModeratorAsync(IUser user, string objectName = null, string correlationID = null, CancellationToken cancellationToken = default)
 			=> this.IsModeratorAsync(user, objectName, null, null, correlationID, cancellationToken);
 
 		/// <summary>
@@ -1142,7 +1173,7 @@ namespace net.vieapps.Services
 		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task<bool> IsServiceModeratorAsync(IUser user, string correlationID = null, CancellationToken cancellationToken = default)
+		protected virtual Task<bool> IsServiceModeratorAsync(IUser user, string correlationID = null, CancellationToken cancellationToken = default)
 			=> this.IsModeratorAsync(user, null, correlationID, cancellationToken);
 
 		/// <summary>
@@ -1152,7 +1183,7 @@ namespace net.vieapps.Services
 		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task<bool> IsServiceModeratorAsync(Session session, string correlationID = null, CancellationToken cancellationToken = default)
+		protected virtual Task<bool> IsServiceModeratorAsync(Session session, string correlationID = null, CancellationToken cancellationToken = default)
 			=> this.IsServiceModeratorAsync(session?.User, correlationID, cancellationToken);
 
 		/// <summary>
@@ -1161,7 +1192,7 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo">The requesting information that contains user information and related service</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task<bool> IsServiceModeratorAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
+		protected virtual Task<bool> IsServiceModeratorAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
 			=> this.IsServiceModeratorAsync(requestInfo?.Session, requestInfo?.CorrelationID, cancellationToken);
 
 		/// <summary>
@@ -1174,7 +1205,7 @@ namespace net.vieapps.Services
 		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected async Task<bool> IsEditorAsync(IUser user, string objectName, string definitionID, string objectID, string correlationID = null, CancellationToken cancellationToken = default)
+		protected virtual async Task<bool> IsEditorAsync(IUser user, string objectName, string definitionID, string objectID, string correlationID = null, CancellationToken cancellationToken = default)
 		{
 			correlationID = correlationID ?? UtilityService.NewUUID;
 			Privileges privileges = null;
@@ -1206,7 +1237,7 @@ namespace net.vieapps.Services
 		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task<bool> IsEditorAsync(IUser user, string objectName = null, string correlationID = null, CancellationToken cancellationToken = default)
+		protected virtual Task<bool> IsEditorAsync(IUser user, string objectName = null, string correlationID = null, CancellationToken cancellationToken = default)
 			=> this.IsEditorAsync(user, objectName, null, null, correlationID, cancellationToken);
 
 		/// <summary>
@@ -1219,7 +1250,7 @@ namespace net.vieapps.Services
 		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected async Task<bool> IsContributorAsync(IUser user, string objectName, string definitionID, string objectID, string correlationID = null, CancellationToken cancellationToken = default)
+		protected virtual async Task<bool> IsContributorAsync(IUser user, string objectName, string definitionID, string objectID, string correlationID = null, CancellationToken cancellationToken = default)
 		{
 			correlationID = correlationID ?? UtilityService.NewUUID;
 			Privileges privileges = null;
@@ -1251,7 +1282,7 @@ namespace net.vieapps.Services
 		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task<bool> IsContributorAsync(IUser user, string objectName = null, string correlationID = null, CancellationToken cancellationToken = default)
+		protected virtual Task<bool> IsContributorAsync(IUser user, string objectName = null, string correlationID = null, CancellationToken cancellationToken = default)
 			=> this.IsContributorAsync(user, objectName, null, null, correlationID, cancellationToken);
 
 		/// <summary>
@@ -1264,7 +1295,7 @@ namespace net.vieapps.Services
 		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected async Task<bool> IsViewerAsync(IUser user, string objectName, string definitionID, string objectID, string correlationID = null, CancellationToken cancellationToken = default)
+		protected virtual async Task<bool> IsViewerAsync(IUser user, string objectName, string definitionID, string objectID, string correlationID = null, CancellationToken cancellationToken = default)
 		{
 			correlationID = correlationID ?? UtilityService.NewUUID;
 			Privileges privileges = null;
@@ -1296,7 +1327,7 @@ namespace net.vieapps.Services
 		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task<bool> IsViewerAsync(IUser user, string objectName = null, string correlationID = null, CancellationToken cancellationToken = default)
+		protected virtual Task<bool> IsViewerAsync(IUser user, string objectName = null, string correlationID = null, CancellationToken cancellationToken = default)
 			=> this.IsViewerAsync(user, objectName, null, null, correlationID, cancellationToken);
 
 		/// <summary>
@@ -1309,7 +1340,7 @@ namespace net.vieapps.Services
 		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected async Task<bool> IsDownloaderAsync(IUser user, string objectName, string definitionID, string objectID, string correlationID = null, CancellationToken cancellationToken = default)
+		protected virtual async Task<bool> IsDownloaderAsync(IUser user, string objectName, string definitionID, string objectID, string correlationID = null, CancellationToken cancellationToken = default)
 		{
 			correlationID = correlationID ?? UtilityService.NewUUID;
 			Privileges privileges = null;
@@ -1341,7 +1372,7 @@ namespace net.vieapps.Services
 		/// <param name="correlationID">The identity for tracking the correlation</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected Task<bool> IsDownloaderAsync(IUser user, string objectName = null, string correlationID = null, CancellationToken cancellationToken = default)
+		protected virtual Task<bool> IsDownloaderAsync(IUser user, string objectName = null, string correlationID = null, CancellationToken cancellationToken = default)
 			=> this.IsDownloaderAsync(user, objectName, null, null, correlationID, cancellationToken);
 		#endregion
 
@@ -1691,7 +1722,7 @@ namespace net.vieapps.Services
 		/// <param name="interval">The elapsed time for firing the action (seconds)</param>
 		/// <param name="delay">Delay time (miliseconds) before firing the action</param>
 		/// <returns></returns>
-		protected IDisposable StartTimer(System.Action action, int interval, int delay = 0)
+		protected virtual IDisposable StartTimer(System.Action action, int interval, int delay = 0)
 		{
 			interval = interval < 1 ? 1 : interval;
 			var timer = Observable.Timer(TimeSpan.FromMilliseconds(delay > 0 ? delay : interval * 1000), TimeSpan.FromSeconds(interval)).Subscribe(_ =>
@@ -1712,7 +1743,7 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Stops all timers
 		/// </summary>
-		protected void StopTimers()
+		protected virtual void StopTimers()
 			=> this.Timers.ForEach(timer => timer.Dispose());
 		#endregion
 
@@ -1725,7 +1756,7 @@ namespace net.vieapps.Services
 		/// <param name="sort">The sorting expression</param>
 		/// <param name="pageNumber">The page number</param>
 		/// <returns></returns>
-		protected string GetCacheKey<T>(IFilterBy<T> filter, SortBy<T> sort, int pageNumber = 0) where T : class
+		protected virtual string GetCacheKey<T>(IFilterBy<T> filter, SortBy<T> sort, int pageNumber = 0) where T : class
 			=> typeof(T).GetTypeName(true) + "#"
 				+ (filter != null ? $"{filter.GetUUID()}:" : "")
 				+ (sort != null ? $"{sort.GetUUID()}:" : "")
@@ -1751,7 +1782,7 @@ namespace net.vieapps.Services
 		/// <param name="cache">The caching storage</param>
 		/// <param name="filter">The filtering expression</param>
 		/// <param name="sort">The sorting expression</param>
-		protected void ClearRelatedCache<T>(ICache cache, IFilterBy<T> filter, SortBy<T> sort) where T : class
+		protected virtual void ClearRelatedCache<T>(ICache cache, IFilterBy<T> filter, SortBy<T> sort) where T : class
 			=> cache?.Remove(this.GetRelatedCacheKeys(filter, sort));
 
 		/// <summary>
@@ -1761,7 +1792,7 @@ namespace net.vieapps.Services
 		/// <param name="cache">The caching storage</param>
 		/// <param name="filter">The filtering expression</param>
 		/// <param name="sort">The sorting expression</param>
-		protected Task ClearRelatedCacheAsync<T>(ICache cache, IFilterBy<T> filter, SortBy<T> sort) where T : class
+		protected virtual Task ClearRelatedCacheAsync<T>(ICache cache, IFilterBy<T> filter, SortBy<T> sort) where T : class
 			=> cache != null
 				? cache.RemoveAsync(this.GetRelatedCacheKeys(filter, sort))
 				: Task.CompletedTask;
@@ -1834,7 +1865,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
 		/// <returns></returns>
-		protected JToken GenerateFormControls<T>() where T : class
+		protected virtual JToken GenerateFormControls<T>() where T : class
 			=> RepositoryMediator.GenerateFormControls<T>();
 
 		/// <summary>
@@ -1842,7 +1873,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
 		/// <returns></returns>
-		protected JToken GenerateViewControls<T>() where T : class
+		protected virtual JToken GenerateViewControls<T>() where T : class
 			=> RepositoryMediator.GenerateFormControls<T>();
 		#endregion
 
@@ -1854,7 +1885,7 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo">The object that presents the information - '__requestInfo' global variable</param>
 		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <returns></returns>
-		protected IDictionary<string, object> GetJsEmbedObjects(object current, RequestInfo requestInfo, IDictionary<string, object> embedObjects = null)
+		protected virtual IDictionary<string, object> GetJsEmbedObjects(object current, RequestInfo requestInfo, IDictionary<string, object> embedObjects = null)
 			=> Extensions.GetJsEmbedObjects(current, requestInfo, embedObjects);
 
 		/// <summary>
@@ -1862,7 +1893,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
 		/// <returns></returns>
-		protected IDictionary<string, Type> GetJsEmbedTypes(IDictionary<string, Type> embedTypes = null)
+		protected virtual IDictionary<string, Type> GetJsEmbedTypes(IDictionary<string, Type> embedTypes = null)
 			=> Extensions.GetJsEmbedTypes(embedTypes);
 
 		/// <summary>
@@ -1873,7 +1904,7 @@ namespace net.vieapps.Services
 		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
 		/// <returns></returns>
-		protected JavaScriptEngineSwitcher.Core.IJsEngine CreateJsEngine(object current, RequestInfo requestInfo, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
+		protected virtual JavaScriptEngineSwitcher.Core.IJsEngine CreateJsEngine(object current, RequestInfo requestInfo, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 			=> Extensions.CreateJsEngine(this.GetJsEmbedObjects(current, requestInfo, embedObjects), this.GetJsEmbedTypes(embedTypes));
 
 		/// <summary>
@@ -1884,7 +1915,7 @@ namespace net.vieapps.Services
 		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
 		/// <returns></returns>
-		protected JSPool.PooledJsEngine GetJsEngine(object current, RequestInfo requestInfo, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
+		protected virtual JSPool.PooledJsEngine GetJsEngine(object current, RequestInfo requestInfo, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 			=> Extensions.GetJsEngine(this.GetJsEmbedObjects(current, requestInfo, embedObjects), this.GetJsEmbedTypes(embedTypes));
 
 		/// <summary>
@@ -1894,7 +1925,7 @@ namespace net.vieapps.Services
 		/// <param name="current">The object that presents information of current processing object - '__current' global variable and 'this' instance is bond to JSON stringify</param>
 		/// <param name="requestInfo">The object that presents the information - '__requestInfoJSON' global variable</param>
 		/// <returns></returns>
-		protected string GetJsExpression(string expression, object current, RequestInfo requestInfo)
+		protected virtual string GetJsExpression(string expression, object current, RequestInfo requestInfo)
 			=> Extensions.GetJsExpression(expression, current, requestInfo);
 
 		/// <summary>
@@ -1906,7 +1937,7 @@ namespace net.vieapps.Services
 		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
 		/// <returns>The object the presents the value that evaluated by the expression</returns>
-		protected object JsEvaluate(string expression, object current = null, RequestInfo requestInfo = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
+		protected virtual object JsEvaluate(string expression, object current = null, RequestInfo requestInfo = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 		{
 			using (var jsEngine = this.GetJsEngine(current, requestInfo, embedObjects, embedTypes))
 			{
@@ -1925,7 +1956,7 @@ namespace net.vieapps.Services
 		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
 		/// <returns>The object the presents the value that evaluated by the expression</returns>
-		protected T JsEvaluate<T>(string expression, object current = null, RequestInfo requestInfo = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
+		protected virtual T JsEvaluate<T>(string expression, object current = null, RequestInfo requestInfo = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 			=> Extensions.JsCast<T>(this.JsEvaluate(expression, current, requestInfo, embedObjects, embedTypes));
 
 		/// <summary>
@@ -1937,7 +1968,7 @@ namespace net.vieapps.Services
 		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
 		/// <returns>The collection of value that evaluated by the expressions</returns>
-		protected IEnumerable<object> JsEvaluate(IEnumerable<string> expressions, object current = null, RequestInfo requestInfo = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
+		protected virtual IEnumerable<object> JsEvaluate(IEnumerable<string> expressions, object current = null, RequestInfo requestInfo = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 		{
 			using (var jsEngine = this.GetJsEngine(current, requestInfo, embedObjects, embedTypes))
 			{
@@ -1972,7 +2003,7 @@ namespace net.vieapps.Services
 			=> Task.Run(() => this.Logger?.LogInformation($"Attempting to connect to API Gateway Router [{new Uri(Router.GetRouterStrInfo()).GetResolvedURI()}]")).ContinueWith(async _ => await Router.ConnectAsync(
 				async (sender, arguments) =>
 				{
-					await Router.IncomingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Incoming ({this.ServiceURI})").ConfigureAwait(false);
+					Router.IncomingChannel.Update(arguments.SessionId, this.ServiceName, $"Incoming ({this.ServiceURI})");
 					this.Logger?.LogInformation($"The incoming channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
 					if (this.State == ServiceState.Initializing)
 						this.State = ServiceState.Ready;
@@ -2025,7 +2056,7 @@ namespace net.vieapps.Services
 				},
 				async (sender, arguments) =>
 				{
-					await Router.OutgoingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Outgoing ({this.ServiceURI})").ConfigureAwait(false);
+					Router.OutgoingChannel.Update(arguments.SessionId, this.ServiceName, $"Outgoing ({this.ServiceURI})");
 					this.Logger?.LogInformation($"The outgoing channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
 
 					await this.InitializeHelperServicesAsync().ConfigureAwait(false);
@@ -2156,7 +2187,7 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the stopped state of the service
 		/// </summary>
-		protected bool Stopped { get; private set; } = false;
+		protected virtual bool Stopped { get; private set; } = false;
 
 		/// <summary>
 		/// Stops the service (unregister/disconnect from API Gateway and do the clean-up tasks)
@@ -2174,44 +2205,8 @@ namespace net.vieapps.Services
 			// assign the flag
 			this.Stopped = true;
 
-			// send information to API Gateway
-			try
-			{
-				await this.SendServiceInfoAsync(args, false, available).ConfigureAwait(false);
-			}
-			catch (Exception ex)
-			{
-				this.Logger?.LogError($"Error occurred while sending info to API Gateway => {ex.Message}", ex);
-			}
-
-			// dispose all instances
-			if (this.ServiceInstance != null)
-				try
-				{
-					await this.ServiceInstance.DisposeAsync().ConfigureAwait(false);
-				}
-				catch (Exception ex)
-				{
-					this.Logger?.LogError($"Error occurred while disposing the service instance => {ex.Message}", ex);
-				}
-				finally
-				{
-					this.ServiceInstance = null;
-				}
-
-			if (this.ServiceUniqueInstance != null)
-				try
-				{
-					await this.ServiceUniqueInstance.DisposeAsync().ConfigureAwait(false);
-				}
-				catch (Exception ex)
-				{
-					this.Logger?.LogError($"Error occurred while disposing the unique service instance => {ex.Message}", ex);
-				}
-				finally
-				{
-					this.ServiceUniqueInstance = null;
-				}
+			// unregister the services
+			await this.UnregisterServiceAsync(args, available).ConfigureAwait(false);
 
 			// clean-up
 			this.StopTimers();
@@ -2252,7 +2247,7 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the disposed state of the service
 		/// </summary>
-		protected bool Disposed { get; private set; } = false;
+		protected virtual bool Disposed { get; private set; } = false;
 
 		/// <summary>
 		/// Disposes the service
