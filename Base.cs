@@ -76,32 +76,32 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the real-time updater (RTU) service
 		/// </summary>
-		protected virtual IRTUService RTUService { get; private set; }
+		protected IRTUService RTUService { get; private set; }
 
 		/// <summary>
 		/// Gets the logging service
 		/// </summary>
-		protected virtual ILoggingService LoggingService { get; private set; }
+		protected ILoggingService LoggingService { get; private set; }
 
 		/// <summary>
 		/// Gets the messaging service
 		/// </summary>
-		protected virtual IMessagingService MessagingService { get; private set; }
+		protected IMessagingService MessagingService { get; private set; }
 
 		/// <summary>
 		/// Gets the cancellation token source
 		/// </summary>
-		internal protected virtual CancellationTokenSource CancellationTokenSource { get; } = new CancellationTokenSource();
+		internal protected CancellationTokenSource CancellationTokenSource { get; } = new CancellationTokenSource();
 
 		/// <summary>
 		/// Gets the collection of timers
 		/// </summary>
-		internal protected virtual List<IDisposable> Timers { get; private set; } = new List<IDisposable>();
+		internal protected List<IDisposable> Timers { get; private set; } = new List<IDisposable>();
 
 		/// <summary>
 		/// Gets the state of the service
 		/// </summary>
-		internal protected virtual ServiceState State { get; private set; } = ServiceState.Initializing;
+		internal protected ServiceState State { get; private set; } = ServiceState.Initializing;
 
 		/// <summary>
 		/// Gets the full URI of this service
@@ -2000,7 +2000,11 @@ namespace net.vieapps.Services
 			Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null,
 			Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null
 		)
-			=> Task.Run(() => this.Logger?.LogInformation($"Attempting to connect to API Gateway Router [{new Uri(Router.GetRouterStrInfo()).GetResolvedURI()}]")).ContinueWith(async _ => await Router.ConnectAsync(
+			=> Task.Run(() =>
+			{
+				this.Logger?.LogInformation($"Attempting to connect to API Gateway Router [{new Uri(Router.GetRouterStrInfo()).GetResolvedURI()}]");
+			})
+			.ContinueWith(async _ => await Router.ConnectAsync(
 				async (sender, arguments) =>
 				{
 					Router.IncomingChannel.Update(arguments.SessionId, this.ServiceName, $"Incoming ({this.ServiceURI})");
@@ -2208,7 +2212,7 @@ namespace net.vieapps.Services
 			// unregister the services
 			await this.UnregisterServiceAsync(args, available).ConfigureAwait(false);
 
-			// clean-up
+			// do the clean up tasks
 			this.StopTimers();
 			this.CancellationTokenSource.Cancel();
 
