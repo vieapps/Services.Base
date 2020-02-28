@@ -9,19 +9,15 @@ using System.Reflection;
 using System.Reactive.Linq;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
-
 using WampSharp.V2;
 using WampSharp.V2.Rpc;
 using WampSharp.V2.Core.Contracts;
 using WampSharp.V2.Client;
 using WampSharp.V2.Realm;
 using WampSharp.Core.Listener;
-
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-
 using Microsoft.Extensions.Logging;
-
 using net.vieapps.Components.Utility;
 using net.vieapps.Components.Security;
 using net.vieapps.Components.Caching;
@@ -128,10 +124,10 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Registers the service with API Gateway
 		/// </summary>
-		/// <param name="onSuccessAsync">The action to run when register successfully</param>
-		/// <param name="onErrorAsync">The action to run when got any error</param>
+		/// <param name="onSuccess">The action to run when the service was registered successful</param>
+		/// <param name="onError">The action to run when got any error</param>
 		/// <returns></returns>
-		protected virtual async Task RegisterServiceAsync(Func<ServiceBase, Task> onSuccessAsync = null, Func<Exception, Task> onErrorAsync = null)
+		protected virtual async Task RegisterServiceAsync(Action<ServiceBase> onSuccess = null, Action<Exception> onError = null)
 		{
 			this.ServiceUniqueName = this.ServiceUniqueName ?? Extensions.GetUniqueName(this.ServiceName);
 
@@ -191,21 +187,23 @@ namespace net.vieapps.Services
 					this.Logger?.LogDebug($"The service was re-started successful - PID: {Process.GetCurrentProcess().Id} - URI: {this.ServiceURI}");
 
 				this.State = ServiceState.Connected;
-				await (onSuccessAsync != null ? onSuccessAsync(this) : Task.CompletedTask).ConfigureAwait(false);
+				onSuccess?.Invoke(this);
 			}
 			catch (Exception ex)
 			{
 				this.Logger?.LogError($"Cannot{(this.State == ServiceState.Disconnected ? " re-" : " ")}register the service => {ex.Message}", ex);
-				await (onErrorAsync != null ? onErrorAsync(ex) : Task.CompletedTask).ConfigureAwait(false);
+				onError?.Invoke(ex);
 			}
 		}
 
 		/// <summary>
-		/// Stops the service (unregister/disconnect from API Gateway and do the clean-up tasks)
+		/// Unregisters the service with API Gateway
 		/// </summary>
 		/// <param name="args">The arguments</param>
 		/// <param name="available">true to mark the service still available</param>
-		protected virtual async Task UnregisterServiceAsync(string[] args, bool available = true)
+		/// <param name="onSuccess">The action to run when the service was unregistered successful</param>
+		/// <param name="onError">The action to run when got any error</param>
+		protected virtual async Task UnregisterServiceAsync(string[] args, bool available = true, Action<ServiceBase> onSuccess = null, Action<Exception> onError = null)
 		{
 			// send information to API Gateway
 			try
@@ -215,6 +213,7 @@ namespace net.vieapps.Services
 			catch (Exception ex)
 			{
 				this.Logger?.LogError($"Error occurred while sending info to API Gateway => {ex.Message}", ex);
+				onError?.Invoke(ex);
 			}
 
 			// dispose all instances
@@ -224,24 +223,27 @@ namespace net.vieapps.Services
 					(this.ServiceInstance != null ? this.ServiceInstance.DisposeAsync().AsTask() : Task.CompletedTask),
 					(this.ServiceUniqueInstance != null ? this.ServiceUniqueInstance.DisposeAsync().AsTask() : Task.CompletedTask)
 				).ConfigureAwait(false);
+				onSuccess?.Invoke(this);
 			}
 			catch (Exception ex)
 			{
 				this.Logger?.LogError($"Error occurred while disposing the service instances => {ex.Message}", ex);
+				onError?.Invoke(ex);
 			}
 			finally
 			{
 				this.ServiceInstance = null;
+				this.ServiceUniqueInstance = null;
 			}
 		}
 
 		/// <summary>
-		/// Initializes the helper services
+		/// Initializes the helper services from API Gateway
 		/// </summary>
-		/// <param name="onSuccessAsync">The action to run when initialize successfully</param>
-		/// <param name="onErrorAsync">The action to run when got any error</param>
+		/// <param name="onSuccess">The action to run when the service was registered successful</param>
+		/// <param name="onError">The action to run when got any error</param>
 		/// <returns></returns>
-		protected virtual async Task InitializeHelperServicesAsync(Func<ServiceBase, Task> onSuccessAsync = null, Func<Exception, Task> onErrorAsync = null)
+		protected virtual async Task InitializeHelperServicesAsync(Action<ServiceBase> onSuccess = null, Action<Exception> onError = null)
 		{
 			try
 			{
@@ -253,12 +255,12 @@ namespace net.vieapps.Services
 				this.LoggingService = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<ILoggingService>(ProxyInterceptor.Create());
 				this.Logger?.LogDebug($"The helper services are{(this.State == ServiceState.Disconnected ? " re-" : " ")}initialized");
 
-				await (onSuccessAsync != null ? onSuccessAsync(this) : Task.CompletedTask).ConfigureAwait(false);
+				onSuccess?.Invoke(this);
 			}
 			catch (Exception ex)
 			{
 				this.Logger?.LogError($"Error occurred while{(this.State == ServiceState.Disconnected ? " re-" : " ")}initializing the helper services", ex);
-				await (onErrorAsync != null ? onErrorAsync(ex) : Task.CompletedTask).ConfigureAwait(false);
+				onError?.Invoke(ex);
 			}
 		}
 		#endregion
@@ -812,7 +814,7 @@ namespace net.vieapps.Services
 			}
 			catch (WampSessionNotEstablishedException)
 			{
-				await Task.Delay(567, cancellationToken).ConfigureAwait(false);
+				await Task.Delay(UtilityService.GetRandomNumber(567, 789), cancellationToken).ConfigureAwait(false);
 				try
 				{
 					var json = await Router.GetService(requestInfo.ServiceName).ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false);
@@ -1948,22 +1950,22 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
-		#region Start & Stop
+		#region Start the service
 		/// <summary>
 		/// Starts the service (the short way - connect to API Gateway and register the service)
 		/// </summary>
-		/// <param name="onRegisterSuccessAsync"></param>
-		/// <param name="onRegisterErrorAsync"></param>
-		/// <param name="onIncomingConnectionEstablished"></param>
-		/// <param name="onOutgoingConnectionEstablished"></param>
-		/// <param name="onIncomingConnectionBroken"></param>
-		/// <param name="onOutgoingConnectionBroken"></param>
-		/// <param name="onIncomingConnectionError"></param>
-		/// <param name="onOutgoingConnectionError"></param>
+		/// <param name="onRegisterSuccess">The action to run when the service was registered successful</param>
+		/// <param name="onRegisterError">The action to run when got any error while registering the service</param>
+		/// <param name="onIncomingConnectionEstablished">The action to fire when the incomming connection is established</param>
+		/// <param name="onOutgoingConnectionEstablished">The action to fire when the outgoing connection is established</param>
+		/// <param name="onIncomingConnectionBroken">The action to fire when the incomming connection is broken</param>
+		/// <param name="onOutgoingConnectionBroken">The action to fire when the outgoing connection is broken</param>
+		/// <param name="onIncomingConnectionError">The action to fire when the incomming connection got any error</param>
+		/// <param name="onOutgoingConnectionError">The action to fire when the outgoing connection got any error</param>
 		/// <returns></returns>
 		protected virtual Task StartAsync(
-			Func<ServiceBase, Task> onRegisterSuccessAsync = null,
-			Func<Exception, Task> onRegisterErrorAsync = null,
+			Action<ServiceBase> onRegisterSuccess = null,
+			Action<Exception> onRegisterError = null,
 			Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null,
 			Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null,
 			Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null,
@@ -1978,13 +1980,16 @@ namespace net.vieapps.Services
 			.ContinueWith(async _ => await Router.ConnectAsync(
 				async (sender, arguments) =>
 				{
+					// update session info
 					Router.IncomingChannel.Update(arguments.SessionId, this.ServiceName, $"Incoming ({this.ServiceURI})");
 					this.Logger?.LogInformation($"The incoming channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
 					if (this.State == ServiceState.Initializing)
 						this.State = ServiceState.Ready;
 
-					await this.RegisterServiceAsync(onRegisterSuccessAsync, onRegisterErrorAsync).ConfigureAwait(false);
+					// register the service
+					await this.RegisterServiceAsync(onRegisterSuccess, onRegisterError).ConfigureAwait(false);
 
+					// handling the established event
 					try
 					{
 						onIncomingConnectionEstablished?.Invoke(sender, arguments);
@@ -1996,9 +2001,11 @@ namespace net.vieapps.Services
 				},
 				(sender, arguments) =>
 				{
+					// update state
 					if (this.State == ServiceState.Connected)
 						this.State = ServiceState.Disconnected;
 
+					// re-connect
 					if (Router.ChannelsAreClosedBySystem || arguments.CloseType.Equals(SessionCloseType.Goodbye))
 						this.Logger?.LogDebug($"The incoming channel to API Gateway Router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
 
@@ -2008,6 +2015,7 @@ namespace net.vieapps.Services
 						Router.IncomingChannel.ReOpen(this.CancellationTokenSource.Token, (msg, ex) => this.Logger?.LogDebug(msg, ex), "Incoming");
 					}
 
+					// handling the broken event
 					try
 					{
 						onIncomingConnectionBroken?.Invoke(sender, arguments);
@@ -2019,6 +2027,7 @@ namespace net.vieapps.Services
 				},
 				(sender, arguments) =>
 				{
+					// handling the error event
 					this.Logger?.LogError($"Got an unexpected error of the incoming channel to API Gateway Router => {arguments.Exception.Message}", arguments.Exception);
 					try
 					{
@@ -2031,11 +2040,14 @@ namespace net.vieapps.Services
 				},
 				async (sender, arguments) =>
 				{
+					// update session info
 					Router.OutgoingChannel.Update(arguments.SessionId, this.ServiceName, $"Outgoing ({this.ServiceURI})");
 					this.Logger?.LogInformation($"The outgoing channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
 
+					// initialize all helper services
 					await this.InitializeHelperServicesAsync().ConfigureAwait(false);
 
+					// handling the established event
 					try
 					{
 						onOutgoingConnectionEstablished?.Invoke(sender, arguments);
@@ -2047,6 +2059,7 @@ namespace net.vieapps.Services
 				},
 				(sender, arguments) =>
 				{
+					// re-connect
 					if (Router.ChannelsAreClosedBySystem || arguments.CloseType.Equals(SessionCloseType.Goodbye))
 						this.Logger?.LogDebug($"The outgoing channel to API Gateway Router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
 
@@ -2056,6 +2069,7 @@ namespace net.vieapps.Services
 						Router.OutgoingChannel.ReOpen(this.CancellationTokenSource.Token, (msg, ex) => this.Logger?.LogDebug(msg, ex), "Outgoing");
 					}
 
+					// handling the broken event
 					try
 					{
 						onOutgoingConnectionBroken?.Invoke(sender, arguments);
@@ -2067,6 +2081,7 @@ namespace net.vieapps.Services
 				},
 				(sender, arguments) =>
 				{
+					// handling the error event
 					this.Logger?.LogError($"Got an unexpected error of the outgoing channel to API Gateway Router => {arguments.Exception.Message}", arguments.Exception);
 					try
 					{
@@ -2086,15 +2101,27 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="args">The arguments</param>
 		/// <param name="initializeRepository">true to initialize the repository of the service</param>
-		/// <param name="nextAsync">The next action to run</param>
-		public virtual void Start(string[] args = null, bool initializeRepository = true, Func<IService, Task> nextAsync = null)
-			=> this.StartAsync(async _ =>
+		/// <param name="next">The next action to run when the service was started</param>
+		public virtual void Start(string[] args = null, bool initializeRepository = true, Action<IService> next = null)
+			=> this.StartAsync(_ =>
 			{
+				// send the service information to API Gateway
+				Task.Run(async () =>
+				{
+					try
+					{
+						await this.SendServiceInfoAsync(args, true).ConfigureAwait(false);
+					}
+					catch (Exception ex)
+					{
+						this.Logger?.LogError($"Error occurred while sending info to API Gateway => {ex.Message}", ex);
+					}
+				}).ConfigureAwait(false);
+
 				// initialize repository
 				if (initializeRepository)
 					try
 					{
-						await Task.Delay(UtilityService.GetRandomNumber(123, 456)).ConfigureAwait(false);
 						this.Logger?.LogInformation("Initializing the repository");
 						RepositoryStarter.Initialize(
 							new[] { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
@@ -2129,40 +2156,31 @@ namespace net.vieapps.Services
 					}
 					catch (Exception ex)
 					{
-						this.Logger?.LogError($"Error occurred while initializing the repository: {ex.Message}", ex);
+						this.Logger?.LogError($"Error occurred while initializing the repository => {ex.Message}", ex);
 					}
 
-				// default privileges
+				// debug => default privileges
 				if (this.IsDebugLogEnabled)
-					this.Logger?.LogDebug($"Default working privileges: {this.Privileges?.ToJson()}");
+					this.Logger?.LogDebug($"Default working privileges\r\n{this.Privileges?.ToJson()}");
 
 				// run the next action
-				if (nextAsync != null)
-					try
-					{
-						await nextAsync(this).WithCancellationToken(this.CancellationTokenSource.Token).ConfigureAwait(false);
-					}
-					catch (Exception ex)
-					{
-						this.Logger?.LogError($"Error occurred while invoking the next action => {ex.Message}", ex);
-					}
-
-				// send the service information to API Gateway
 				try
 				{
-					await this.SendServiceInfoAsync(args, true).ConfigureAwait(false);
+					next?.Invoke(this);
 				}
 				catch (Exception ex)
 				{
-					this.Logger?.LogError($"Error occurred while sending info to API Gateway => {ex.Message}", ex);
+					this.Logger?.LogError($"Error occurred while invoking the next action \"{nameof(next)}\" => {ex.Message}", ex);
 				}
 			})
 			.Wait();
+		#endregion
 
+		#region Stop the service
 		/// <summary>
-		/// Gets the stopped state of the service
+		/// Gets the state that determines the service was stopped or not
 		/// </summary>
-		protected virtual bool Stopped { get; private set; } = false;
+		public virtual bool Stopped { get; private set; } = false;
 
 		/// <summary>
 		/// Stops the service (unregister/disconnect from API Gateway and do the clean-up tasks)
@@ -2171,16 +2189,14 @@ namespace net.vieapps.Services
 		/// <param name="available">true to mark the service still available</param>
 		/// <param name="disconnect">true to disconnect from API Gateway Router and close all WAMP channels</param>
 		/// <param name="next">The next action to run when the service was stopped</param>
-		protected virtual async Task StopAsync(string[] args, bool available = true, bool disconnect = true, Action<ServiceBase> next = null)
+		protected virtual async Task StopAsync(string[] args, bool available = true, bool disconnect = true, Action<IService> next = null)
 		{
 			// don't process if already stopped
 			if (this.Stopped)
 				return;
 
-			// assign the flag
+			// assign the flag and do unregister the services
 			this.Stopped = true;
-
-			// unregister the services
 			await this.UnregisterServiceAsync(args, available).ConfigureAwait(false);
 
 			// do the clean up tasks
@@ -2198,7 +2214,7 @@ namespace net.vieapps.Services
 			}
 			catch (Exception ex)
 			{
-				this.Logger?.LogError($"Error occurred while invoking the next action => {ex.Message}", ex);
+				this.Logger?.LogError($"Error occurred while invoking the next action \"{nameof(next)}\" => {ex.Message}", ex);
 			}
 		}
 
@@ -2209,7 +2225,7 @@ namespace net.vieapps.Services
 		/// <param name="available">true to mark the service still available</param>
 		/// <param name="disconnect">true to disconnect from API Gateway Router and close all WAMP channels</param>
 		/// <param name="next">The next action to run when the service was stopped</param>
-		protected virtual void Stop(string[] args, bool available = true, bool disconnect = true, Action<ServiceBase> next = null)
+		protected virtual void Stop(string[] args, bool available = true, bool disconnect = true, Action<IService> next = null)
 			=> this.StopAsync(args, available, disconnect, next).Wait();
 
 		/// <summary>
@@ -2218,11 +2234,13 @@ namespace net.vieapps.Services
 		/// <param name="args">The arguments</param>
 		public virtual void Stop(string[] args = null)
 			=> this.Stop(args, true, true);
+		#endregion
 
+		#region Dispose the service
 		/// <summary>
-		/// Gets the disposed state of the service
+		/// Gets the state that determines the service was disposed or not
 		/// </summary>
-		protected virtual bool Disposed { get; private set; } = false;
+		public virtual bool Disposed { get; private set; } = false;
 
 		/// <summary>
 		/// Disposes the service
