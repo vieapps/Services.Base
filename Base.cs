@@ -216,6 +216,18 @@ namespace net.vieapps.Services
 				onError?.Invoke(ex);
 			}
 
+			// dispose all communicators
+			try
+			{
+				this.ServiceCommunicator?.Dispose();
+				this.GatewayCommunicator?.Dispose();
+			}
+			catch (Exception ex)
+			{
+				this.Logger?.LogError($"Error occurred while disposing the services' communicators => {ex.Message}", ex);
+				onError?.Invoke(ex);
+			}
+
 			// dispose all instances
 			try
 			{
@@ -227,7 +239,7 @@ namespace net.vieapps.Services
 			}
 			catch (Exception ex)
 			{
-				this.Logger?.LogError($"Error occurred while disposing the service instances => {ex.Message}", ex);
+				this.Logger?.LogError($"Error occurred while disposing the services' instances => {ex.Message}", ex);
 				onError?.Invoke(ex);
 			}
 			finally
