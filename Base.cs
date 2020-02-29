@@ -1954,6 +1954,7 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Starts the service (the short way - connect to API Gateway and register the service)
 		/// </summary>
+		/// <param name="args">The arguments</param>
 		/// <param name="onRegisterSuccess">The action to run when the service was registered successful</param>
 		/// <param name="onRegisterError">The action to run when got any error while registering the service</param>
 		/// <param name="onIncomingConnectionEstablished">The action to fire when the incomming connection is established</param>
@@ -1964,6 +1965,7 @@ namespace net.vieapps.Services
 		/// <param name="onOutgoingConnectionError">The action to fire when the outgoing connection got any error</param>
 		/// <returns></returns>
 		protected virtual Task StartAsync(
+			string[] args = null,
 			Action<ServiceBase> onRegisterSuccess = null,
 			Action<Exception> onRegisterError = null,
 			Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null,
@@ -2047,6 +2049,16 @@ namespace net.vieapps.Services
 					// initialize all helper services
 					await this.InitializeHelperServicesAsync().ConfigureAwait(false);
 
+					// send the service information to API Gateway
+					try
+					{
+						await this.SendServiceInfoAsync(args, true).ConfigureAwait(false);
+					}
+					catch (Exception ex)
+					{
+						this.Logger?.LogError($"Error occurred while sending info to API Gateway => {ex.Message}", ex);
+					}
+
 					// handling the established event
 					try
 					{
@@ -2103,26 +2115,19 @@ namespace net.vieapps.Services
 		/// <param name="initializeRepository">true to initialize the repository of the service</param>
 		/// <param name="next">The next action to run when the service was started</param>
 		public virtual void Start(string[] args = null, bool initializeRepository = true, Action<IService> next = null)
-			=> this.StartAsync(_ =>
+			=> this.StartAsync(args, _ =>
 			{
-				// send the service information to API Gateway
-				Task.Run(async () =>
-				{
-					try
-					{
-						await this.SendServiceInfoAsync(args, true).ConfigureAwait(false);
-					}
-					catch (Exception ex)
-					{
-						this.Logger?.LogError($"Error occurred while sending info to API Gateway => {ex.Message}", ex);
-					}
-				}).ConfigureAwait(false);
+				// show privileges
+				if (this.IsDebugLogEnabled)
+					this.Logger?.LogDebug($"Default working privileges\r\n{this.Privileges?.ToJson()}");
 
 				// initialize repository
 				if (initializeRepository)
 					try
 					{
-						this.Logger?.LogInformation("Initializing the repository");
+						if (this.IsDebugLogEnabled)
+							this.Logger?.LogDebug("Initializing the repository");
+
 						RepositoryStarter.Initialize(
 							new[] { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
 								.Where(a => !a.Name.IsStartsWith("mscorlib") && !a.Name.IsStartsWith("System") && !a.Name.IsStartsWith("Microsoft") && !a.Name.IsEquals("NETStandard")
@@ -2158,10 +2163,6 @@ namespace net.vieapps.Services
 					{
 						this.Logger?.LogError($"Error occurred while initializing the repository => {ex.Message}", ex);
 					}
-
-				// debug => default privileges
-				if (this.IsDebugLogEnabled)
-					this.Logger?.LogDebug($"Default working privileges\r\n{this.Privileges?.ToJson()}");
 
 				// run the next action
 				try
