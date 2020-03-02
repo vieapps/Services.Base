@@ -232,38 +232,50 @@ namespace net.vieapps.Services
 		/// Closes the incoming channel of the API Gateway Router
 		/// </summary>
 		/// <param name="message">The message to send to API Gateway Router before closing the channel</param>
-		public static async Task CloseIncomingChannelAsync(string message = null)
+		/// <param name="onError">The action to run when got any error</param>
+		public static async Task CloseIncomingChannelAsync(string message = null, Action<Exception> onError = null)
 		{
-			if (Router.IncomingChannel != null)
-				try
-				{
-					await Router.IncomingChannel.Close(message ?? "Disconnected", new GoodbyeDetails
-					{
-						Message = message ?? "Disconnected"
-					}).ConfigureAwait(false);
-				}
-				catch { }
-			Router.IncomingChannel = null;
-			Router.IncomingChannelSessionID = 0;
+			try
+			{
+				await (Router.IncomingChannel != null
+					? Router.IncomingChannel.Close(message ?? "Disconnected", new GoodbyeDetails { Message = message ?? "Disconnected" })
+					: Task.CompletedTask
+				).ConfigureAwait(false);
+			}
+			catch (Exception ex)
+			{
+				onError?.Invoke(ex);
+			}
+			finally
+			{
+				Router.IncomingChannel = null;
+				Router.IncomingChannelSessionID = 0;
+			}
 		}
 
 		/// <summary>
 		/// Closes the outgoing channel of the API Gateway Router
 		/// </summary>
 		/// <param name="message">The message to send to API Gateway Router before closing the channel</param>
-		public static async Task CloseOutgoingChannelAsync(string message = null)
+		/// <param name="onError">The action to run when got any error</param>
+		public static async Task CloseOutgoingChannelAsync(string message = null, Action<Exception> onError = null)
 		{
-			if (Router.OutgoingChannel != null)
-				try
-				{
-					await Router.OutgoingChannel.Close(message ?? "Disconnected", new GoodbyeDetails
-					{
-						Message = message ?? "Disconnected"
-					}).ConfigureAwait(false);
-				}
-				catch { }
-			Router.OutgoingChannel = null;
-			Router.OutgoingChannelSessionID = 0;
+			try
+			{
+				await (Router.OutgoingChannel != null
+					? Router.OutgoingChannel.Close(message ?? "Disconnected", new GoodbyeDetails { Message = message ?? "Disconnected" })
+					: Task.CompletedTask
+				).ConfigureAwait(false);
+			}
+			catch (Exception ex)
+			{
+				onError?.Invoke(ex);
+			}
+			finally
+			{
+				Router.OutgoingChannel = null;
+				Router.OutgoingChannelSessionID = 0;
+			}
 		}
 		#endregion
 
@@ -375,18 +387,22 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Disconnects from API Gateway Router (means close all WAMP channels)
 		/// </summary>
-		public static Task DisconnectAsync()
+		/// <param name="message">The message to send to API Gateway Router before closing the channel</param>
+		/// <param name="onError">The action to run when got any error</param>
+		public static Task DisconnectAsync(string message = null, Action<Exception> onError = null)
 		{
 			Router.ChannelsAreClosedBySystem = true;
-			return Task.WhenAll(Router.CloseIncomingChannelAsync(), Router.CloseOutgoingChannelAsync());
+			return Task.WhenAll(Router.CloseIncomingChannelAsync(message, onError), Router.CloseOutgoingChannelAsync(message, onError));
 		}
 
 		/// <summary>
 		/// Disconnects from API Gateway Router and close all WAMP channels
 		/// </summary>
 		/// <param name="waitingTimes">Times (miliseconds) for waiting to disconnect</param>
-		public static void Disconnect(int waitingTimes = 1234)
-			=> Router.DisconnectAsync().Wait(waitingTimes > 0 ? waitingTimes : 1234);
+		/// <param name="message">The message to send to API Gateway Router before closing the channel</param>
+		/// <param name="onError">The action to run when got any error</param>
+		public static void Disconnect(int waitingTimes = 1234, string message = null, Action<Exception> onError = null)
+			=> Router.DisconnectAsync(message, onError).Wait(waitingTimes > 0 ? waitingTimes : 1234);
 		#endregion
 
 		#region Get a service
