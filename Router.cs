@@ -421,7 +421,7 @@ namespace net.vieapps.Services
 			if (!Router.Services.TryGetValue(name, out var service))
 			{
 				service = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IService>(ProxyInterceptor.Create(name));
-				Router.Services.TryAdd(name, service);
+				Router.Services.Add(name, service);
 			}
 
 			return service ?? throw new ServiceNotFoundException($"The service \"{name.ToLower()}\" is not found");
@@ -442,7 +442,7 @@ namespace net.vieapps.Services
 			if (!Router.UniqueServices.TryGetValue(name, out var service))
 			{
 				service = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IUniqueService>(ProxyInterceptor.Create(name));
-				Router.UniqueServices.TryAdd(name, service);
+				Router.UniqueServices.Add(name, service);
 			}
 
 			return service ?? throw new ServiceNotFoundException($"The service with unique URI \"{name.ToLower()}\" is not found");
