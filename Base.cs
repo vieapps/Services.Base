@@ -134,7 +134,7 @@ namespace net.vieapps.Services
 			async Task registerCalleesAsync()
 			{
 				this.ServiceInstance = await Router.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(this.ServiceName)).ConfigureAwait(false);
-				this.ServiceUniqueInstance = await Router.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(this.ServiceUniqueName, WampInvokePolicy.Single)).ConfigureAwait(false);
+				this.ServiceUniqueInstance = await Router.IncomingChannel.RealmProxy.Services.RegisterCallee<IUniqueService>(() => this, RegistrationInterceptor.Create(this.ServiceUniqueName, WampInvokePolicy.Single)).ConfigureAwait(false);
 			}
 
 			async Task registerServiceAsync()
@@ -184,7 +184,7 @@ namespace net.vieapps.Services
 				await registerServiceAsync().ConfigureAwait(false);
 
 				if (this.State == ServiceState.Disconnected)
-					this.Logger?.LogDebug($"The service was re-started successful - PID: {Process.GetCurrentProcess().Id} - URI: {this.ServiceURI}");
+					this.Logger?.LogDebug("The service was re-started successful");
 
 				this.State = ServiceState.Connected;
 				onSuccess?.Invoke(this);
@@ -232,8 +232,8 @@ namespace net.vieapps.Services
 			try
 			{
 				await Task.WhenAll(
-					(this.ServiceInstance != null ? this.ServiceInstance.DisposeAsync().AsTask() : Task.CompletedTask),
-					(this.ServiceUniqueInstance != null ? this.ServiceUniqueInstance.DisposeAsync().AsTask() : Task.CompletedTask)
+					this.ServiceInstance != null ? this.ServiceInstance.DisposeAsync().AsTask() : Task.CompletedTask,
+					this.ServiceUniqueInstance != null ? this.ServiceUniqueInstance.DisposeAsync().AsTask() : Task.CompletedTask
 				).ConfigureAwait(false);
 				onSuccess?.Invoke(this);
 			}
@@ -1703,9 +1703,9 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Starts a timer (using ReactiveX)
 		/// </summary>
-		/// <param name="action">The action to fire</param>
-		/// <param name="interval">The elapsed time for firing the action (seconds)</param>
-		/// <param name="delay">Delay time (miliseconds) before firing the action</param>
+		/// <param name="action">The action to run</param>
+		/// <param name="interval">The elapsed time for running the action (seconds)</param>
+		/// <param name="delay">Delay time (miliseconds) before running the action</param>
 		/// <returns></returns>
 		protected virtual IDisposable StartTimer(System.Action action, int interval, int delay = 0)
 		{
@@ -1969,12 +1969,12 @@ namespace net.vieapps.Services
 		/// <param name="args">The arguments</param>
 		/// <param name="onRegisterSuccess">The action to run when the service was registered successful</param>
 		/// <param name="onRegisterError">The action to run when got any error while registering the service</param>
-		/// <param name="onIncomingConnectionEstablished">The action to fire when the incomming connection is established</param>
-		/// <param name="onOutgoingConnectionEstablished">The action to fire when the outgoing connection is established</param>
-		/// <param name="onIncomingConnectionBroken">The action to fire when the incomming connection is broken</param>
-		/// <param name="onOutgoingConnectionBroken">The action to fire when the outgoing connection is broken</param>
-		/// <param name="onIncomingConnectionError">The action to fire when the incomming connection got any error</param>
-		/// <param name="onOutgoingConnectionError">The action to fire when the outgoing connection got any error</param>
+		/// <param name="onIncomingConnectionEstablished">The action to run when the incomming connection is established</param>
+		/// <param name="onOutgoingConnectionEstablished">The action to run when the outgoing connection is established</param>
+		/// <param name="onIncomingConnectionBroken">The action to run when the incomming connection is broken</param>
+		/// <param name="onOutgoingConnectionBroken">The action to run when the outgoing connection is broken</param>
+		/// <param name="onIncomingConnectionError">The action to run when the incomming connection got any error</param>
+		/// <param name="onOutgoingConnectionError">The action to run when the outgoing connection got any error</param>
 		/// <returns></returns>
 		protected virtual Task StartAsync(
 			string[] args,
@@ -2141,7 +2141,7 @@ namespace net.vieapps.Services
 
 						RepositoryStarter.Initialize(
 							new[] { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
-								.Where(a => !a.Name.IsStartsWith("mscorlib") && !a.Name.IsStartsWith("System") && !a.Name.IsStartsWith("Microsoft") && !a.Name.IsEquals("NETStandard")
+								.Where(a => !a.Name.IsStartsWith("System") && !a.Name.IsStartsWith("mscorlib") && !a.Name.IsStartsWith("Microsoft") && !a.Name.IsEquals("NETStandard")
 									&& !a.Name.IsStartsWith("Newtonsoft") && !a.Name.IsStartsWith("WampSharp") && !a.Name.IsStartsWith("Castle.") && !a.Name.IsStartsWith("StackExchange.")
 									&& !a.Name.IsStartsWith("MongoDB") && !a.Name.IsStartsWith("MySql") && !a.Name.IsStartsWith("Oracle") && !a.Name.IsStartsWith("Npgsql") && !a.Name.IsStartsWith("Serilog")
 									&& !a.Name.IsStartsWith("VIEApps.Components.") && !a.Name.IsStartsWith("VIEApps.Services.Abstractions") && !a.Name.IsStartsWith("VIEApps.Services.Base")
@@ -2159,7 +2159,6 @@ namespace net.vieapps.Services
 									}
 								})
 								.Where(assembly => assembly != null)
-								.ToList()
 							),
 							(msg, ex) =>
 							{
@@ -2200,7 +2199,7 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the state that determines the service was stopped or not
 		/// </summary>
-		public virtual bool Stopped { get; private set; } = false;
+		public bool Stopped { get; private set; } = false;
 
 		/// <summary>
 		/// Stops the service (unregister/disconnect from API Gateway and do the clean-up tasks)
@@ -2224,7 +2223,7 @@ namespace net.vieapps.Services
 
 				// disconnect from API Gateway Router
 				await (disconnect ? Router.DisconnectAsync() : Task.CompletedTask).ConfigureAwait(false);
-				this.Logger?.LogDebug($"The service was stopped");
+				this.Logger?.LogDebug("The service was stopped");
 			}
 
 			// run the next action
@@ -2262,26 +2261,55 @@ namespace net.vieapps.Services
 		/// <param name="args">The arguments</param>
 		/// <param name="next">The next action to run when the service was stopped</param>
 		public virtual void Stop(string[] args = null, Action<IService> next = null)
-			=> this.Stop(args, true, true, next);
+			=> this.StopAsync(args, next).Wait();
 		#endregion
 
 		#region Dispose the service
 		/// <summary>
 		/// Gets the state that determines the service was disposed or not
 		/// </summary>
-		public virtual bool Disposed { get; private set; } = false;
+		public bool Disposed { get; private set; } = false;
+
+		/// <summary>
+		/// Disposes the service
+		/// </summary>
+		/// <param name="args">The arguments</param>
+		/// <param name="available">true to mark the service still available</param>
+		/// <param name="next">The next action to run when the service was disposed</param>
+		public virtual ValueTask DisposeAsync(string[] args, bool available, Action<IService> next = null)
+			=> new ValueTask(this.Disposed ? Task.CompletedTask : this.StopAsync(args, available, true, _ =>
+			{
+				// clean up
+				this.Disposed = true;
+				this.CancellationTokenSource.Dispose();
+				this.Logger?.LogDebug("The service was disposed");
+				GC.SuppressFinalize(this);
+
+				// run the next action
+				try
+				{
+					next?.Invoke(this);
+				}
+				catch (Exception ex)
+				{
+					this.Logger?.LogError($"Error occurred while invoking the next action \"{nameof(next)}\" => {ex.Message}", ex);
+				}
+			}));
 
 		/// <summary>
 		/// Disposes the service
 		/// </summary>
 		public virtual ValueTask DisposeAsync()
-			=> new ValueTask(this.Disposed ? Task.CompletedTask : this.StopAsync(null, _ =>
-			{
-				this.Disposed = true;
-				this.CancellationTokenSource.Dispose();
-				this.Logger?.LogDebug($"The service was disposed");
-				GC.SuppressFinalize(this);
-			}));
+			=> this.DisposeAsync(null, true);
+
+		/// <summary>
+		/// Disposes the service
+		/// </summary>
+		/// <param name="args">The arguments</param>
+		/// <param name="available">true to mark the service still available</param>
+		/// <param name="next">The next action to run when the service was disposed</param>
+		public virtual void Dispose(string[] args, bool available, Action<IService> next = null)
+			=> this.DisposeAsync(args, available, next).AsTask().Wait();
 
 		/// <summary>
 		/// Disposes the service
