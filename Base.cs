@@ -2275,9 +2275,10 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="args">The arguments</param>
 		/// <param name="available">true to mark the service still available</param>
+		/// <param name="disconnect">true to disconnect from API Gateway Router and close all WAMP channels</param>
 		/// <param name="next">The next action to run when the service was disposed</param>
-		public virtual ValueTask DisposeAsync(string[] args, bool available, Action<IService> next = null)
-			=> new ValueTask(this.Disposed ? Task.CompletedTask : this.StopAsync(args, available, true, _ =>
+		public virtual ValueTask DisposeAsync(string[] args, bool available, bool disconnect = true, Action<IService> next = null)
+			=> new ValueTask(this.Disposed ? Task.CompletedTask : this.StopAsync(args, available, disconnect, _ =>
 			{
 				// clean up
 				this.Disposed = true;
@@ -2307,9 +2308,10 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="args">The arguments</param>
 		/// <param name="available">true to mark the service still available</param>
+		/// <param name="disconnect">true to disconnect from API Gateway Router and close all WAMP channels</param>
 		/// <param name="next">The next action to run when the service was disposed</param>
-		public virtual void Dispose(string[] args, bool available, Action<IService> next = null)
-			=> this.DisposeAsync(args, available, next).AsTask().Wait();
+		public virtual void Dispose(string[] args, bool available, bool disconnect = true, Action<IService> next = null)
+			=> this.DisposeAsync(args, available, disconnect, next).AsTask().Wait();
 
 		/// <summary>
 		/// Disposes the service
