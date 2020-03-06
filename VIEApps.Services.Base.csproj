@@ -9,7 +9,7 @@
 		<AssemblyTitle>VIEApps NGX Service Base</AssemblyTitle>
 		<AssemblyVersion>10.3.2003.3</AssemblyVersion>
 		<FileVersion>10.3.2003.3</FileVersion>
-		<InformationalVersion>10.3@$(TargetFramework)-lovely.4+build:2020.03.03+lts.targets</InformationalVersion>
+		<InformationalVersion>10.3.$([System.DateTime]::Now.Year).$([System.DateTime]::Now.Month).$([System.DateTime]::Now.Day)@$(TargetFramework)#lts.targets+so.regret</InformationalVersion>
 		<Version>10.3.2003.3</Version>
 		<Title>VIEApps NGX Service Base</Title>
 		<Description>The base class for all microservices in the VIEApps NGX</Description>
@@ -19,7 +19,7 @@
 		<Copyright>© 2020 VIEApps.net</Copyright>
 	</PropertyGroup>
 
-	<PropertyGroup Condition="'$(Configuration)'=='Release'">
+	<PropertyGroup Condition="'$(Configuration)' == 'Release'">
 		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 		<IncludeSymbols>true</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
