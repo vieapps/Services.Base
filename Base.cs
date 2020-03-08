@@ -37,7 +37,7 @@ namespace net.vieapps.Services
 		public abstract string ServiceName { get; }
 
 		/// <summary>
-		/// Process the request of the service
+		/// Processes the request of the service
 		/// </summary>
 		/// <param name="requestInfo">The requesting information</param>
 		/// <param name="cancellationToken">The cancellation token</param>
@@ -2141,7 +2141,7 @@ namespace net.vieapps.Services
 
 						RepositoryStarter.Initialize(
 							new[] { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
-								.Where(a => !a.Name.IsStartsWith("System") && !a.Name.IsStartsWith("mscorlib") && !a.Name.IsStartsWith("Microsoft") && !a.Name.IsEquals("NETStandard")
+								.Where(a => !a.Name.IsStartsWith("System") && !a.Name.IsStartsWith("Microsoft") && !a.Name.IsStartsWith("mscorlib") && !a.Name.IsEquals("NETStandard")
 									&& !a.Name.IsStartsWith("Newtonsoft") && !a.Name.IsStartsWith("WampSharp") && !a.Name.IsStartsWith("Castle.") && !a.Name.IsStartsWith("StackExchange.")
 									&& !a.Name.IsStartsWith("MongoDB") && !a.Name.IsStartsWith("MySql") && !a.Name.IsStartsWith("Oracle") && !a.Name.IsStartsWith("Npgsql") && !a.Name.IsStartsWith("Serilog")
 									&& !a.Name.IsStartsWith("VIEApps.Components.") && !a.Name.IsStartsWith("VIEApps.Services.Abstractions") && !a.Name.IsStartsWith("VIEApps.Services.Base")
@@ -2181,7 +2181,7 @@ namespace net.vieapps.Services
 				}
 				catch (Exception ex)
 				{
-					this.Logger?.LogError($"Error occurred while invoking the next action \"{nameof(next)}\" => {ex.Message}", ex);
+					this.Logger?.LogError($"Error occurred while invoking the next action when start the service => {ex.Message}", ex);
 				}
 			});
 
@@ -2202,7 +2202,7 @@ namespace net.vieapps.Services
 		public bool Stopped { get; private set; } = false;
 
 		/// <summary>
-		/// Stops the service (unregister/disconnect from API Gateway and do the clean-up tasks)
+		/// Stops the service (unregister the service, disconnect from API Gateway and do the clean-up tasks)
 		/// </summary>
 		/// <param name="args">The arguments</param>
 		/// <param name="available">true to mark the service still available</param>
@@ -2233,12 +2233,12 @@ namespace net.vieapps.Services
 			}
 			catch (Exception ex)
 			{
-				this.Logger?.LogError($"Error occurred while invoking the next action \"{nameof(next)}\" => {ex.Message}", ex);
+				this.Logger?.LogError($"Error occurred while invoking the next action when stop the service => {ex.Message}", ex);
 			}
 		}
 
 		/// <summary>
-		/// Stops the service (unregister/disconnect from API Gateway and do the clean-up tasks)
+		/// Stops the service (unregister the service, disconnect from API Gateway and do the clean-up tasks)
 		/// </summary>
 		/// <param name="args">The arguments</param>
 		/// <param name="next">The next action to run when the service was stopped</param>
@@ -2246,7 +2246,7 @@ namespace net.vieapps.Services
 			=> this.StopAsync(args, true, true, next);
 
 		/// <summary>
-		/// Stops the service (unregister/disconnect from API Gateway and do the clean-up tasks)
+		/// Stops the service (unregister the service, disconnect from API Gateway and do the clean-up tasks)
 		/// </summary>
 		/// <param name="args">The arguments</param>
 		/// <param name="available">true to mark the service still available</param>
@@ -2256,7 +2256,7 @@ namespace net.vieapps.Services
 			=> this.StopAsync(args, available, disconnect, next).Wait();
 
 		/// <summary>
-		/// Stops the service (unregister/disconnect from API Gateway and do the clean-up tasks)
+		/// Stops the service (unregister the service, disconnect from API Gateway and do the clean-up tasks)
 		/// </summary>
 		/// <param name="args">The arguments</param>
 		/// <param name="next">The next action to run when the service was stopped</param>
@@ -2271,20 +2271,20 @@ namespace net.vieapps.Services
 		public bool Disposed { get; private set; } = false;
 
 		/// <summary>
-		/// Disposes the service
+		/// Disposes the service (unregister the service, disconnect from API Gateway and do the clean-up tasks)
 		/// </summary>
 		/// <param name="args">The arguments</param>
 		/// <param name="available">true to mark the service still available</param>
 		/// <param name="disconnect">true to disconnect from API Gateway Router and close all WAMP channels</param>
 		/// <param name="next">The next action to run when the service was disposed</param>
-		public virtual ValueTask DisposeAsync(string[] args, bool available, bool disconnect = true, Action<IService> next = null)
+		public virtual ValueTask DisposeAsync(string[] args, bool available = true, bool disconnect = true, Action<IService> next = null)
 			=> new ValueTask(this.Disposed ? Task.CompletedTask : this.StopAsync(args, available, disconnect, _ =>
 			{
 				// clean up
+				GC.SuppressFinalize(this);
 				this.Disposed = true;
 				this.CancellationTokenSource.Dispose();
 				this.Logger?.LogDebug("The service was disposed");
-				GC.SuppressFinalize(this);
 
 				// run the next action
 				try
@@ -2293,31 +2293,31 @@ namespace net.vieapps.Services
 				}
 				catch (Exception ex)
 				{
-					this.Logger?.LogError($"Error occurred while invoking the next action \"{nameof(next)}\" => {ex.Message}", ex);
+					this.Logger?.LogError($"Error occurred while invoking the next action when dispose the service => {ex.Message}", ex);
 				}
 			}));
 
 		/// <summary>
-		/// Disposes the service
+		/// Disposes the service (unregister the service, disconnect from API Gateway and do the clean-up tasks)
 		/// </summary>
 		public virtual ValueTask DisposeAsync()
-			=> this.DisposeAsync(null, true);
+			=> this.DisposeAsync(null);
 
 		/// <summary>
-		/// Disposes the service
+		/// Disposes the service (unregister the service, disconnect from API Gateway and do the clean-up tasks)
 		/// </summary>
 		/// <param name="args">The arguments</param>
 		/// <param name="available">true to mark the service still available</param>
 		/// <param name="disconnect">true to disconnect from API Gateway Router and close all WAMP channels</param>
 		/// <param name="next">The next action to run when the service was disposed</param>
-		public virtual void Dispose(string[] args, bool available, bool disconnect = true, Action<IService> next = null)
+		public virtual void Dispose(string[] args, bool available = true, bool disconnect = true, Action<IService> next = null)
 			=> this.DisposeAsync(args, available, disconnect, next).AsTask().Wait();
 
 		/// <summary>
-		/// Disposes the service
+		/// Disposes the service (unregister the service, disconnect from API Gateway and do the clean-up tasks)
 		/// </summary>
 		public virtual void Dispose()
-			=> this.DisposeAsync().AsTask().Wait();
+			=> this.Dispose(null);
 
 		~ServiceBase()
 			=> this.Dispose();

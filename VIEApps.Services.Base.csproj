@@ -2,15 +2,15 @@
 
 	<PropertyGroup>
 		<TargetFrameworks>netstandard2.0;netstandard2.1;netcoreapp2.1;netcoreapp3.1</TargetFrameworks>
-		<RootNamespace>net.vieapps.Services</RootNamespace>
-		<AssemblyName>VIEApps.Services.Base</AssemblyName>
 		<WarningLevel>3</WarningLevel>
 		<DocumentationFile>bin/$(Configuration)/$(TargetFramework)/VIEApps.Services.Base.xml</DocumentationFile>
+		<RootNamespace>net.vieapps.Services</RootNamespace>
+		<AssemblyName>VIEApps.Services.Base</AssemblyName>
 		<AssemblyTitle>VIEApps NGX Service Base</AssemblyTitle>
-		<AssemblyVersion>10.3.2003.3</AssemblyVersion>
-		<FileVersion>10.3.2003.3</FileVersion>
-		<InformationalVersion>10.3.$([System.DateTime]::Now.Year).$([System.DateTime]::Now.Month).$([System.DateTime]::Now.Day)@$(TargetFramework)#lts.targets+so.regret</InformationalVersion>
-		<Version>10.3.2003.3</Version>
+		<AssemblyVersion>10.3.2003.4</AssemblyVersion>
+		<FileVersion>10.3.2003.4</FileVersion>
+		<Version>10.3.2003.4</Version>
+		<InformationalVersion>10.3.$([System.DateTime]::Now.Year).$([System.DateTime]::Now.Month).$([System.DateTime]::Now.Day)@$(TargetFramework)#so.be.its</InformationalVersion>
 		<Title>VIEApps NGX Service Base</Title>
 		<Description>The base class for all microservices in the VIEApps NGX</Description>
 		<Authors>VIEApps.net</Authors>
@@ -51,9 +51,9 @@
 		<PackageReference Include="Npgsql" Version="4.1.3.1" />
 		<PackageReference Include="Serilog.Extensions.Logging.File" Version="2.0.0" />
 		<PackageReference Include="System.Data.SqlClient" Version="4.8.1" />
-		<PackageReference Include="VIEApps.Components.Repository" Version="10.3.2003.3" />
-		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.3.2003.3" />
-		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.3.2003.3" />
+		<PackageReference Include="VIEApps.Components.Repository" Version="10.3.2003.4" />
+		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.3.2003.4" />
+		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.3.2003.4" />
 	</ItemGroup>
 
 </Project>
