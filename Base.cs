@@ -2217,13 +2217,31 @@ namespace net.vieapps.Services
 				this.Stopped = true;
 				await this.UnregisterServiceAsync(args, available).ConfigureAwait(false);
 
-				// do the clean up tasks
-				this.StopTimers();
-				this.CancellationTokenSource.Cancel();
+				// clean up
+				try
+				{
+					this.StopTimers();
+					if (!this.Disposed)
+						this.CancellationTokenSource.Cancel();
+				}
+				catch (Exception ex)
+				{
+					this.Logger?.LogDebug($"Error occurred while cleaning up the service => {ex.Message}", ex);
+				}
 
 				// disconnect from API Gateway Router
-				await (disconnect ? Router.DisconnectAsync() : Task.CompletedTask).ConfigureAwait(false);
-				this.Logger?.LogDebug("The service was stopped");
+				try
+				{
+					await (disconnect ? Router.DisconnectAsync() : Task.CompletedTask).ConfigureAwait(false);
+				}
+				catch (Exception ex)
+				{
+					this.Logger?.LogDebug($"Error occurred while disconnecting the service => {ex.Message}", ex);
+				}
+				finally
+				{
+					this.Logger?.LogDebug("The service was stopped");
+				}
 			}
 
 			// run the next action
@@ -2283,8 +2301,18 @@ namespace net.vieapps.Services
 				// clean up
 				GC.SuppressFinalize(this);
 				this.Disposed = true;
-				this.CancellationTokenSource.Dispose();
-				this.Logger?.LogDebug("The service was disposed");
+				try
+				{
+					this.CancellationTokenSource.Dispose();
+				}
+				catch (Exception ex)
+				{
+					this.Logger?.LogDebug($"Error occurred while disposing the service => {ex.Message}", ex);
+				}
+				finally
+				{
+					this.Logger?.LogDebug("The service was disposed");
+				}
 
 				// run the next action
 				try
