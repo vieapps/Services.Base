@@ -21,16 +21,17 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the stack trace of the error exception
 		/// </summary>
-		/// <param name="exception"></param>
-		/// <returns></returns>
-		public static string GetStack(this Exception exception)
+		/// <param name="exception">The exception to get the stack</param>
+		/// <param name="onlyStack">true to get only stack trace when the exception is <see cref="WampException">WampException</see></param>
+		/// <returns>The string that presents the stack trace</returns>
+		public static string GetStack(this Exception exception, bool onlyStack = true)
 		{
 			var stack = "";
 			if (exception != null && exception is WampException)
 			{
 				var details = (exception as WampException).GetDetails();
 				stack = details.Item6 != null
-					? details.Item6.ToString(Formatting.Indented).Replace("\\r", "\r").Replace("\\n", "\n").Replace(@"\\", @"\")
+					? (onlyStack ? details.Item6.Get<string>("Stack") : details.Item6.ToString(Formatting.Indented))?.Replace("\\r", "\r").Replace("\\n", "\n").Replace(@"\\", @"\")
 					: details.Item4?.Replace("\\r", "\r")?.Replace("\\n", "\n")?.Replace(@"\\", @"\");
 			}
 			else if (exception != null)
