@@ -429,14 +429,35 @@ namespace net.vieapps.Services
 			=> this.SendEmailAsync(null, to, subject, body, null, 0, false, null, null, cancellationToken);
 
 		/// <summary>
-		/// Sends a web hook message
+		/// Sends a web-hook message
 		/// </summary>
-		/// <param name="message"></param>
-		/// <param name="cancellationToken"></param>
+		/// <param name="message">The well-formed message to send</param>
+		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected virtual Task SendWebHookAsync(WebHookMessage message, CancellationToken cancellationToken = default)
 			=> this.MessagingService.SendWebHookAsync(message, cancellationToken);
 
+		/// <summary>
+		/// Sends a web-hook message
+		/// </summary>
+		/// <param name="message">The message to send</param>
+		/// <param name="developerID">The identity of developer</param>
+		/// <param name="appID">The identity of app</param>
+		/// <param name="signAlgorithm">The HMAC algorithm to sign the body with the specified key (md5, sha1, sha256, sha384, sha512, ripemd/ripemd160, blake128, blake/blake256, blake384, blake512)</param>
+		/// <param name="signKey">The key that use to sign</param>
+		/// <param name="signatureName">The name of the signature parameter, default is combination of algorithm and the string 'Signature', ex: HmacSha256Signature</param>
+		/// <param name="signatureAsHex">true to use signature as hex, false to use as Base64</param>
+		/// <param name="signatureInQuery">true to place the signature in query string, false to place in header, default is false</param>
+		/// <param name="additionalQuery">The additional query string</param>
+		/// <param name="additionalHeader">The additional header</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		protected virtual Task SendWebHookAsync(WebHookMessage message, string developerID, string appID, string signAlgorithm = "SHA256", string signKey = null, string signatureName = null, bool signatureAsHex = true, bool signatureInQuery = false, Dictionary<string, string> additionalQuery = null, Dictionary<string, string> additionalHeader = null, CancellationToken cancellationToken = default)
+			=> this.MessagingService.SendWebHookAsync(message?.Normalize(signAlgorithm, signKey ?? appID, signatureName, signatureAsHex, signatureInQuery, additionalQuery, new Dictionary<string, string>(additionalHeader ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase)
+			{
+				{ "DeveloperID", developerID },
+				{ "AppID", appID }
+			}), cancellationToken);
 		#endregion
 
 		#region Loggings
