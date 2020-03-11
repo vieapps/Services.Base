@@ -95,6 +95,11 @@ namespace net.vieapps.Services
 		internal protected List<IDisposable> Timers { get; private set; } = new List<IDisposable>();
 
 		/// <summary>
+		/// Gets the JSON formatting mode
+		/// </summary>
+		internal protected Formatting JsonFormat => this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None;
+
+		/// <summary>
 		/// Gets the state of the service
 		/// </summary>
 		internal protected ServiceState State { get; private set; } = ServiceState.Initializing;
@@ -839,8 +844,8 @@ namespace net.vieapps.Services
 
 				if (this.IsDebugResultsEnabled)
 					await this.WriteLogsAsync(requestInfo.CorrelationID, "Call service successful" + "\r\n" +
-						$"Request: {requestInfo.ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}" + "\r\n" +
-						$"Response: {json?.ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}"
+						$"Request: {requestInfo.ToString(this.JsonFormat)}" + "\r\n" +
+						$"Response: {json?.ToString(this.JsonFormat)}"
 					, null, this.ServiceName, objectName).ConfigureAwait(false);
 
 				return json;
@@ -855,8 +860,8 @@ namespace net.vieapps.Services
 
 					if (this.IsDebugResultsEnabled)
 						await this.WriteLogsAsync(requestInfo.CorrelationID, "Re-call service successful" + "\r\n" +
-							$"Request: {requestInfo.ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}" + "\r\n" +
-							$"Response: {json?.ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}"
+							$"Request: {requestInfo.ToString(this.JsonFormat)}" + "\r\n" +
+							$"Response: {json?.ToString(this.JsonFormat)}"
 						, null, this.ServiceName, objectName).ConfigureAwait(false);
 
 					return json;
@@ -1832,7 +1837,7 @@ namespace net.vieapps.Services
 			this.WriteLogs(requestInfo, new List<string>
 			{
 				$"Error response: {message}{(stopwatch == null ? "" : $" - Execution times: {stopwatch.GetElapsedTimes()}")}",
-				$"Request: {requestInfo.ToString(this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None)}"
+				$"Request: {requestInfo.ToString(this.JsonFormat)}"
 			}, exception);
 
 			// return the exception
