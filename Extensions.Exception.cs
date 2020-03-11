@@ -13,9 +13,6 @@ using net.vieapps.Components.Utility;
 
 namespace net.vieapps.Services
 {
-	/// <summary>
-	/// Extension methods for working with exceptions in the VIEApps NGX
-	/// </summary>
 	public static partial class Extensions
 	{
 		/// <summary>

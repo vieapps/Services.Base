@@ -12,9 +12,6 @@ using net.vieapps.Components.Utility;
 
 namespace net.vieapps.Services
 {
-	/// <summary>
-	/// Extension methods for working with services in the VIEApps NGX
-	/// </summary>
 	public static partial class Extensions
 	{
 

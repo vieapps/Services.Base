@@ -13,9 +13,6 @@ using net.vieapps.Components.WebSockets;
 
 namespace net.vieapps.Services
 {
-	/// <summary>
-	/// Extension methods for working with services in the VIEApps NGX
-	/// </summary>
 	public static partial class Extensions
 	{
 		/// <summary>
@@ -26,7 +23,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
 		public static Task SendAsync(this ManagedWebSocket websocket, IEnumerable<string> messages, CancellationToken cancellationToken = default)
-			=> (messages?? new List<string>()).Where(message => !string.IsNullOrWhiteSpace(message)).ForEachAsync((message, token) => websocket.SendAsync(message, token), cancellationToken, true, false);
+			=> (messages ?? new List<string>()).Where(message => !string.IsNullOrWhiteSpace(message)).ForEachAsync((message, token) => websocket.SendAsync(message, token), cancellationToken, true, false);
 
 		/// <summary>
 		/// Sends the messages

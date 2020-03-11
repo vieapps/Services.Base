@@ -11,9 +11,6 @@ using net.vieapps.Components.Repository;
 
 namespace net.vieapps.Services
 {
-	/// <summary>
-	/// Extension methods for working with data in the VIEApps NGX
-	/// </summary>
 	public static partial class Extensions
 	{
 
