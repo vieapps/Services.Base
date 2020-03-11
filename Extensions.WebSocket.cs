@@ -26,7 +26,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
 		public static Task SendAsync(this ManagedWebSocket websocket, IEnumerable<string> messages, CancellationToken cancellationToken = default)
-			=> messages.Where(message => !string.IsNullOrWhiteSpace(message)).ForEachAsync((message, token) => websocket.SendAsync(message, token), cancellationToken, true, false);
+			=> (messages?? new List<string>()).Where(message => !string.IsNullOrWhiteSpace(message)).ForEachAsync((message, token) => websocket.SendAsync(message, token), cancellationToken, true, false);
 
 		/// <summary>
 		/// Sends the messages
@@ -36,7 +36,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
 		public static Task SendAsync(this ManagedWebSocket websocket, IEnumerable<JToken> messages, CancellationToken cancellationToken = default)
-			=> websocket.SendAsync(messages.Where(message => message != null).Select(message => message.ToString(Formatting.None)), cancellationToken);
+			=> websocket.SendAsync(messages?.Where(message => message != null).Select(message => message.ToString(Formatting.None)), cancellationToken);
 
 		/// <summary>
 		/// Sends the message
@@ -46,7 +46,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
 		public static Task SendAsync(this ManagedWebSocket websocket, JToken message, CancellationToken cancellationToken = default)
-			=> websocket.SendAsync(new[] { message }, cancellationToken);
+			=> websocket.SendAsync(message?.ToString(Formatting.None), cancellationToken);
 
 		/// <summary>
 		/// Sends an update message
@@ -57,7 +57,7 @@ namespace net.vieapps.Services
 		/// <param name="toJsonPreCompleted"></param>
 		/// <returns></returns>
 		public static Task SendAsync(this ManagedWebSocket websocket, UpdateMessage message, CancellationToken cancellationToken = default, Action<JToken> toJsonPreCompleted = null)
-			=> websocket.SendAsync(message.ToJson(toJsonPreCompleted), cancellationToken);
+			=> websocket.SendAsync(message?.ToJson(toJsonPreCompleted), cancellationToken);
 
 		/// <summary>
 		/// Prepares the information of the connection
