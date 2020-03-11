@@ -29,16 +29,6 @@ namespace net.vieapps.Services
 			=> messages.Where(message => !string.IsNullOrWhiteSpace(message)).ForEachAsync((message, token) => websocket.SendAsync(message, token), cancellationToken, true, false);
 
 		/// <summary>
-		/// Sends the message
-		/// </summary>
-		/// <param name="websocket"></param>
-		/// <param name="message"></param>
-		/// <param name="cancellationToken"></param>
-		/// <returns></returns>
-		public static Task SendAsync(this ManagedWebSocket websocket, string message, CancellationToken cancellationToken = default)
-			=> websocket.SendAsync(new[] { message }, cancellationToken);
-
-		/// <summary>
 		/// Sends the messages
 		/// </summary>
 		/// <param name="websocket"></param>
