@@ -188,12 +188,12 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Gets UUID of this filtering definition
+		/// Generates the UUID of this filter expression
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
 		/// <param name="filter"></param>
 		/// <returns></returns>
-		public static string GetUUID<T>(this IFilterBy<T> filter) where T : class
+		public static string GenerateUUID<T>(this IFilterBy<T> filter) where T : class
 			=> filter.ToClientJson().ToString(Formatting.None).ToLower().GenerateUUID();
 		#endregion
 
@@ -253,12 +253,12 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Gets UUID of this sorting definition
+		/// Generates the UUID of this sort expression
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
 		/// <param name="sortby"></param>
 		/// <returns></returns>
-		public static string GetUUID<T>(this SortBy<T> sortby) where T : class
+		public static string GenerateUUID<T>(this SortBy<T> sortby) where T : class
 			=> sortby.ToClientJson().ToString(Formatting.None).ToLower().GenerateUUID();
 		#endregion
 
@@ -271,8 +271,8 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static int GetTotalPages(long totalRecords, int pageSize)
 		{
-			var totalPages = (int)(totalRecords / pageSize);
-			if (totalRecords - (totalPages * pageSize) > 0)
+			var totalPages = pageSize > 0 ? (int)(totalRecords / pageSize) : 1;
+			if (pageSize > 0 && totalRecords - (totalPages * pageSize) > 0)
 				totalPages += 1;
 			return totalPages;
 		}
@@ -372,6 +372,95 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static JObject GetPagination(this Tuple<long, int, int, int> pagination)
 			=> Extensions.GetPagination(pagination.Item1, pagination.Item2, pagination.Item3, pagination.Item4);
+		#endregion
+
+		#region Cache keys
+		/// <summary>
+		/// Gets the caching key
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <returns></returns>
+		public static string GetCacheKey<T>() where T : class
+		=> typeof(T).GetTypeName(true);
+
+		/// <summary>
+		/// Gets the caching key
+		/// </summary>
+		/// <param name="prefix">The string that presents the prefix of the caching key</param>
+		/// <param name="pageSize">The page size</param>
+		/// <param name="pageNumber">The page number</param>
+		/// <param name="addPageNumberHolder">true to add page number as '[page-number]' holder</param>
+		/// <returns></returns>
+		public static string GetCacheKey(string prefix, int pageSize = 0, int pageNumber = 0, bool addPageNumberHolder = false)
+			=> $"{prefix}{(pageNumber > 0 ? $"#p:{(addPageNumberHolder ? "[page-number]" : pageNumber.ToString())}{(pageSize > 0 ? $"~{pageSize}" : "")}" : "")}";
+
+		/// <summary>
+		/// Gets the caching key
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="filter">The filter expression</param>
+		/// <param name="sort">The sort expression</param>
+		/// <param name="pageSize">The page size</param>
+		/// <param name="pageNumber">The page number</param>
+		/// <returns></returns>
+		public static string GetCacheKey<T>(IFilterBy<T> filter, SortBy<T> sort, int pageSize = 0, int pageNumber = 0) where T : class
+			=> Extensions.GetCacheKey(Extensions.GetCacheKey<T>() + $"{(filter != null ? $"#f:{filter.GenerateUUID()}" : "")}{(sort != null ? $"#s:{sort.GenerateUUID()}" : "")}", pageSize, pageNumber);
+
+		/// <summary>
+		/// Gets the related caching key for working with collection of objects
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="filter">The filter expression</param>
+		/// <param name="sort">The sort expression</param>
+		/// <returns>The collection presents all related caching keys (100 pages each size is 20 objects)</returns>
+		public static List<string> GetRelatedCacheKeys<T>(IFilterBy<T> filter, SortBy<T> sort) where T : class
+		{
+			var key = Extensions.GetCacheKey(filter, sort);
+			var keys = new List<string> { key, $"{key}:total", Extensions.GetCacheKey(key, 0, 1) };
+			var paginationKey = Extensions.GetCacheKey(key, 20, 1, true);
+			for (var pageNumber = 1; pageNumber <= 100; pageNumber++)
+			{
+				var pageKey = paginationKey.Replace("[page-number]", pageNumber.ToString());
+				keys.Add(pageKey);
+				keys.Add($"{pageKey}:json");
+				keys.Add($"{pageKey}:xml");
+			}
+			return keys;
+		}
+
+		/// <summary>
+		/// Gets the caching key for workingwith the number of total objects
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="filter">The filter expression</param>
+		/// <param name="sort">The sort expression</param>
+		/// <returns>The string that presents a caching key</returns>
+		public static string GetCacheKeyOfTotalObjects<T>(IFilterBy<T> filter, SortBy<T> sort) where T : class
+			=> $"{Extensions.GetCacheKey(filter, sort)}:total";
+
+		/// <summary>
+		/// Gets the caching key for working with the JSON of objects
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="filter">The filter expression</param>
+		/// <param name="sort">The sort expression</param>
+		/// <param name="pageNumber">The page number</param>
+		/// <param name="pageSize">The page size</param>
+		/// <returns>The string that presents a caching key</returns>
+		public static string GetCacheKeyOfObjectsJson<T>(IFilterBy<T> filter, SortBy<T> sort, int pageSize = 0, int pageNumber = 0) where T : class
+			=> $"{Extensions.GetCacheKey(filter, sort, pageSize, pageNumber)}:json";
+
+		/// <summary>
+		/// Gets the caching key for working with the XML of objects
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="filter">The filter expression</param>
+		/// <param name="sort">The sort expression</param>
+		/// <param name="pageNumber">The page number</param>
+		/// <param name="pageSize">The page size</param>
+		/// <returns>The string that presents a caching key</returns>
+		public static string GetCacheKeyOfObjectsXml<T>(IFilterBy<T> filter, SortBy<T> sort, int pageSize = 0, int pageNumber = 0) where T : class
+			=> $"{Extensions.GetCacheKey(filter, sort, pageSize, pageNumber)}:xml";
 		#endregion
 
 	}
