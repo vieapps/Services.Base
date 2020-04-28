@@ -31,17 +31,8 @@ namespace net.vieapps.Services
 	/// </summary>
 	public abstract class ServiceBase : IService, IUniqueService, IServiceComponent
 	{
-		/// <summary>
-		/// Gets the name of the service (for working with related URIs)
-		/// </summary>
 		public abstract string ServiceName { get; }
 
-		/// <summary>
-		/// Processes the request of the service
-		/// </summary>
-		/// <param name="requestInfo">The requesting information</param>
-		/// <param name="cancellationToken">The cancellation token</param>
-		/// <returns></returns>
 		public abstract Task<JToken> ProcessRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default);
 
 		/// <summary>
@@ -104,20 +95,13 @@ namespace net.vieapps.Services
 		/// </summary>
 		internal protected ServiceState State { get; private set; } = ServiceState.Initializing;
 
-		/// <summary>
-		/// Gets the full URI of this service
-		/// </summary>
+		public string NodeID { get; private set; }
+
 		public string ServiceURI => $"services.{(this.ServiceName ?? "unknown").Trim().ToLower()}";
 
-		/// <summary>
-		/// Gets the unique name for working with related URIs
-		/// </summary>
-		public string ServiceUniqueName { get; private set; }
+		public string ServiceUniqueName => $"{(this.ServiceName ?? "unknown").Trim().ToLower()}.{this.NodeID}";
 
-		/// <summary>
-		/// Gets the full unique URI of this service
-		/// </summary>
-		public string ServiceUniqueURI => $"services.{(this.ServiceUniqueName ?? "unknown").Trim().ToLower()}";
+		public string ServiceUniqueURI => $"services.{this.ServiceUniqueName}";
 
 		/// <summary>
 		/// Gets or sets the single instance of current playing service component
@@ -129,13 +113,12 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Registers the service with API Gateway
 		/// </summary>
+		/// <param name="args">The arguments for registering</param>
 		/// <param name="onSuccess">The action to run when the service was registered successful</param>
 		/// <param name="onError">The action to run when got any error</param>
 		/// <returns></returns>
-		protected virtual async Task RegisterServiceAsync(Action<ServiceBase> onSuccess = null, Action<Exception> onError = null)
+		public virtual async Task RegisterServiceAsync(IEnumerable<string> args, Action<ServiceBase> onSuccess = null, Action<Exception> onError = null)
 		{
-			this.ServiceUniqueName = this.ServiceUniqueName ?? Extensions.GetUniqueName(this.ServiceName);
-
 			async Task registerCalleesAsync()
 			{
 				this.ServiceInstance = await Router.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(this.ServiceName)).ConfigureAwait(false);
@@ -166,7 +149,7 @@ namespace net.vieapps.Services
 				this.ServiceCommunicator = Router.IncomingChannel.RealmProxy.Services
 					.GetSubject<CommunicateMessage>($"messages.services.{this.ServiceName.Trim().ToLower()}")
 					.Subscribe(
-						async message => await this.ProcessInterCommunicateMessageAsync(message).ConfigureAwait(false),
+						async message => await (this.NodeID.IsEquals(message.ExcludedNodeID) ? Task.CompletedTask : this.ProcessInterCommunicateMessageAsync(message)).ConfigureAwait(false),
 						exception => this.Logger?.LogError($"Error occurred while fetching an inter-communicate message => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
 					);
 
@@ -180,6 +163,8 @@ namespace net.vieapps.Services
 
 				this.Logger?.LogDebug($"The inter-communicate message updater was{(this.State == ServiceState.Disconnected ? " re-" : " ")}subscribed successful");
 			}
+
+			this.NodeID = this.NodeID ?? Extensions.GetNodeID(args);
 
 			try
 			{
@@ -204,11 +189,11 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Unregisters the service with API Gateway
 		/// </summary>
-		/// <param name="args">The arguments</param>
+		/// <param name="args">The arguments for unregistering</param>
 		/// <param name="available">true to mark the service still available</param>
 		/// <param name="onSuccess">The action to run when the service was unregistered successful</param>
 		/// <param name="onError">The action to run when got any error</param>
-		protected virtual async Task UnregisterServiceAsync(string[] args, bool available = true, Action<ServiceBase> onSuccess = null, Action<Exception> onError = null)
+		public virtual async Task UnregisterServiceAsync(IEnumerable<string> args, bool available = true, Action<ServiceBase> onSuccess = null, Action<Exception> onError = null)
 		{
 			// send information to API Gateway
 			try
@@ -357,7 +342,7 @@ namespace net.vieapps.Services
 		/// <param name="running">The running state</param>
 		/// <param name="available">The available state</param>
 		/// <returns></returns>
-		protected virtual Task SendServiceInfoAsync(string[] args, bool running, bool available = true)
+		protected virtual Task SendServiceInfoAsync(IEnumerable<string> args, bool running, bool available = true)
 			=> this.RTUService.SendServiceInfoAsync(this.ServiceName, args, running, available);
 		#endregion
 
@@ -466,18 +451,12 @@ namespace net.vieapps.Services
 		#endregion
 
 		#region Loggings
-		/// <summary>
-		/// Gets or sets the logger
-		/// </summary>
 		ILogger IServiceComponent.Logger
 		{
 			get => this.Logger;
 			set => this.Logger = value;
 		}
 
-		/// <summary>
-		/// Gets the logger
-		/// </summary>
 		public ILogger Logger { get; private set; }
 
 		ConcurrentQueue<Tuple<string, string, string, string, string, List<string>, string>> Logs { get; } = new ConcurrentQueue<Tuple<string, string, string, string, string, List<string>, string>>();
@@ -1516,91 +1495,31 @@ namespace net.vieapps.Services
 		protected virtual Task<bool> IsAuthorizedAsync(RequestInfo requestInfo, IBusinessEntity @object, Components.Security.Action action, Func<IUser, string, string, List<Privilege>> getPrivileges = null, Func<PrivilegeRole, List<Components.Security.Action>> getActions = null, CancellationToken cancellationToken = default)
 			=> this.IsAuthorizedAsync(requestInfo?.Session, requestInfo.ObjectName, @object, action, getPrivileges, getActions, requestInfo?.CorrelationID, cancellationToken);
 
-		/// <summary>
-		/// Determines the user is able to perform the manage action or not
-		/// </summary>
-		/// <param name="user">The user who performs the action</param>
-		/// <param name="objectName">The name of the service's object</param>
-		/// <param name="systemID">The identity of the business system</param>
-		/// <param name="definitionID">The identity of the entity definition</param>
-		/// <param name="objectID">The identity of the object</param>
-		/// <param name="cancellationToken">The cancellation token</param>
-		/// <returns></returns>
 		public virtual async Task<bool> CanManageAsync(User user, string objectName, string systemID, string definitionID, string objectID, CancellationToken cancellationToken = default)
 			=> await this.IsAdministratorAsync(user, objectName, definitionID, objectID, null, cancellationToken).ConfigureAwait(false)
 				? true
 				: await this.IsAuthorizedAsync(user, objectName, objectID, Components.Security.Action.Full, (await this.GetBusinessObjectAsync(definitionID, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges, null, null, null, cancellationToken).ConfigureAwait(false);
 
-		/// <summary>
-		/// Gets the state that determines the user is able to moderate or not
-		/// </summary>
-		/// <param name="user">The user who performs the action</param>
-		/// <param name="objectName">The name of the service's object</param>
-		/// <param name="systemID">The identity of the business system</param>
-		/// <param name="definitionID">The identity of the entity definition</param>
-		/// <param name="objectID">The identity of the object</param>
-		/// <param name="cancellationToken">The cancellation token</param>
-		/// <returns></returns>
 		public virtual async Task<bool> CanModerateAsync(User user, string objectName, string systemID, string definitionID, string objectID, CancellationToken cancellationToken = default)
 			=> await this.IsModeratorAsync(user, objectName, definitionID, objectID, null, cancellationToken).ConfigureAwait(false)
 				? true
 				: await this.IsAuthorizedAsync(user, objectName, objectID, Components.Security.Action.Approve, (await this.GetBusinessObjectAsync(definitionID, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges, null, null, null, cancellationToken).ConfigureAwait(false);
 
-		/// <summary>
-		/// Gets the state that determines the user is able to edit or not
-		/// </summary>
-		/// <param name="user">The user who performs the action</param>
-		/// <param name="objectName">The name of the service's object</param>
-		/// <param name="systemID">The identity of the business system</param>
-		/// <param name="definitionID">The identity of the entity definition</param>
-		/// <param name="objectID">The identity of the object</param>
-		/// <param name="cancellationToken">The cancellation token</param>
-		/// <returns></returns>
 		public virtual async Task<bool> CanEditAsync(User user, string objectName, string systemID, string definitionID, string objectID, CancellationToken cancellationToken = default)
 			=> await this.IsEditorAsync(user, objectName, definitionID, objectID, null, cancellationToken).ConfigureAwait(false)
 				? true
 				: await this.IsAuthorizedAsync(user, objectName, objectID, Components.Security.Action.Update, (await this.GetBusinessObjectAsync(definitionID, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges, null, null, null, cancellationToken).ConfigureAwait(false);
 
-		/// <summary>
-		/// Gets the state that determines the user is able to contribute or not
-		/// </summary>
-		/// <param name="user">The user who performs the action</param>
-		/// <param name="objectName">The name of the service's object</param>
-		/// <param name="systemID">The identity of the business system</param>
-		/// <param name="definitionID">The identity of the entity definition</param>
-		/// <param name="objectID">The identity of the object</param>
-		/// <param name="cancellationToken">The cancellation token</param>
-		/// <returns></returns>
 		public virtual async Task<bool> CanContributeAsync(User user, string objectName, string systemID, string definitionID, string objectID, CancellationToken cancellationToken = default)
 			=> await this.IsContributorAsync(user, objectName, definitionID, objectID, null, cancellationToken).ConfigureAwait(false)
 				? true
 				: await this.IsAuthorizedAsync(user, objectName, objectID, Components.Security.Action.Create, (await this.GetBusinessObjectAsync(definitionID, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges, null, null, null, cancellationToken).ConfigureAwait(false);
 
-		/// <summary>
-		/// Gets the state that determines the user is able to view or not
-		/// </summary>
-		/// <param name="user">The user who performs the action</param>
-		/// <param name="objectName">The name of the service's object</param>
-		/// <param name="systemID">The identity of the business system</param>
-		/// <param name="definitionID">The identity of the entity definition</param>
-		/// <param name="objectID">The identity of the object</param>
-		/// <param name="cancellationToken">The cancellation token</param>
-		/// <returns></returns>
 		public virtual async Task<bool> CanViewAsync(User user, string objectName, string systemID, string definitionID, string objectID, CancellationToken cancellationToken = default)
 			=> await this.IsViewerAsync(user, objectName, definitionID, objectID, null, cancellationToken).ConfigureAwait(false)
 				? true
 				: await this.IsAuthorizedAsync(user, objectName, objectID, Components.Security.Action.View, (await this.GetBusinessObjectAsync(definitionID, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges, null, null, null, cancellationToken).ConfigureAwait(false);
 
-		/// <summary>
-		/// Gets the state that determines the user is able to download or not
-		/// </summary>
-		/// <param name="user">The user who performs the action</param>
-		/// <param name="objectName">The name of the service's object</param>
-		/// <param name="systemID">The identity of the business system</param>
-		/// <param name="definitionID">The identity of the entity definition</param>
-		/// <param name="objectID">The identity of the object</param>
-		/// <param name="cancellationToken">The cancellation token</param>
-		/// <returns></returns>
 		public virtual async Task<bool> CanDownloadAsync(User user, string objectName, string systemID, string definitionID, string objectID, CancellationToken cancellationToken = default)
 			=> await this.IsDownloaderAsync(user, objectName, definitionID, objectID, null, cancellationToken).ConfigureAwait(false)
 				? true
@@ -1758,55 +1677,62 @@ namespace net.vieapps.Services
 			=> this.Timers.ForEach(timer => timer.Dispose());
 		#endregion
 
-		#region Caching
+		#region Caching keys
 		/// <summary>
-		/// Gets the key for working with caching
+		/// Gets the caching key for working with collection of objects
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
-		/// <param name="filter">The filtering expression</param>
-		/// <param name="sort">The sorting expression</param>
+		/// <param name="filter">The filter expression</param>
+		/// <param name="sort">The sort expression</param>
+		/// <param name="pageSize">The page size</param>
 		/// <param name="pageNumber">The page number</param>
-		/// <returns></returns>
-		protected virtual string GetCacheKey<T>(IFilterBy<T> filter, SortBy<T> sort, int pageNumber = 0) where T : class
-			=> typeof(T).GetTypeName(true) + "#"
-				+ (filter != null ? $"{filter.GetUUID()}:" : "")
-				+ (sort != null ? $"{sort.GetUUID()}:" : "")
-				+ (pageNumber > 0 ? $"{pageNumber}" : "");
-
-		List<string> GetRelatedCacheKeys<T>(IFilterBy<T> filter, SortBy<T> sort) where T : class
-		{
-			var key = this.GetCacheKey(filter, sort);
-			var keys = new List<string> { key, $"{key}json", $"{key}total" };
-			for (var index = 1; index <= 100; index++)
-			{
-				keys.Add($"{key}{index}");
-				keys.Add($"{key}{index}:json");
-				keys.Add($"{key}{index}:total");
-			}
-			return keys;
-		}
+		/// <returns>The string that presents a caching key</returns>
+		protected virtual string GetCacheKey<T>(IFilterBy<T> filter, SortBy<T> sort, int pageSize = 0, int pageNumber = 0) where T : class
+			=> Extensions.GetCacheKey(filter, sort, pageSize, pageNumber);
 
 		/// <summary>
-		/// Clears the related data from the cache storage
+		/// Gets the related caching key for working with collection of objects
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
-		/// <param name="cache">The caching storage</param>
-		/// <param name="filter">The filtering expression</param>
-		/// <param name="sort">The sorting expression</param>
-		protected virtual void ClearRelatedCache<T>(ICache cache, IFilterBy<T> filter, SortBy<T> sort) where T : class
-			=> cache?.Remove(this.GetRelatedCacheKeys(filter, sort));
+		/// <param name="filter">The filter expression</param>
+		/// <param name="sort">The sort expression</param>
+		/// <returns>The collection presents all related caching keys (100 pages each size is 20 objects)</returns>
+		protected virtual List<string> GetRelatedCacheKeys<T>(IFilterBy<T> filter, SortBy<T> sort) where T : class
+			=> Extensions.GetRelatedCacheKeys(filter, sort);
 
 		/// <summary>
-		/// Clears the related data from the cache storage
+		/// Gets the caching key for workingwith the number of total objects
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
-		/// <param name="cache">The caching storage</param>
-		/// <param name="filter">The filtering expression</param>
-		/// <param name="sort">The sorting expression</param>
-		protected virtual Task ClearRelatedCacheAsync<T>(ICache cache, IFilterBy<T> filter, SortBy<T> sort) where T : class
-			=> cache != null
-				? cache.RemoveAsync(this.GetRelatedCacheKeys(filter, sort))
-				: Task.CompletedTask;
+		/// <param name="filter">The filter expression</param>
+		/// <param name="sort">The sort expression</param>
+		/// <returns>The string that presents a caching key</returns>
+		protected virtual string GetCacheKeyOfTotalObjects<T>(IFilterBy<T> filter, SortBy<T> sort) where T : class
+			=> Extensions.GetCacheKeyOfTotalObjects(filter, sort);
+
+		/// <summary>
+		/// Gets the caching key for working with the JSON of objects
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="filter">The filter expression</param>
+		/// <param name="sort">The sort expression</param>
+		/// <param name="pageNumber">The page number</param>
+		/// <param name="pageSize">The page size</param>
+		/// <returns>The string that presents a caching key</returns>
+		protected virtual string GetCacheKeyOfObjectsJson<T>(IFilterBy<T> filter, SortBy<T> sort, int pageSize = 0, int pageNumber = 0) where T : class
+			=> Extensions.GetCacheKeyOfObjectsJson(filter, sort, pageSize, pageNumber);
+
+		/// <summary>
+		/// Gets the caching key for working with the XML of objects
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="filter">The filter expression</param>
+		/// <param name="sort">The sort expression</param>
+		/// <param name="pageNumber">The page number</param>
+		/// <param name="pageSize">The page size</param>
+		/// <returns>The string that presents a caching key</returns>
+		protected virtual string GetCacheKeyOfObjectsXml<T>(IFilterBy<T> filter, SortBy<T> sort, int pageSize = 0, int pageNumber = 0) where T : class
+			=> Extensions.GetCacheKeyOfObjectsXml(filter, sort, pageSize, pageNumber);
 		#endregion
 
 		#region Runtime exception
@@ -1885,7 +1811,7 @@ namespace net.vieapps.Services
 		/// <typeparam name="T"></typeparam>
 		/// <returns></returns>
 		protected virtual JToken GenerateViewControls<T>() where T : class
-			=> RepositoryMediator.GenerateFormControls<T>();
+			=> RepositoryMediator.GenerateViewControls<T>();
 		#endregion
 
 		#region Evaluate an Javascript expression
@@ -2014,6 +1940,7 @@ namespace net.vieapps.Services
 			Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null
 		)
 		{
+			this.NodeID = Extensions.GetNodeID(args);
 			this.Logger?.LogInformation($"Attempting to connect to API Gateway Router [{new Uri(Router.GetRouterStrInfo()).GetResolvedURI()}]");
 			return Router.ConnectAsync(
 				async (sender, arguments) =>
@@ -2025,7 +1952,7 @@ namespace net.vieapps.Services
 						this.State = ServiceState.Ready;
 
 					// register the service
-					await this.RegisterServiceAsync(onRegisterSuccess, onRegisterError).ConfigureAwait(false);
+					await this.RegisterServiceAsync(args, onRegisterSuccess, onRegisterError).ConfigureAwait(false);
 
 					// handling the established event
 					try
@@ -2145,12 +2072,6 @@ namespace net.vieapps.Services
 			);
 		}
 
-		/// <summary>
-		/// Starts the service (the short way - connect to API Gateway and register the service)
-		/// </summary>
-		/// <param name="args">The arguments</param>
-		/// <param name="initializeRepository">true to initialize the repository of the service</param>
-		/// <param name="next">The next action to run when the service was started</param>
 		public virtual Task StartAsync(string[] args = null, bool initializeRepository = true, Action<IService> next = null)
 			=> this.StartAsync(args, _ =>
 			{
@@ -2211,12 +2132,6 @@ namespace net.vieapps.Services
 				}
 			});
 
-		/// <summary>
-		/// Starts the service (the short way - connect to API Gateway and register the service)
-		/// </summary>
-		/// <param name="args">The arguments</param>
-		/// <param name="initializeRepository">true to initialize the repository of the service</param>
-		/// <param name="next">The next action to run when the service was started</param>
 		public virtual void Start(string[] args = null, bool initializeRepository = true, Action<IService> next = null)
 			=> this.StartAsync(args, initializeRepository, next).Wait();
 		#endregion
@@ -2281,11 +2196,6 @@ namespace net.vieapps.Services
 			}
 		}
 
-		/// <summary>
-		/// Stops the service (unregister the service, disconnect from API Gateway and do the clean-up tasks)
-		/// </summary>
-		/// <param name="args">The arguments</param>
-		/// <param name="next">The next action to run when the service was stopped</param>
 		public virtual Task StopAsync(string[] args = null, Action<IService> next = null)
 			=> this.StopAsync(args, true, true, next);
 
@@ -2299,11 +2209,6 @@ namespace net.vieapps.Services
 		protected virtual void Stop(string[] args, bool available, bool disconnect, Action<IService> next = null)
 			=> this.StopAsync(args, available, disconnect, next).Wait();
 
-		/// <summary>
-		/// Stops the service (unregister the service, disconnect from API Gateway and do the clean-up tasks)
-		/// </summary>
-		/// <param name="args">The arguments</param>
-		/// <param name="next">The next action to run when the service was stopped</param>
 		public virtual void Stop(string[] args = null, Action<IService> next = null)
 			=> this.StopAsync(args, next).Wait();
 		#endregion
@@ -2314,13 +2219,6 @@ namespace net.vieapps.Services
 		/// </summary>
 		public bool Disposed { get; private set; } = false;
 
-		/// <summary>
-		/// Disposes the service (unregister the service, disconnect from API Gateway and do the clean-up tasks)
-		/// </summary>
-		/// <param name="args">The arguments</param>
-		/// <param name="available">true to mark the service still available</param>
-		/// <param name="disconnect">true to disconnect from API Gateway Router and close all WAMP channels</param>
-		/// <param name="next">The next action to run when the service was disposed</param>
 		public virtual ValueTask DisposeAsync(string[] args, bool available = true, bool disconnect = true, Action<IService> next = null)
 			=> new ValueTask(this.Disposed ? Task.CompletedTask : this.StopAsync(args, available, disconnect, _ =>
 			{
@@ -2357,13 +2255,6 @@ namespace net.vieapps.Services
 		public virtual ValueTask DisposeAsync()
 			=> this.DisposeAsync(null);
 
-		/// <summary>
-		/// Disposes the service (unregister the service, disconnect from API Gateway and do the clean-up tasks)
-		/// </summary>
-		/// <param name="args">The arguments</param>
-		/// <param name="available">true to mark the service still available</param>
-		/// <param name="disconnect">true to disconnect from API Gateway Router and close all WAMP channels</param>
-		/// <param name="next">The next action to run when the service was disposed</param>
 		public virtual void Dispose(string[] args, bool available = true, bool disconnect = true, Action<IService> next = null)
 			=> this.DisposeAsync(args, available, disconnect, next).AsTask().Wait();
 
