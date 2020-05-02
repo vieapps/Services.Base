@@ -43,6 +43,19 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static string GetRuntimeEnvironment(string seperator = "\r\n\t")
 			=> $"- User: {Environment.UserName.ToLower()} @ {Environment.MachineName.ToLower()}{seperator ?? "\r\n\t"}- Platform: {Extensions.GetRuntimePlatform()}";
+
+		/// <summary>
+		/// Gets the run-time arguments (for working with service/node identity)
+		/// </summary>
+		/// <returns></returns>
+		public static Tuple<string, string, string, string> GetRuntimeArguments()
+			=> new Tuple<string, string, string, string>
+			(
+				Environment.UserName.Trim().ToLower(),
+				Environment.MachineName.Trim().ToLower(),
+				RuntimeInformation.FrameworkDescription.Trim(),
+				Extensions.GetRuntimePlatform(false)
+			);
 		#endregion
 
 		#region Get node identity, unique name & end-point
@@ -56,10 +69,11 @@ namespace net.vieapps.Services
 		/// <returns>The string that presents the identity of a node (include user and host)</returns>
 		public static string GetNodeID(string user = null, string host = null, string platform = null, string os = null)
 		{
-			user = (user ?? Environment.UserName).Trim().ToLower();
-			host = (host ?? Environment.MachineName).Trim().ToLower();
-			platform = (platform ?? RuntimeInformation.FrameworkDescription).Trim().ToLower();
-			os = (os ?? Extensions.GetRuntimeOS()).Trim().ToLower();
+			var runtimeArguments = Extensions.GetRuntimeArguments();
+			user = user?.Trim().ToLower() ?? runtimeArguments.Item1;
+			host = host?.Trim().ToLower() ?? runtimeArguments.Item2;
+			platform = platform?.Trim() ?? runtimeArguments.Item3;
+			os = os?.Trim() ?? runtimeArguments.Item4;
 			return $"{user}-{host}-" + $"{platform} @ {os}".GenerateUUID();
 		}
 
@@ -69,7 +83,8 @@ namespace net.vieapps.Services
 		/// <param name="args">The running (starting) arguments</param>
 		/// <returns>The string that presents the identity of a node (include user and host)</returns>
 		public static string GetNodeID(IEnumerable<string> args)
-			=> Extensions.GetNodeID(
+			=> Extensions.GetNodeID
+			(
 				args?.FirstOrDefault(arg => arg.IsStartsWith("/run-user:"))?.Replace(StringComparison.OrdinalIgnoreCase, "/run-user:", "").UrlDecode(),
 				args?.FirstOrDefault(arg => arg.IsStartsWith("/run-host:"))?.Replace(StringComparison.OrdinalIgnoreCase, "/run-host:", "").UrlDecode(),
 				args?.FirstOrDefault(arg => arg.IsStartsWith("/run-platform:"))?.Replace(StringComparison.OrdinalIgnoreCase, "/run-platform:", "").UrlDecode(),
@@ -118,6 +133,25 @@ namespace net.vieapps.Services
 
 		#region Send service info to API Gateway
 		/// <summary>
+		/// Gets the invoke information
+		/// </summary>
+		/// <param name="args"></param>
+		/// <returns></returns>
+		public static string GetInvokeInfo(IEnumerable<string> args = null)
+		{
+			var runtimeArguments = Extensions.GetRuntimeArguments();
+			var callingArguments = args ?? new string[] { };
+			return (callingArguments.FirstOrDefault(argument => argument.IsStartsWith("/call-user:"))?.Replace(StringComparison.OrdinalIgnoreCase, "/call-user:", "").UrlDecode() ?? runtimeArguments.Item1)
+				+ " [Host: "
+				+ (callingArguments.FirstOrDefault(argument => argument.IsStartsWith("/call-host:"))?.Replace(StringComparison.OrdinalIgnoreCase, "/call-host:", "").UrlDecode() ?? runtimeArguments.Item2)
+				+ " - Platform: "
+				+ (callingArguments.FirstOrDefault(argument => argument.IsStartsWith("/call-platform:"))?.Replace(StringComparison.OrdinalIgnoreCase, "/call-platform:", "").UrlDecode() ?? runtimeArguments.Item3)
+				+ " @ "
+				+ (callingArguments.FirstOrDefault(argument => argument.IsStartsWith("/call-os:"))?.Replace(StringComparison.OrdinalIgnoreCase, "/call-os:", "").UrlDecode() ?? runtimeArguments.Item4)
+				+ "]";
+		}
+
+		/// <summary>
 		/// Sends the service information to API Gateway
 		/// </summary>
 		/// <param name="rtuService"></param>
@@ -128,33 +162,21 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		public static Task SendServiceInfoAsync(this IRTUService rtuService, string serviceName, IEnumerable<string> args, bool running, bool available = true, CancellationToken cancellationToken = default)
-		{
-			if (rtuService == null || string.IsNullOrWhiteSpace(serviceName))
-				return Task.CompletedTask;
-
-			var arguments = (args ?? new string[] { }).Where(arg => !arg.IsStartsWith("/controller-id:")).ToArray();
-			var invokeInfo = (arguments.FirstOrDefault(arg => arg.IsStartsWith("/call-user:"))?.Replace(StringComparison.OrdinalIgnoreCase, "/call-user:", "").UrlDecode().Trim().ToLower() ?? Environment.UserName.ToLower())
-				+ " [Host: "
-				+ (arguments.FirstOrDefault(arg => arg.IsStartsWith("/call-host:"))?.Replace(StringComparison.OrdinalIgnoreCase, "/call-host:", "").UrlDecode().Trim().ToLower() ?? Environment.MachineName.ToLower())
-				+ " - Platform: "
-				+ (arguments.FirstOrDefault(arg => arg.IsStartsWith("/call-platform:"))?.Replace(StringComparison.OrdinalIgnoreCase, "/call-platform:", "").UrlDecode() ?? RuntimeInformation.FrameworkDescription.Trim())
-				+ " @ "
-				+ (arguments.FirstOrDefault(arg => arg.IsStartsWith("/call-os:"))?.Replace(StringComparison.OrdinalIgnoreCase, "/call-os:", "").UrlDecode() ?? Extensions.GetRuntimePlatform(false))
-				+ "]";
-			return rtuService.SendInterCommunicateMessageAsync(new CommunicateMessage("APIGateway")
-			{
-				Type = "Service#Info",
-				Data = new ServiceInfo
+			=> rtuService == null || string.IsNullOrWhiteSpace(serviceName)
+				? Task.CompletedTask
+				: rtuService.SendInterCommunicateMessageAsync(new CommunicateMessage("APIGateway")
 				{
-					Name = serviceName.ToLower(),
-					UniqueName = Extensions.GetUniqueName(serviceName, arguments),
-					ControllerID = args?.FirstOrDefault(arg => arg.IsStartsWith("/controller-id:"))?.Replace("/controller-id:", "") ?? "Unknown",
-					InvokeInfo = invokeInfo,
-					Available = available,
-					Running = running
-				}.ToJson()
-			}, cancellationToken);
-		}
+					Type = "Service#Info",
+					Data = new ServiceInfo
+					{
+						Name = serviceName.ToLower(),
+						UniqueName = Extensions.GetUniqueName(serviceName, args),
+						ControllerID = args?.FirstOrDefault(arg => arg.IsStartsWith("/controller-id:"))?.Replace("/controller-id:", "") ?? "Unknown",
+						InvokeInfo = Extensions.GetInvokeInfo(args),
+						Available = available,
+						Running = running
+					}.ToJson()
+				}, cancellationToken);
 		#endregion
 
 	}
