@@ -119,8 +119,8 @@ namespace net.vieapps.Services
 					? (jsonException["Message"] as JValue).Value.ToString()
 					: $"Error occurred at \"services.{(requestInfo?.ServiceName ?? "unknown").ToLower()}\"";
 
-				type = jsonException != null
-					? (jsonException["Type"] as JValue).Value.ToString().ToArray('.').Last()
+				type = jsonException != null && jsonException["Type"] != null
+					? ((jsonException["Type"] as JValue)?.Value?.ToString()?.ToArray('.').Last() ?? "ServiceOperationException")
 					: "ServiceOperationException";
 			}
 
