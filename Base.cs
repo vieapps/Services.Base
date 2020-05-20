@@ -1626,14 +1626,15 @@ namespace net.vieapps.Services
 		public Task<JToken> MarkFilesAsOfficialAsync(RequestInfo requestInfo, string systemID = null, string entityInfo = null, string objectID = null, string objectTitle = null, CancellationToken cancellationToken = default)
 			=> requestInfo == null || requestInfo.Session == null
 				? Task.FromResult<JToken>(null)
-				: this.CallServiceAsync(new RequestInfo(requestInfo.Session, "Files", null, "PATCH")
+				: this.CallServiceAsync(new RequestInfo(requestInfo.Session, "Files")
 				{
+					Verb = "PATCH",
 					Header = requestInfo.Header,
 					Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 					{
 						["x-service-name"] = requestInfo.ServiceName,
 						["x-object-name"] = requestInfo.ObjectName,
-						["x-system"] = systemID,
+						["x-system-id"] = systemID,
 						["x-entity"] = entityInfo,
 						["x-object-id"] = objectID ?? requestInfo.GetObjectIdentity(),
 						["x-object-title"] = objectTitle
@@ -1799,7 +1800,7 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
-		#region Controls of forms/views
+		#region Forms controls & Expressions of JavaScript
 		/// <summary>
 		/// Generates the controls of this type (for working with input forms)
 		/// </summary>
@@ -1808,16 +1809,6 @@ namespace net.vieapps.Services
 		protected virtual JToken GenerateFormControls<T>() where T : class
 			=> RepositoryMediator.GenerateFormControls<T>();
 
-		/// <summary>
-		/// Generates the controls of this type (for working with view forms)
-		/// </summary>
-		/// <typeparam name="T"></typeparam>
-		/// <returns></returns>
-		protected virtual JToken GenerateViewControls<T>() where T : class
-			=> RepositoryMediator.GenerateViewControls<T>();
-		#endregion
-
-		#region Evaluate an Javascript expression
 		/// <summary>
 		/// Gest the Javascript embed objects
 		/// </summary>
