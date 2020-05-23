@@ -793,6 +793,17 @@ namespace net.vieapps.Services
 		#endregion
 
 		#region Call services
+		protected Action<string, Exception> GetTracker(RequestInfo requestInfo)
+		{
+			var objectName = this.ServiceName.IsEquals(requestInfo.ServiceName) ? "" : requestInfo.ServiceName;
+			void tracker(string log, Exception exception)
+			{
+				if (this.IsDebugResultsEnabled)
+					this.WriteLogs(requestInfo.CorrelationID, log, exception, this.ServiceName, objectName);
+			}
+			return tracker;
+		}
+
 		/// <summary>
 		/// Calls a business service
 		/// </summary>
@@ -802,66 +813,8 @@ namespace net.vieapps.Services
 		/// <param name="onSuccess">The action to run when success</param>
 		/// <param name="onError">The action to run when got an error</param>
 		/// <returns>A <see cref="JObject">JSON</see> object that presents the results of the business service</returns>
-		protected virtual async Task<JToken> CallServiceAsync(
-			RequestInfo requestInfo,
-			CancellationToken cancellationToken = default,
-			Action<RequestInfo> onStart = null,
-			Action<RequestInfo, JToken> onSuccess = null,
-			Action<RequestInfo, Exception> onError = null
-		)
-		{
-			var stopwatch = Stopwatch.StartNew();
-			var objectName = this.ServiceName.IsEquals(requestInfo.ServiceName) ? "" : requestInfo.ServiceName;
-			try
-			{
-				onStart?.Invoke(requestInfo);
-				if (this.IsDebugResultsEnabled)
-					await this.WriteLogsAsync(requestInfo.CorrelationID, $"Start call service {requestInfo.Verb} {requestInfo.GetURI()} - {requestInfo.Session.AppName} ({requestInfo.Session.AppPlatform}) @ {requestInfo.Session.IP}", null, this.ServiceName, objectName).ConfigureAwait(false);
-
-				var json = await Router.GetService(requestInfo.ServiceName).ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false);
-				onSuccess?.Invoke(requestInfo, json);
-
-				if (this.IsDebugResultsEnabled)
-					await this.WriteLogsAsync(requestInfo.CorrelationID, "Call service successful" + "\r\n" +
-						$"Request: {requestInfo.ToString(this.JsonFormat)}" + "\r\n" +
-						$"Response: {json?.ToString(this.JsonFormat)}"
-					, null, this.ServiceName, objectName).ConfigureAwait(false);
-
-				return json;
-			}
-			catch (WampSessionNotEstablishedException)
-			{
-				await Task.Delay(UtilityService.GetRandomNumber(567, 789), cancellationToken).ConfigureAwait(false);
-				try
-				{
-					var json = await Router.GetService(requestInfo.ServiceName).ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false);
-					onSuccess?.Invoke(requestInfo, json);
-
-					if (this.IsDebugResultsEnabled)
-						await this.WriteLogsAsync(requestInfo.CorrelationID, "Re-call service successful" + "\r\n" +
-							$"Request: {requestInfo.ToString(this.JsonFormat)}" + "\r\n" +
-							$"Response: {json?.ToString(this.JsonFormat)}"
-						, null, this.ServiceName, objectName).ConfigureAwait(false);
-
-					return json;
-				}
-				catch (Exception)
-				{
-					throw;
-				}
-			}
-			catch (Exception ex)
-			{
-				onError?.Invoke(requestInfo, ex);
-				throw ex;
-			}
-			finally
-			{
-				stopwatch.Stop();
-				if (this.IsDebugResultsEnabled)
-					await this.WriteLogsAsync(requestInfo.CorrelationID, $"Call service finished in {stopwatch.GetElapsedTimes()}", null, this.ServiceName, objectName).ConfigureAwait(false);
-			}
-		}
+		protected virtual async Task<JToken> CallServiceAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default, Action<RequestInfo> onStart = null, Action<RequestInfo, JToken> onSuccess = null, Action<RequestInfo, Exception> onError = null)
+			=> await requestInfo.CallServiceAsync(cancellationToken, onStart, onSuccess, onError, this.GetTracker(requestInfo), this.JsonFormat).ConfigureAwait(false);
 		#endregion
 
 		#region Sessions
@@ -1539,24 +1492,9 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
 		public Task<JToken> GetThumbnailsAsync(RequestInfo requestInfo, string objectID = null, string objectTitle = null, CancellationToken cancellationToken = default)
-			=> requestInfo == null || requestInfo.Session == null
+			=> requestInfo == null
 				? Task.FromResult<JToken>(null)
-				: this.CallServiceAsync(new RequestInfo(requestInfo.Session, "Files", "Thumbnail")
-				{
-					Header = requestInfo.Header,
-					Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-					{
-						["object-identity"] = "search",
-						["x-object-id"] = objectID ?? requestInfo.GetObjectIdentity(),
-						["x-object-title"] = objectTitle
-					},
-					Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-					{
-						["Signature"] = (requestInfo.Header.TryGetValue("x-app-token", out var appToken) ? appToken : "").GetHMACSHA256(this.ValidationKey),
-						["SessionID"] = requestInfo.Session.SessionID.GetHMACBLAKE256(this.ValidationKey)
-					},
-					CorrelationID = requestInfo.CorrelationID
-				}, cancellationToken);
+				: requestInfo.GetThumbnailsAsync(objectID, objectTitle, cancellationToken, this.ValidationKey, this.GetTracker(requestInfo), this.JsonFormat);
 
 		/// <summary>
 		/// Gets the collection of attachments
@@ -1567,24 +1505,9 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
 		public Task<JToken> GetAttachmentsAsync(RequestInfo requestInfo, string objectID = null, string objectTitle = null, CancellationToken cancellationToken = default)
-			=> requestInfo == null || requestInfo.Session == null
+			=> requestInfo == null
 				? Task.FromResult<JToken>(null)
-				: this.CallServiceAsync(new RequestInfo(requestInfo.Session, "Files", "Attachment")
-				{
-					Header = requestInfo.Header,
-					Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-					{
-						["object-identity"] = "search",
-						["x-object-id"] = objectID ?? requestInfo.GetObjectIdentity(),
-						["x-object-title"] = objectTitle
-					},
-					Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-					{
-						["Signature"] = (requestInfo.Header.TryGetValue("x-app-token", out var appToken) ? appToken : "").GetHMACSHA256(this.ValidationKey),
-						["SessionID"] = requestInfo.Session.SessionID.GetHMACBLAKE256(this.ValidationKey)
-					},
-					CorrelationID = requestInfo.CorrelationID
-				}, cancellationToken);
+				: requestInfo.GetAttachmentsAsync(objectID, objectTitle, cancellationToken, this.ValidationKey, this.GetTracker(requestInfo), this.JsonFormat);
 
 		/// <summary>
 		/// Gets the collection of files (thumbnails and attachment files are included)
@@ -1595,23 +1518,9 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
 		public Task<JToken> GetFilesAsync(RequestInfo requestInfo, string objectID = null, string objectTitle = null, CancellationToken cancellationToken = default)
-			=> requestInfo == null || requestInfo.Session == null
+			=> requestInfo == null
 				? Task.FromResult<JToken>(null)
-				: this.CallServiceAsync(new RequestInfo(requestInfo.Session, "Files")
-				{
-					Header = requestInfo.Header,
-					Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-					{
-						["x-object-id"] = objectID ?? requestInfo.GetObjectIdentity(),
-						["x-object-title"] = objectTitle
-					},
-					Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-					{
-						["Signature"] = (requestInfo.Header.TryGetValue("x-app-token", out var appToken) ? appToken : "").GetHMACSHA256(this.ValidationKey),
-						["SessionID"] = requestInfo.Session.SessionID.GetHMACBLAKE256(this.ValidationKey)
-					},
-					CorrelationID = requestInfo.CorrelationID
-				}, cancellationToken);
+				: requestInfo.GetFilesAsync(objectID, objectTitle, cancellationToken, this.ValidationKey, this.GetTracker(requestInfo), this.JsonFormat);
 
 		/// <summary>
 		/// Gets the collection of files (thumbnails and attachment files are included) as official
@@ -1624,28 +1533,23 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
 		public Task<JToken> MarkFilesAsOfficialAsync(RequestInfo requestInfo, string systemID = null, string entityInfo = null, string objectID = null, string objectTitle = null, CancellationToken cancellationToken = default)
-			=> requestInfo == null || requestInfo.Session == null
+			=> requestInfo == null
 				? Task.FromResult<JToken>(null)
-				: this.CallServiceAsync(new RequestInfo(requestInfo.Session, "Files")
-				{
-					Verb = "PATCH",
-					Header = requestInfo.Header,
-					Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-					{
-						["x-service-name"] = requestInfo.ServiceName,
-						["x-object-name"] = requestInfo.ObjectName,
-						["x-system-id"] = systemID,
-						["x-entity"] = entityInfo,
-						["x-object-id"] = objectID ?? requestInfo.GetObjectIdentity(),
-						["x-object-title"] = objectTitle
-					},
-					Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-					{
-						["Signature"] = (requestInfo.Header.TryGetValue("x-app-token", out var appToken) ? appToken : "").GetHMACSHA256(this.ValidationKey),
-						["SessionID"] = requestInfo.Session.SessionID.GetHMACBLAKE256(this.ValidationKey)
-					},
-					CorrelationID = requestInfo.CorrelationID
-				}, cancellationToken);
+				: requestInfo.MarkFilesAsOfficialAsync(systemID, entityInfo, objectID, objectTitle, cancellationToken, this.ValidationKey, this.GetTracker(requestInfo), this.JsonFormat);
+
+		/// <summary>
+		/// Deletes the collection of files (thumbnails and attachment files are included)
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <param name="systemID"></param>
+		/// <param name="entityInfo"></param>
+		/// <param name="objectID"></param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		public Task<JToken> DeleteFilesAsync(RequestInfo requestInfo, string systemID = null, string entityInfo = null, string objectID = null, CancellationToken cancellationToken = default)
+			=> requestInfo == null
+				? Task.FromResult<JToken>(null)
+				: requestInfo.DeleteFilesAsync(systemID, entityInfo, objectID, cancellationToken, this.ValidationKey, this.GetTracker(requestInfo), this.JsonFormat);
 		#endregion
 
 		#region Timers
