@@ -5,15 +5,18 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using WampSharp.Binding;
 using WampSharp.Core.Listener;
 using WampSharp.V2;
 using WampSharp.V2.Realm;
 using WampSharp.V2.Core.Contracts;
+using WampSharp.V2.Client;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using net.vieapps.Components.Utility;
 using net.vieapps.Components.WebSockets;
+using DnsClient.Internal;
 #endregion
 
 namespace net.vieapps.Services
@@ -387,7 +390,7 @@ namespace net.vieapps.Services
 			=> Router.DisconnectAsync(message, onError).Wait(waitingTimes > 0 ? waitingTimes : 1234);
 		#endregion
 
-		#region Get a service
+		#region Get and Call a service
 		internal static ConcurrentDictionary<string, IService> Services { get; } = new ConcurrentDictionary<string, IService>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>
@@ -428,6 +431,60 @@ namespace net.vieapps.Services
 			}
 
 			return service ?? throw new ServiceNotFoundException($"The service with unique URI \"{name.ToLower()}\" is not found");
+		}
+
+		/// <summary>
+		/// Calls a business service
+		/// </summary>
+		/// <param name="requestInfo">The requesting information</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <param name="onStart">The action to run when start</param>
+		/// <param name="onSuccess">The action to run when success</param>
+		/// <param name="onError">The action to run when got an error</param>
+		/// <param name="tracker">The tracker to wirte debuging log of all steps</param>
+		/// <param name="jsonFormat">The format of outputing json</param>
+		/// <returns>A <see cref="JObject">JSON</see> object that presents the results of the business service</returns>
+		public static async Task<JToken> CallServiceAsync(this RequestInfo requestInfo, CancellationToken cancellationToken = default, Action<RequestInfo> onStart = null, Action<RequestInfo, JToken> onSuccess = null, Action<RequestInfo, Exception> onError = null, Action<string, Exception> tracker = null, Formatting jsonFormat = Formatting.None)
+		{
+			var stopwatch = Stopwatch.StartNew();
+			var objectName = requestInfo.ServiceName;
+			try
+			{
+				onStart?.Invoke(requestInfo);
+				tracker?.Invoke($"Start call service {requestInfo.Verb} {requestInfo.GetURI()} - {requestInfo.Session.AppName} ({requestInfo.Session.AppPlatform}) @ {requestInfo.Session.IP}", null);
+
+				var json = await Router.GetService(requestInfo.ServiceName).ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false);
+				onSuccess?.Invoke(requestInfo, json);
+
+				tracker?.Invoke("Call service successful" + "\r\n" + $"Request: {requestInfo.ToString(jsonFormat)}" + "\r\n" + $"Response: {json?.ToString(jsonFormat)}", null);
+				return json;
+			}
+			catch (WampSessionNotEstablishedException)
+			{
+				await Task.Delay(UtilityService.GetRandomNumber(567, 789), cancellationToken).ConfigureAwait(false);
+				try
+				{
+					var json = await Router.GetService(requestInfo.ServiceName).ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false);
+					onSuccess?.Invoke(requestInfo, json);
+
+					tracker?.Invoke("Re-call service successful" + "\r\n" + $"Request: {requestInfo.ToString(jsonFormat)}" + "\r\n" + $"Response: {json?.ToString(jsonFormat)}", null);
+					return json;
+				}
+				catch (Exception)
+				{
+					throw;
+				}
+			}
+			catch (Exception ex)
+			{
+				onError?.Invoke(requestInfo, ex);
+				throw ex;
+			}
+			finally
+			{
+				stopwatch.Stop();
+				tracker?.Invoke($"Call service finished in {stopwatch.GetElapsedTimes()}", null);
+			}
 		}
 		#endregion
 
