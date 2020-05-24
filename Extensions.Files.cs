@@ -1,6 +1,5 @@
 ﻿#region Related components
 using System;
-using System.Dynamic;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
@@ -120,7 +119,7 @@ namespace net.vieapps.Services
 					Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 					{
 						["x-service-name"] = requestInfo.ServiceName,
-						["x-object-name"] = requestInfo.ObjectName,
+						["x-object-name"] = requestInfo.GetObjectName(),
 						["x-system-id"] = systemID,
 						["x-entity"] = entityInfo,
 						["x-object-id"] = objectID ?? requestInfo.GetObjectIdentity(),
@@ -156,7 +155,7 @@ namespace net.vieapps.Services
 					Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 					{
 						["x-service-name"] = requestInfo.ServiceName,
-						["x-object-name"] = requestInfo.ObjectName,
+						["x-object-name"] = requestInfo.GetObjectName(),
 						["x-system-id"] = systemID,
 						["x-entity"] = entityInfo,
 						["x-object-id"] = objectID ?? requestInfo.GetObjectIdentity()
@@ -168,5 +167,11 @@ namespace net.vieapps.Services
 					},
 					CorrelationID = requestInfo.CorrelationID
 				}.CallServiceAsync(cancellationToken, null, null, null, tracker, jsonFormat);
+
+		static string GetObjectName(this RequestInfo requestInfo)
+		{
+			var nameElements = requestInfo.ObjectName.ToArray(".");
+			return nameElements.Length > 1 ? nameElements[1] : nameElements[0];
+		}
 	}
 }

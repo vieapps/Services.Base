@@ -2009,7 +2009,7 @@ namespace net.vieapps.Services
 							{
 								if (ex != null)
 									this.Logger?.LogError(msg, ex);
-								else if (!this.IsDebugLogEnabled)
+								else if (this.IsDebugLogEnabled)
 									this.Logger?.LogDebug(msg);
 							}
 						);
