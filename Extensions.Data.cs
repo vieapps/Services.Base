@@ -148,6 +148,7 @@ namespace net.vieapps.Services
 			var children = serverJson.Get<JArray>("Children");
 			if (children == null)
 			{
+				@operator = @operator ?? CompareOperator.Equals.ToString();
 				name = serverJson.Get<string>("Attribute");
 				return @operator.IsEquals("IsNull") || @operator.IsEquals("IsNotNull") || @operator.IsEquals("IsEmpty") || @operator.IsEquals("IsNotEmpty")
 					? new JValue(@operator) as JToken
@@ -155,6 +156,7 @@ namespace net.vieapps.Services
 			}
 			else
 			{
+				@operator = @operator ?? GroupOperator.And.ToString();
 				name = @operator;
 				return children.ToJArray(json =>
 				{
@@ -235,7 +237,9 @@ namespace net.vieapps.Services
 
 		static void GetClientJson(this JToken serverJson, JObject clientJson)
 		{
-			clientJson[serverJson.Get<string>("Attribute")] = serverJson.Get("Mode", "Ascending");
+			var attribute = serverJson.Get<string>("Attribute");
+			if (!string.IsNullOrWhiteSpace(attribute))
+				clientJson[attribute] = serverJson.Get("Mode", "Ascending");
 			serverJson.Get<JObject>("ThenBy")?.GetClientJson(clientJson);
 		}
 
