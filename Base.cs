@@ -934,7 +934,9 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected virtual Task<RepositoryBase> GetBusinessObjectAsync(string entityInfo, string objectID, CancellationToken cancellationToken = default)
-			=> RepositoryMediator.GetAsync(entityInfo, objectID, cancellationToken);
+			=> string.IsNullOrWhiteSpace(entityInfo) || string.IsNullOrWhiteSpace(objectID)
+				? Task.FromResult<RepositoryBase>(null)
+				: RepositoryMediator.GetAsync(entityInfo, objectID, cancellationToken);
 
 		/// <summary>
 		/// Gets a business object
@@ -944,7 +946,9 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected virtual Task<RepositoryBase> GetBusinessObjectAsync(EntityDefinition definition, string objectID, CancellationToken cancellationToken = default)
-			=> RepositoryMediator.GetAsync(definition, objectID, cancellationToken);
+			=> definition  == null || string.IsNullOrWhiteSpace(objectID)
+				? Task.FromResult<RepositoryBase>(null)
+				: RepositoryMediator.GetAsync(definition, objectID, cancellationToken);
 		#endregion
 
 		#region Role-based authorizations
@@ -962,7 +966,7 @@ namespace net.vieapps.Services
 				correlationID = correlationID ?? UtilityService.NewUUID;
 				try
 				{
-					var @is = "Users".IsEquals(this.ServiceName) ? user.IsSystemAdministrator : false;
+					var @is = "Users".IsEquals(this.ServiceName) && user.IsSystemAdministrator;
 					if (!@is && !"Users".IsEquals(this.ServiceName))
 					{
 						var response = await this.CallServiceAsync(new RequestInfo(new Session { User = new User(user) }, "Users", "Account", "GET")
@@ -1024,15 +1028,19 @@ namespace net.vieapps.Services
 			var @is = await this.IsSystemAdministratorAsync(user, correlationID, cancellationToken).ConfigureAwait(false);
 			if (!@is && user != null)
 			{
-				privileges = (await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges ?? this.Privileges;
-				@is = user.IsAdministrator(this.ServiceName, objectName) || user.IsAdministrator(privileges);
+				@is = user.IsAdministrator(this.ServiceName, objectName);
+				if (!@is)
+				{
+					privileges = (await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges ?? this.Privileges;
+					@is = user.IsAdministrator(privileges);
+				}
 			}
 
 			if (this.IsDebugAuthorizationsEnabled)
 				this.WriteLogs(correlationID, $"Determines the user is administrator of service/object => {@is}" + "\r\n" +
 					$"Object: {objectName ?? "N/A"}{(string.IsNullOrWhiteSpace(objectID) ? "" : $"#{objectID} (Entity: {entityInfo ?? "N/A"})")}" + "\r\n" +
 					$"User: {user?.ID ?? "N/A"}" + "\r\n\t" + $"- Roles: {user?.Roles?.ToString(", ")}" + "\r\n\t" + $"- Privileges: {(user?.Privileges == null || user.Privileges.Count < 1 ? "None" : user.Privileges.ToJArray().ToString())}" + "\r\n" +
-					$"Privileges for determining: {privileges?.ToJson()}"
+					$"Privileges for determining: {privileges?.ToJson().ToString() ?? "None"}"
 				, null, this.ServiceName, "Authorization");
 			return @is;
 		}
@@ -1361,7 +1369,7 @@ namespace net.vieapps.Services
 				this.WriteLogs(correlationID, $"Determines the user can perform the {action} action => {@is}" + "\r\n" +
 					$"Object: {objectName ?? "N/A"}{(string.IsNullOrWhiteSpace(objectID) ? "" : $"#{objectID}")}" + "\r\n" +
 					$"User: {user?.ID ?? "N/A"}" + "\r\n\t" + $"- Roles: {user?.Roles?.ToString(", ")}" + "\r\n\t" + $"- Privileges: {(user?.Privileges == null || user.Privileges.Count < 1 ? "None" : user.Privileges.ToJArray().ToString())}" + "\r\n" +
-					$"Privileges for determining: {(privileges ?? this.Privileges)?.ToJson()}"
+					$"Privileges for determining: {(privileges ?? this.Privileges)?.ToJson().ToString() ?? "None"}"
 				, null, this.ServiceName, "Authorization");
 			return @is;
 		}
@@ -1452,34 +1460,22 @@ namespace net.vieapps.Services
 			=> this.IsAuthorizedAsync(requestInfo?.Session, requestInfo.ObjectName, @object, action, getPrivileges, getActions, requestInfo?.CorrelationID, cancellationToken);
 
 		public virtual async Task<bool> CanManageAsync(User user, string objectName, string systemID, string entityInfo, string objectID, CancellationToken cancellationToken = default)
-			=> await this.IsAdministratorAsync(user, objectName, entityInfo, objectID, null, cancellationToken).ConfigureAwait(false)
-				? true
-				: await this.IsAuthorizedAsync(user, objectName, objectID, Components.Security.Action.Full, (await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges, null, null, null, cancellationToken).ConfigureAwait(false);
+			=> await this.IsAdministratorAsync(user, objectName, entityInfo, objectID, null, cancellationToken).ConfigureAwait(false) || await this.IsAuthorizedAsync(user, objectName, objectID, Components.Security.Action.Full, (await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges, null, null, null, cancellationToken).ConfigureAwait(false);
 
 		public virtual async Task<bool> CanModerateAsync(User user, string objectName, string systemID, string entityInfo, string objectID, CancellationToken cancellationToken = default)
-			=> await this.IsModeratorAsync(user, objectName, entityInfo, objectID, null, cancellationToken).ConfigureAwait(false)
-				? true
-				: await this.IsAuthorizedAsync(user, objectName, objectID, Components.Security.Action.Approve, (await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges, null, null, null, cancellationToken).ConfigureAwait(false);
+			=> await this.IsModeratorAsync(user, objectName, entityInfo, objectID, null, cancellationToken).ConfigureAwait(false) || await this.IsAuthorizedAsync(user, objectName, objectID, Components.Security.Action.Approve, (await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges, null, null, null, cancellationToken).ConfigureAwait(false);
 
 		public virtual async Task<bool> CanEditAsync(User user, string objectName, string systemID, string entityInfo, string objectID, CancellationToken cancellationToken = default)
-			=> await this.IsEditorAsync(user, objectName, entityInfo, objectID, null, cancellationToken).ConfigureAwait(false)
-				? true
-				: await this.IsAuthorizedAsync(user, objectName, objectID, Components.Security.Action.Update, (await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges, null, null, null, cancellationToken).ConfigureAwait(false);
+			=> await this.IsEditorAsync(user, objectName, entityInfo, objectID, null, cancellationToken).ConfigureAwait(false) || await this.IsAuthorizedAsync(user, objectName, objectID, Components.Security.Action.Update, (await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges, null, null, null, cancellationToken).ConfigureAwait(false);
 
 		public virtual async Task<bool> CanContributeAsync(User user, string objectName, string systemID, string entityInfo, string objectID, CancellationToken cancellationToken = default)
-			=> await this.IsContributorAsync(user, objectName, entityInfo, objectID, null, cancellationToken).ConfigureAwait(false)
-				? true
-				: await this.IsAuthorizedAsync(user, objectName, objectID, Components.Security.Action.Create, (await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges, null, null, null, cancellationToken).ConfigureAwait(false);
+			=> await this.IsContributorAsync(user, objectName, entityInfo, objectID, null, cancellationToken).ConfigureAwait(false) || await this.IsAuthorizedAsync(user, objectName, objectID, Components.Security.Action.Create, (await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges, null, null, null, cancellationToken).ConfigureAwait(false);
 
 		public virtual async Task<bool> CanViewAsync(User user, string objectName, string systemID, string entityInfo, string objectID, CancellationToken cancellationToken = default)
-			=> await this.IsViewerAsync(user, objectName, entityInfo, objectID, null, cancellationToken).ConfigureAwait(false)
-				? true
-				: await this.IsAuthorizedAsync(user, objectName, objectID, Components.Security.Action.View, (await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges, null, null, null, cancellationToken).ConfigureAwait(false);
+			=> await this.IsViewerAsync(user, objectName, entityInfo, objectID, null, cancellationToken).ConfigureAwait(false) || await this.IsAuthorizedAsync(user, objectName, objectID, Components.Security.Action.View, (await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges, null, null, null, cancellationToken).ConfigureAwait(false);
 
 		public virtual async Task<bool> CanDownloadAsync(User user, string objectName, string systemID, string entityInfo, string objectID, CancellationToken cancellationToken = default)
-			=> await this.IsDownloaderAsync(user, objectName, entityInfo, objectID, null, cancellationToken).ConfigureAwait(false)
-				? true
-				: await this.IsAuthorizedAsync(user, objectName, objectID, Components.Security.Action.Download, (await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges, null, null, null, cancellationToken).ConfigureAwait(false);
+			=> await this.IsDownloaderAsync(user, objectName, entityInfo, objectID, null, cancellationToken).ConfigureAwait(false) || await this.IsAuthorizedAsync(user, objectName, objectID, Components.Security.Action.Download, (await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges, null, null, null, cancellationToken).ConfigureAwait(false);
 		#endregion
 
 		#region Files, Thumbnails & Attachments
