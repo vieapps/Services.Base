@@ -338,7 +338,7 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Converts the (client) JSON object to filtering expression
+		/// Converts the (client) JSON object to a filtering expression
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
 		/// <param name="expression"></param>
@@ -368,13 +368,38 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Converts the Expando object to filtering expression
+		/// Converts the (client) ExpandoObject object to a filtering expression
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
 		/// <param name="expression"></param>
 		/// <returns></returns>
 		public static IFilterBy<T> ToFilterBy<T>(this ExpandoObject expression) where T : class
-			=> JObject.FromObject(expression).ToFilterBy<T>();
+			=> expression != null ? JObject.FromObject(expression).ToFilterBy<T>() : null;
+
+		/// <summary>
+		/// Converts the (server) JSON object to a filtering expression
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="expression"></param>
+		/// <returns></returns>
+		public static IFilterBy<T> ToFilter<T>(this JObject expression) where T : class
+		{
+			var property = expression?.Properties()?.FirstOrDefault();
+			return property != null
+				? property.Name.IsEquals("Or") || property.Name.IsEquals("And")
+					? new FilterBys<T>(expression, property.Name.IsEquals("Or") ? GroupOperator.Or : GroupOperator.And)
+					: new FilterBy<T>(expression) as IFilterBy<T>
+				: null;
+		}
+
+		/// <summary>
+		/// Converts the (server) ExpandoObject object to a filtering expression
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="expression"></param>
+		/// <returns></returns>
+		public static IFilterBy<T> ToFilter<T>(this ExpandoObject expression) where T : class
+			=> expression != null ? JObject.FromObject(expression).ToFilter<T>() : null;
 
 		static JToken GetClientJson(this JToken serverJson, out string name)
 		{
@@ -430,12 +455,12 @@ namespace net.vieapps.Services
 		/// <param name="filter"></param>
 		/// <returns></returns>
 		public static string GenerateUUID<T>(this IFilterBy<T> filter) where T : class
-			=> filter.ToClientJson().ToString(Formatting.None).ToLower().GenerateUUID();
+			=> filter?.ToClientJson().ToString(Formatting.None).ToLower().GenerateUUID();
 		#endregion
 
 		#region Sort
 		/// <summary>
-		/// Converts the (client) JSON object to sorting expression
+		/// Converts the (client) JSON object to a sorting expression
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
 		/// <param name="expression"></param>
@@ -443,7 +468,7 @@ namespace net.vieapps.Services
 		public static SortBy<T> ToSortBy<T>(this JObject expression) where T : class
 		{
 			SortBy<T> sort = null;
-			expression.ForEach(kvp =>
+			expression?.ForEach(kvp =>
 			{
 				var attribute = kvp.Key;
 				if (!((kvp.Value as JValue).Value?.ToString() ?? "Ascending").TryToEnum(out SortMode mode))
@@ -461,13 +486,13 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Converts the Expando object to sorting expression
+		/// Converts the (client) ExpandoObject object to a sorting expression
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
 		/// <param name="expression"></param>
 		/// <returns></returns>
 		public static SortBy<T> ToSortBy<T>(this ExpandoObject expression) where T : class
-			=> JObject.FromObject(expression).ToSortBy<T>();
+			=> expression != null ? JObject.FromObject(expression).ToSortBy<T>() : null;
 
 		static void GetClientJson(this JToken serverJson, JObject clientJson)
 		{
@@ -478,6 +503,26 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
+		/// Converts the (server) JSON object to a sorting expression
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="expression"></param>
+		/// <returns></returns>
+		public static SortBy<T> ToSort<T>(this JObject expression) where T : class
+			=> !string.IsNullOrWhiteSpace(expression?.Get<string>("Attribute"))
+				? new SortBy<T>(expression)
+				: null;
+
+		/// <summary>
+		/// Converts the (server) ExpandoObject object to a sorting expression
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="expression"></param>
+		/// <returns></returns>
+		public static SortBy<T> ToSort<T>(this ExpandoObject expression) where T : class
+			=> expression != null ? JObject.FromObject(expression).ToSort<T>() : null;
+
+		/// <summary>
 		/// Converts the sorting expression to JSON for using at client-side
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
@@ -485,8 +530,12 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static JObject ToClientJson<T>(this SortBy<T> sort) where T : class
 		{
-			var clientJson = new JObject();
-			sort.ToJson().GetClientJson(clientJson);
+			JObject clientJson = null;
+			if (sort != null)
+			{
+				clientJson = new JObject();
+				sort.ToJson().GetClientJson(clientJson);
+			}
 			return clientJson;
 		}
 
@@ -497,7 +546,7 @@ namespace net.vieapps.Services
 		/// <param name="sortby"></param>
 		/// <returns></returns>
 		public static string GenerateUUID<T>(this SortBy<T> sortby) where T : class
-			=> sortby.ToClientJson().ToString(Formatting.None).ToLower().GenerateUUID();
+			=> sortby?.ToClientJson().ToString(Formatting.None).ToLower().GenerateUUID();
 		#endregion
 
 		#region Pagination
