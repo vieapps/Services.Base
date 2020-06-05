@@ -384,10 +384,10 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static IFilterBy<T> ToFilter<T>(this JObject expression) where T : class
 		{
-			var property = expression?.Properties()?.FirstOrDefault();
-			return property != null
-				? property.Name.IsEquals("Or") || property.Name.IsEquals("And")
-					? new FilterBys<T>(expression, property.Name.IsEquals("Or") ? GroupOperator.Or : GroupOperator.And)
+			var @operator = expression?.Get<string>("Operator");
+			return @operator != null
+				? @operator.IsEquals("Or") || @operator.IsEquals("And")
+					? new FilterBys<T>(expression, @operator.IsEquals("Or") ? GroupOperator.Or : GroupOperator.And)
 					: new FilterBy<T>(expression) as IFilterBy<T>
 				: null;
 		}
@@ -494,14 +494,6 @@ namespace net.vieapps.Services
 		public static SortBy<T> ToSortBy<T>(this ExpandoObject expression) where T : class
 			=> expression != null ? JObject.FromObject(expression).ToSortBy<T>() : null;
 
-		static void GetClientJson(this JToken serverJson, JObject clientJson)
-		{
-			var attribute = serverJson.Get<string>("Attribute");
-			if (!string.IsNullOrWhiteSpace(attribute))
-				clientJson[attribute] = serverJson.Get("Mode", "Ascending");
-			serverJson.Get<JObject>("ThenBy")?.GetClientJson(clientJson);
-		}
-
 		/// <summary>
 		/// Converts the (server) JSON object to a sorting expression
 		/// </summary>
@@ -521,6 +513,14 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static SortBy<T> ToSort<T>(this ExpandoObject expression) where T : class
 			=> expression != null ? JObject.FromObject(expression).ToSort<T>() : null;
+
+		static void GetClientJson(this JToken serverJson, JObject clientJson)
+		{
+			var attribute = serverJson?.Get<string>("Attribute");
+			if (!string.IsNullOrWhiteSpace(attribute))
+				clientJson[attribute] = serverJson.Get("Mode", "Ascending");
+			serverJson?.Get<JObject>("ThenBy")?.GetClientJson(clientJson);
+		}
 
 		/// <summary>
 		/// Converts the sorting expression to JSON for using at client-side
