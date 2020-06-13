@@ -1490,7 +1490,7 @@ namespace net.vieapps.Services
 		public Task<JToken> GetThumbnailsAsync(RequestInfo requestInfo, string objectID = null, string objectTitle = null, CancellationToken cancellationToken = default)
 			=> requestInfo == null
 				? Task.FromResult<JToken>(null)
-				: requestInfo.GetThumbnailsAsync(objectID, objectTitle, cancellationToken, this.ValidationKey, this.GetTracker(requestInfo), this.JsonFormat);
+				: requestInfo.GetThumbnailsAsync(objectID, objectTitle, this.ValidationKey, cancellationToken, this.GetTracker(requestInfo), this.JsonFormat);
 
 		/// <summary>
 		/// Gets the collection of attachments
@@ -1503,7 +1503,7 @@ namespace net.vieapps.Services
 		public Task<JToken> GetAttachmentsAsync(RequestInfo requestInfo, string objectID = null, string objectTitle = null, CancellationToken cancellationToken = default)
 			=> requestInfo == null
 				? Task.FromResult<JToken>(null)
-				: requestInfo.GetAttachmentsAsync(objectID, objectTitle, cancellationToken, this.ValidationKey, this.GetTracker(requestInfo), this.JsonFormat);
+				: requestInfo.GetAttachmentsAsync(objectID, objectTitle, this.ValidationKey, cancellationToken, this.GetTracker(requestInfo), this.JsonFormat);
 
 		/// <summary>
 		/// Gets the collection of files (thumbnails and attachment files are included)
@@ -1516,7 +1516,7 @@ namespace net.vieapps.Services
 		public Task<JToken> GetFilesAsync(RequestInfo requestInfo, string objectID = null, string objectTitle = null, CancellationToken cancellationToken = default)
 			=> requestInfo == null
 				? Task.FromResult<JToken>(null)
-				: requestInfo.GetFilesAsync(objectID, objectTitle, cancellationToken, this.ValidationKey, this.GetTracker(requestInfo), this.JsonFormat);
+				: requestInfo.GetFilesAsync(objectID, objectTitle, this.ValidationKey, cancellationToken, this.GetTracker(requestInfo), this.JsonFormat);
 
 		/// <summary>
 		/// Gets the collection of files (thumbnails and attachment files are included) as official
@@ -1531,7 +1531,7 @@ namespace net.vieapps.Services
 		public Task<JToken> MarkFilesAsOfficialAsync(RequestInfo requestInfo, string systemID = null, string entityInfo = null, string objectID = null, string objectTitle = null, CancellationToken cancellationToken = default)
 			=> requestInfo == null
 				? Task.FromResult<JToken>(null)
-				: requestInfo.MarkFilesAsOfficialAsync(systemID, entityInfo, objectID, objectTitle, cancellationToken, this.ValidationKey, this.GetTracker(requestInfo), this.JsonFormat);
+				: requestInfo.MarkFilesAsOfficialAsync(systemID, entityInfo, objectID, objectTitle, this.ValidationKey, cancellationToken, this.GetTracker(requestInfo), this.JsonFormat);
 
 		/// <summary>
 		/// Deletes the collection of files (thumbnails and attachment files are included)
@@ -1545,7 +1545,7 @@ namespace net.vieapps.Services
 		public Task<JToken> DeleteFilesAsync(RequestInfo requestInfo, string systemID = null, string entityInfo = null, string objectID = null, CancellationToken cancellationToken = default)
 			=> requestInfo == null
 				? Task.FromResult<JToken>(null)
-				: requestInfo.DeleteFilesAsync(systemID, entityInfo, objectID, cancellationToken, this.ValidationKey, this.GetTracker(requestInfo), this.JsonFormat);
+				: requestInfo.DeleteFilesAsync(systemID, entityInfo, objectID, this.ValidationKey, cancellationToken, this.GetTracker(requestInfo), this.JsonFormat);
 		#endregion
 
 		#region Timers
@@ -1600,9 +1600,10 @@ namespace net.vieapps.Services
 		/// <typeparam name="T"></typeparam>
 		/// <param name="filter">The filter expression</param>
 		/// <param name="sort">The sort expression</param>
+		/// <param name="pageSize">The size of one page</param>
 		/// <returns>The collection presents all related caching keys (100 pages each size is 20 objects)</returns>
-		protected virtual List<string> GetRelatedCacheKeys<T>(IFilterBy<T> filter, SortBy<T> sort) where T : class
-			=> Extensions.GetRelatedCacheKeys(filter, sort);
+		protected virtual List<string> GetRelatedCacheKeys<T>(IFilterBy<T> filter, SortBy<T> sort, int pageSize = 0) where T : class
+			=> Extensions.GetRelatedCacheKeys(filter, sort, pageSize);
 
 		/// <summary>
 		/// Gets the caching key for workingwith the number of total objects
