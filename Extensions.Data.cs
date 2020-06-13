@@ -679,7 +679,19 @@ namespace net.vieapps.Services
 		/// <param name="addPageNumberHolder">true to add page number as '[page-number]' holder</param>
 		/// <returns></returns>
 		public static string GetCacheKey(string prefix, int pageSize = 0, int pageNumber = 0, bool addPageNumberHolder = false)
-			=> $"{prefix}{(pageNumber > 0 ? $"#p:{(addPageNumberHolder ? "[page-number]" : pageNumber.ToString())}{(pageSize > 0 ? $"~{pageSize}" : "")}" : "")}";
+			=> $"{prefix}{(pageNumber > 0 ? $"#p:{(addPageNumberHolder ? "[page-number]" : $"{pageNumber}")}{(pageSize > 0 ? $"~{pageSize}" : "")}" : "")}";
+
+		/// <summary>
+		/// Gets the caching key
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="prefix">The string that presents the prefix of the caching key</param>
+		/// <param name="pageSize">The page size</param>
+		/// <param name="pageNumber">The page number</param>
+		/// <param name="addPageNumberHolder">true to add page number as '[page-number]' holder</param>
+		/// <returns></returns>
+		public static string GetCacheKey<T>(string prefix, int pageSize = 0, int pageNumber = 0, bool addPageNumberHolder = false) where T : class
+			=> $"{Extensions.GetCacheKey<T>()}{Extensions.GetCacheKey(prefix, pageSize, pageNumber, addPageNumberHolder)}";
 
 		/// <summary>
 		/// Gets the caching key
@@ -689,9 +701,41 @@ namespace net.vieapps.Services
 		/// <param name="sort">The sort expression</param>
 		/// <param name="pageSize">The page size</param>
 		/// <param name="pageNumber">The page number</param>
+		/// <param name="addPageNumberHolder">true to add page number as '[page-number]' holder</param>
 		/// <returns></returns>
-		public static string GetCacheKey<T>(IFilterBy<T> filter, SortBy<T> sort, int pageSize = 0, int pageNumber = 0) where T : class
-			=> Extensions.GetCacheKey(Extensions.GetCacheKey<T>() + $"{(filter != null ? $"#f:{filter.GenerateUUID()}" : "")}{(sort != null ? $"#s:{sort.GenerateUUID()}" : "")}", pageSize, pageNumber);
+		public static string GetCacheKey<T>(IFilterBy<T> filter, SortBy<T> sort, int pageSize = 0, int pageNumber = 0, bool addPageNumberHolder = false) where T : class
+			=> Extensions.GetCacheKey<T>($"{(filter != null ? $"#f:{filter.GenerateUUID()}" : "")}{(sort != null ? $"#s:{sort.GenerateUUID()}" : "")}", pageSize, pageNumber, addPageNumberHolder);
+
+		/// <summary>
+		/// Gets the related caching key for working with collection of objects
+		/// </summary>
+		/// <param name="key">The pre-buid key</param>
+		/// <param name="pageSize">The size of one page</param>
+		/// <returns>The collection presents all related caching keys (100 first pages)</returns>
+		public static List<string> GetRelatedCacheKeys(string key, int pageSize = 0)
+		{
+			var keys = new List<string>
+			{
+				key, $"{key}:total", $"{key}:json", $"{key}:xml", Extensions.GetCacheKey(key, 0, 1),
+				$"{key}:thumbnails", $"{key}:thumbnails:json", $"{key}:thumbnails:xml",
+				$"{key}:attachments", $"{key}:attachments:json", $"{key}:attachments:xml",
+				$"{key}:relateds", $"{key}:relateds:json", $"{key}:relateds:xml",
+				$"{key}:newers", $"{key}:newers:json", $"{key}:newers:xml",
+				$"{key}:olders", $"{key}:olders:json", $"{key}:olders:xml",
+				$"{key}:others", $"{key}:others:json", $"{key}:others:xml"
+			};
+			var paginationKey = Extensions.GetCacheKey(key, pageSize > 0 ? pageSize : 20, 1, true);
+			for (var pageNumber = 1; pageNumber <= 100; pageNumber++)
+			{
+				var pageKey = paginationKey.Replace("[page-number]", $"{pageNumber}");
+				keys.Add(pageKey);
+				keys.Add($"{pageKey}:json");
+				keys.Add($"{pageKey}:xml");
+				keys.Add($"{key}:json:{pageNumber}");
+				keys.Add($"{key}:xml:{pageNumber}");
+			}
+			return keys;
+		}
 
 		/// <summary>
 		/// Gets the related caching key for working with collection of objects
@@ -699,21 +743,19 @@ namespace net.vieapps.Services
 		/// <typeparam name="T"></typeparam>
 		/// <param name="filter">The filter expression</param>
 		/// <param name="sort">The sort expression</param>
-		/// <returns>The collection presents all related caching keys (100 pages each size is 20 objects)</returns>
-		public static List<string> GetRelatedCacheKeys<T>(IFilterBy<T> filter, SortBy<T> sort) where T : class
-		{
-			var key = Extensions.GetCacheKey(filter, sort);
-			var keys = new List<string> { key, $"{key}:total", Extensions.GetCacheKey(key, 0, 1) };
-			var paginationKey = Extensions.GetCacheKey(key, 20, 1, true);
-			for (var pageNumber = 1; pageNumber <= 100; pageNumber++)
-			{
-				var pageKey = paginationKey.Replace("[page-number]", pageNumber.ToString());
-				keys.Add(pageKey);
-				keys.Add($"{pageKey}:json");
-				keys.Add($"{pageKey}:xml");
-			}
-			return keys;
-		}
+		/// <param name="pageSize">The size of one page</param>
+		/// <returns>The collection presents all related caching keys (100 first pages)</returns>
+		public static List<string> GetRelatedCacheKeys<T>(IFilterBy<T> filter, SortBy<T> sort, int pageSize = 0) where T : class
+			=> Extensions.GetRelatedCacheKeys(Extensions.GetCacheKey<T>(filter, sort), pageSize);
+
+		/// <summary>
+		/// Gets the caching key for workingwith the number of total objects
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="prefix">The string that presents the prefix of the caching key</param>
+		/// <returns>The string that presents a caching key</returns>
+		public static string GetCacheKeyOfTotalObjects<T>(string prefix) where T : class
+			=> $"{Extensions.GetCacheKey<T>(prefix)}:total";
 
 		/// <summary>
 		/// Gets the caching key for workingwith the number of total objects
@@ -723,7 +765,18 @@ namespace net.vieapps.Services
 		/// <param name="sort">The sort expression</param>
 		/// <returns>The string that presents a caching key</returns>
 		public static string GetCacheKeyOfTotalObjects<T>(IFilterBy<T> filter, SortBy<T> sort) where T : class
-			=> $"{Extensions.GetCacheKey(filter, sort)}:total";
+			=> Extensions.GetCacheKeyOfTotalObjects<T>((filter != null ? $"#f:{filter.GenerateUUID()}" : "") + (sort != null ? $"#s:{sort.GenerateUUID()}" : ""));
+
+		/// <summary>
+		/// Gets the caching key for working with the JSON of objects
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="prefix">The string that presents the prefix of the caching key</param>
+		/// <param name="pageNumber">The page number</param>
+		/// <param name="pageSize">The page size</param>
+		/// <returns>The string that presents a caching key</returns>
+		public static string GetCacheKeyOfObjectsJson<T>(string prefix, int pageSize = 0, int pageNumber = 0) where T : class
+			=> $"{Extensions.GetCacheKey<T>(prefix, pageSize, pageNumber)}:json";
 
 		/// <summary>
 		/// Gets the caching key for working with the JSON of objects
@@ -735,7 +788,18 @@ namespace net.vieapps.Services
 		/// <param name="pageSize">The page size</param>
 		/// <returns>The string that presents a caching key</returns>
 		public static string GetCacheKeyOfObjectsJson<T>(IFilterBy<T> filter, SortBy<T> sort, int pageSize = 0, int pageNumber = 0) where T : class
-			=> $"{Extensions.GetCacheKey(filter, sort, pageSize, pageNumber)}:json";
+			=> Extensions.GetCacheKeyOfObjectsJson<T>((filter != null ? $"#f:{filter.GenerateUUID()}" : "") + (sort != null ? $"#s:{sort.GenerateUUID()}" : ""), pageSize, pageNumber);
+
+		/// <summary>
+		/// Gets the caching key for working with the XML of objects
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="prefix">The string that presents the prefix of the caching key</param>
+		/// <param name="pageNumber">The page number</param>
+		/// <param name="pageSize">The page size</param>
+		/// <returns>The string that presents a caching key</returns>
+		public static string GetCacheKeyOfObjectsXml<T>(string prefix, int pageSize = 0, int pageNumber = 0) where T : class
+			=> $"{Extensions.GetCacheKey<T>(prefix, pageSize, pageNumber)}:xml";
 
 		/// <summary>
 		/// Gets the caching key for working with the XML of objects
@@ -747,7 +811,7 @@ namespace net.vieapps.Services
 		/// <param name="pageSize">The page size</param>
 		/// <returns>The string that presents a caching key</returns>
 		public static string GetCacheKeyOfObjectsXml<T>(IFilterBy<T> filter, SortBy<T> sort, int pageSize = 0, int pageNumber = 0) where T : class
-			=> $"{Extensions.GetCacheKey(filter, sort, pageSize, pageNumber)}:xml";
+			=> Extensions.GetCacheKeyOfObjectsXml<T>((filter != null ? $"#f:{filter.GenerateUUID()}" : "") + (sort != null ? $"#s:{sort.GenerateUUID()}" : ""), pageSize, pageNumber);
 		#endregion
 
 	}
