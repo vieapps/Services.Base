@@ -18,10 +18,10 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo"></param>
 		/// <param name="objectID"></param>
 		/// <param name="objectTitle"></param>
-		/// <param name="cancellationToken"></param>
 		/// <param name="validationKey"></param>
+		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		public static Task<JToken> GetThumbnailsAsync(this RequestInfo requestInfo, string objectID = null, string objectTitle = null, CancellationToken cancellationToken = default, string validationKey = null, Action<string, Exception> tracker = null, Formatting jsonFormat = Formatting.None)
+		public static Task<JToken> GetThumbnailsAsync(this RequestInfo requestInfo, string objectID = null, string objectTitle = null, string validationKey = null, CancellationToken cancellationToken = default, Action<string, Exception> tracker = null, Formatting jsonFormat = Formatting.None)
 			=> requestInfo == null || requestInfo.Session == null
 				? Task.FromResult<JToken>(null)
 				: new RequestInfo(requestInfo.Session, "Files", "Thumbnail")
@@ -47,10 +47,10 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo"></param>
 		/// <param name="objectID"></param>
 		/// <param name="objectTitle"></param>
-		/// <param name="cancellationToken"></param>
 		/// <param name="validationKey"></param>
+		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		public static Task<JToken> GetAttachmentsAsync(this RequestInfo requestInfo, string objectID = null, string objectTitle = null, CancellationToken cancellationToken = default, string validationKey = null, Action<string, Exception> tracker = null, Formatting jsonFormat = Formatting.None)
+		public static Task<JToken> GetAttachmentsAsync(this RequestInfo requestInfo, string objectID = null, string objectTitle = null, string validationKey = null, CancellationToken cancellationToken = default, Action<string, Exception> tracker = null, Formatting jsonFormat = Formatting.None)
 			=> requestInfo == null || requestInfo.Session == null
 				? Task.FromResult<JToken>(null)
 				: new RequestInfo(requestInfo.Session, "Files", "Attachment")
@@ -76,10 +76,10 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo"></param>
 		/// <param name="objectID"></param>
 		/// <param name="objectTitle"></param>
-		/// <param name="cancellationToken"></param>
 		/// <param name="validationKey"></param>
+		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		public static Task<JToken> GetFilesAsync(this RequestInfo requestInfo, string objectID = null, string objectTitle = null, CancellationToken cancellationToken = default, string validationKey = null, Action<string, Exception> tracker = null, Formatting jsonFormat = Formatting.None)
+		public static Task<JToken> GetFilesAsync(this RequestInfo requestInfo, string objectID = null, string objectTitle = null, string validationKey = null, CancellationToken cancellationToken = default, Action<string, Exception> tracker = null, Formatting jsonFormat = Formatting.None)
 			=> requestInfo == null || requestInfo.Session == null
 				? Task.FromResult<JToken>(null)
 				: new RequestInfo(requestInfo.Session, "Files")
@@ -106,10 +106,10 @@ namespace net.vieapps.Services
 		/// <param name="entityInfo"></param>
 		/// <param name="objectID"></param>
 		/// <param name="objectTitle"></param>
-		/// <param name="cancellationToken"></param>
 		/// <param name="validationKey"></param>
+		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		public static Task<JToken> MarkFilesAsOfficialAsync(this RequestInfo requestInfo, string systemID = null, string entityInfo = null, string objectID = null, string objectTitle = null, CancellationToken cancellationToken = default, string validationKey = null, Action<string, Exception> tracker = null, Formatting jsonFormat = Formatting.None)
+		public static Task<JToken> MarkFilesAsOfficialAsync(this RequestInfo requestInfo, string systemID = null, string entityInfo = null, string objectID = null, string objectTitle = null, string validationKey = null, CancellationToken cancellationToken = default, Action<string, Exception> tracker = null, Formatting jsonFormat = Formatting.None)
 			=> requestInfo == null || requestInfo.Session == null
 				? Task.FromResult<JToken>(null)
 				: new RequestInfo(requestInfo.Session, "Files")
@@ -140,12 +140,12 @@ namespace net.vieapps.Services
 		/// <param name="systemID"></param>
 		/// <param name="entityInfo"></param>
 		/// <param name="objectID"></param>
-		/// <param name="cancellationToken"></param>
 		/// <param name="validationKey"></param>
+		/// <param name="cancellationToken"></param>
 		/// <param name="tracker"></param>
 		/// <param name="jsonFormat"></param>
 		/// <returns></returns>
-		public static Task<JToken> DeleteFilesAsync(this RequestInfo requestInfo, string systemID = null, string entityInfo = null, string objectID = null, CancellationToken cancellationToken = default, string validationKey = null, Action<string, Exception> tracker = null, Formatting jsonFormat = Formatting.None)
+		public static Task<JToken> DeleteFilesAsync(this RequestInfo requestInfo, string systemID = null, string entityInfo = null, string objectID = null, string validationKey = null, CancellationToken cancellationToken = default, Action<string, Exception> tracker = null, Formatting jsonFormat = Formatting.None)
 			=> requestInfo == null || requestInfo.Session == null
 				? Task.FromResult<JToken>(null)
 				: new RequestInfo(requestInfo.Session, "Files")
