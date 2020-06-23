@@ -676,10 +676,10 @@ namespace net.vieapps.Services
 		/// <param name="prefix">The string that presents the prefix of the caching key</param>
 		/// <param name="pageSize">The page size</param>
 		/// <param name="pageNumber">The page number</param>
-		/// <param name="addPageNumberHolder">true to add page number as '[page-number]' holder</param>
+		/// <param name="addPageNumberHolder">true to add page number as a holder ({{pageNumber}})</param>
 		/// <returns></returns>
 		public static string GetCacheKey(string prefix, int pageSize = 0, int pageNumber = 0, bool addPageNumberHolder = false)
-			=> $"{prefix}{(pageNumber > 0 ? $"#p:{(addPageNumberHolder ? "[page-number]" : $"{pageNumber}")}{(pageSize > 0 ? $"~{pageSize}" : "")}" : "")}";
+			=> $"{prefix}{(pageNumber > 0 ? $"#p:{(addPageNumberHolder ? "{{pageNumber}}" : $"{pageNumber}")}{(pageSize > 0 ? $"~{pageSize}" : "")}" : "")}";
 
 		/// <summary>
 		/// Gets the caching key
@@ -706,6 +706,10 @@ namespace net.vieapps.Services
 		public static string GetCacheKey<T>(IFilterBy<T> filter, SortBy<T> sort, int pageSize = 0, int pageNumber = 0, bool addPageNumberHolder = false) where T : class
 			=> Extensions.GetCacheKey<T>($"{(filter != null ? $"#f:{filter.GenerateUUID()}" : "")}{(sort != null ? $"#s:{sort.GenerateUUID()}" : "")}", pageSize, pageNumber, addPageNumberHolder);
 
+		static List<string> KeyPatterns => "total,json,xml".ToList();
+
+		static List<string> RelatedKeyPatterns => "thumbnails,attachments,relateds,newers,olders,others".ToList();
+
 		/// <summary>
 		/// Gets the related caching key for working with collection of objects
 		/// </summary>
@@ -714,27 +718,21 @@ namespace net.vieapps.Services
 		/// <returns>The collection presents all related caching keys (100 first pages)</returns>
 		public static List<string> GetRelatedCacheKeys(string key, int pageSize = 0)
 		{
-			var keys = new List<string>
+			var singleKey = Extensions.GetCacheKey(key, 0, 1);
+			var relatedKeys = new List<string> { key, singleKey };
+			Extensions.KeyPatterns.Concat(Extensions.RelatedKeyPatterns).ForEach(pattern =>
 			{
-				key, $"{key}:total", $"{key}:json", $"{key}:xml", Extensions.GetCacheKey(key, 0, 1),
-				$"{key}:thumbnails", $"{key}:thumbnails:json", $"{key}:thumbnails:xml",
-				$"{key}:attachments", $"{key}:attachments:json", $"{key}:attachments:xml",
-				$"{key}:relateds", $"{key}:relateds:json", $"{key}:relateds:xml",
-				$"{key}:newers", $"{key}:newers:json", $"{key}:newers:xml",
-				$"{key}:olders", $"{key}:olders:json", $"{key}:olders:xml",
-				$"{key}:others", $"{key}:others:json", $"{key}:others:xml"
-			};
+				relatedKeys.Add($"{key}:{pattern}");
+				relatedKeys.Add($"{singleKey}:{pattern}");
+			});
 			var paginationKey = Extensions.GetCacheKey(key, pageSize > 0 ? pageSize : 20, 1, true);
 			for (var pageNumber = 1; pageNumber <= 100; pageNumber++)
 			{
-				var pageKey = paginationKey.Replace("[page-number]", $"{pageNumber}");
-				keys.Add(pageKey);
-				keys.Add($"{pageKey}:json");
-				keys.Add($"{pageKey}:xml");
-				keys.Add($"{key}:json:{pageNumber}");
-				keys.Add($"{key}:xml:{pageNumber}");
+				var pageKey = paginationKey.Replace("{{pageNumber}}", $"{pageNumber}");
+				relatedKeys.Add(pageKey);
+				Extensions.KeyPatterns.ForEach(pattern => relatedKeys.Add($"{pageKey}:{pattern}"));
 			}
-			return keys;
+			return relatedKeys;
 		}
 
 		/// <summary>
