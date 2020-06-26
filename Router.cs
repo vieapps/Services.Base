@@ -486,6 +486,81 @@ namespace net.vieapps.Services
 				tracker?.Invoke($"Call service finished in {stopwatch.GetElapsedTimes()}", null);
 			}
 		}
+
+		internal static ConcurrentDictionary<string, ISyncableService> SyncableServices { get; } = new ConcurrentDictionary<string, ISyncableService>(StringComparer.OrdinalIgnoreCase);
+
+		/// <summary>
+		/// Gets a syncable service by name
+		/// </summary>
+		/// <param name="name">The string that presents the name of a syncable service</param>
+		/// <returns></returns>
+		public static ISyncableService GetSyncableService(string name)
+		{
+			if (string.IsNullOrWhiteSpace(name))
+				throw new ServiceNotFoundException("The service name is null or empty");
+
+			if (!Router.SyncableServices.TryGetValue(name, out var service))
+			{
+				service = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<ISyncableService>(ProxyInterceptor.Create(name));
+				Router.SyncableServices.Add(name, service);
+			}
+
+			return service ?? throw new ServiceNotFoundException($"The service \"{name.ToLower()}\" is not found");
+		}
+
+		/// <summary>
+		/// Gets and calls a syncable service for synchronizing data
+		/// </summary>
+		/// <param name="requestInfo">The requesting information</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <param name="onStart">The action to run when start</param>
+		/// <param name="onSuccess">The action to run when success</param>
+		/// <param name="onError">The action to run when got an error</param>
+		/// <param name="tracker">The tracker to wirte debuging log of all steps</param>
+		/// <param name="jsonFormat">The format of outputing json</param>
+		/// <returns>A <see cref="JObject">JSON</see> object that presents the results of the call</returns>
+		public static async Task<JToken> SyncAsync(this RequestInfo requestInfo, CancellationToken cancellationToken = default, Action<RequestInfo> onStart = null, Action<RequestInfo, JToken> onSuccess = null, Action<RequestInfo, Exception> onError = null, Action<string, Exception> tracker = null, Formatting jsonFormat = Formatting.None)
+		{
+			var stopwatch = Stopwatch.StartNew();
+			var objectName = requestInfo.ServiceName;
+			try
+			{
+				onStart?.Invoke(requestInfo);
+				tracker?.Invoke($"Start call service [for synchronizing] {requestInfo.Verb} {requestInfo.GetURI()} - {requestInfo.Session.AppName} ({requestInfo.Session.AppPlatform}) @ {requestInfo.Session.IP}", null);
+
+				var json = await Router.GetSyncableService(requestInfo.ServiceName).SyncAsync(requestInfo, cancellationToken).ConfigureAwait(false);
+				onSuccess?.Invoke(requestInfo, json);
+
+				tracker?.Invoke("Call service [for synchronizing] successful" + "\r\n" + $"Request: {requestInfo.ToString(jsonFormat)}" + "\r\n" + $"Response: {json?.ToString(jsonFormat)}", null);
+				return json;
+			}
+			catch (WampSessionNotEstablishedException)
+			{
+				await Task.Delay(UtilityService.GetRandomNumber(567, 789), cancellationToken).ConfigureAwait(false);
+				try
+				{
+					var json = await Router.GetSyncableService(requestInfo.ServiceName).SyncAsync(requestInfo, cancellationToken).ConfigureAwait(false);
+					onSuccess?.Invoke(requestInfo, json);
+
+					tracker?.Invoke("Re-call service [for synchronizing] successful" + "\r\n" + $"Request: {requestInfo.ToString(jsonFormat)}" + "\r\n" + $"Response: {json?.ToString(jsonFormat)}", null);
+					return json;
+				}
+				catch (Exception)
+				{
+					throw;
+				}
+			}
+			catch (Exception ex)
+			{
+				onError?.Invoke(requestInfo, ex);
+				throw ex;
+			}
+			finally
+			{
+				stopwatch.Stop();
+				tracker?.Invoke($"Call service [for synchronizing] finished in {stopwatch.GetElapsedTimes()}", null);
+			}
+		}
 		#endregion
 
 	}

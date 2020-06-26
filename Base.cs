@@ -29,11 +29,27 @@ namespace net.vieapps.Services
 	/// <summary>
 	/// Base of all microservices
 	/// </summary>
-	public abstract class ServiceBase : IService, IUniqueService, IServiceComponent
+	public abstract class ServiceBase : IService, IUniqueService, ISyncableService, IServiceComponent
 	{
 		public abstract string ServiceName { get; }
 
 		public abstract Task<JToken> ProcessRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default);
+
+		public virtual Task<JToken> SyncAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
+		{
+			// validate
+			if (requestInfo.Extra == null || !requestInfo.Extra.TryGetValue("SyncKey", out var syncKey) || !this.SyncKey.Equals(syncKey))
+				throw new InformationInvalidException("The sync key (in the request) is not found or invalid");
+
+			if (string.IsNullOrWhiteSpace(requestInfo.Body))
+				throw new InformationInvalidException("The request body (data to sync) is invalid");
+
+			if (requestInfo.Extra == null || !requestInfo.Extra.TryGetValue("Signature", out var signature) || string.IsNullOrWhiteSpace(signature) || !signature.Equals(requestInfo.Body.GetHMACSHA256(this.ValidationKey)))
+				throw new InformationInvalidException("The signature is not found or invalid");
+
+			// do the process
+			return Task.FromResult<JToken>(null);
+		}
 
 		/// <summary>
 		/// Processes the inter-communicate messages between the services' instances
@@ -78,22 +94,27 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the cancellation token source
 		/// </summary>
-		internal protected CancellationTokenSource CancellationTokenSource { get; } = new CancellationTokenSource();
+		protected CancellationTokenSource CancellationTokenSource { get; } = new CancellationTokenSource();
 
 		/// <summary>
 		/// Gets the collection of timers
 		/// </summary>
-		internal protected List<IDisposable> Timers { get; private set; } = new List<IDisposable>();
+		protected List<IDisposable> Timers { get; private set; } = new List<IDisposable>();
 
 		/// <summary>
 		/// Gets the JSON formatting mode
 		/// </summary>
-		internal protected Formatting JsonFormat => this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None;
+		protected Formatting JsonFormat => this.IsDebugLogEnabled ? Formatting.Indented : Formatting.None;
 
 		/// <summary>
 		/// Gets the state of the service
 		/// </summary>
-		internal protected ServiceState State { get; private set; } = ServiceState.Initializing;
+		protected ServiceState State { get; private set; } = ServiceState.Initializing;
+
+		/// <summary>
+		/// The identity of the synchronizing session
+		/// </summary>
+		protected string SyncSessionID { get; private set; }
 
 		public string NodeID { get; private set; }
 
@@ -123,6 +144,7 @@ namespace net.vieapps.Services
 			{
 				this.ServiceInstance = await Router.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(this.ServiceName)).ConfigureAwait(false);
 				this.ServiceUniqueInstance = await Router.IncomingChannel.RealmProxy.Services.RegisterCallee<IUniqueService>(() => this, RegistrationInterceptor.Create(this.ServiceUniqueName, WampInvokePolicy.Single)).ConfigureAwait(false);
+				await Router.IncomingChannel.RealmProxy.Services.RegisterCallee<ISyncableService>(() => this, RegistrationInterceptor.Create(this.ServiceName)).ConfigureAwait(false);
 			}
 
 			async Task registerServiceAsync()
@@ -521,7 +543,7 @@ namespace net.vieapps.Services
 			else if (exception != null)
 			{
 				logs.Add($"> Message: {exception.Message}");
-				logs.Add($"> Type: {exception.GetType().ToString()}");
+				logs.Add($"> Type: {exception.GetType()}");
 			}
 
 			Tuple<string, string, string, string, string, List<string>, string> log = null;
@@ -849,6 +871,11 @@ namespace net.vieapps.Services
 		/// Gets the key for validating data
 		/// </summary>
 		protected virtual string ValidationKey => this.GetKey("Validation", "VIEApps-D6C8C563-NGX-26CC-Services-43AC-Validation-9040-Key-E803AF0F36E4");
+
+		/// <summary>
+		/// Gets the key for synchronizing data
+		/// </summary>
+		protected virtual string SyncKey => this.GetKey("Sync", "VIEApps-FD2CD7FA-NGX-40DE-Services-401D-Sync-93D9-Key-A47006F07048");
 
 		/// <summary>
 		/// Gets a key from app settings
@@ -1701,6 +1728,85 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
+		#region Sync
+		/// <summary>
+		/// Builds the RequestInfo to send a synchronize request
+		/// </summary>
+		/// <returns></returns>
+		protected RequestInfo BuildSyncRequestInfo()
+		{
+			this.SyncSessionID = this.SyncSessionID ?? UtilityService.NewUUID;
+			return new RequestInfo
+			{
+				Session = new Session
+				{
+					SessionID = this.SyncSessionID,
+					User = new User
+					{
+						SessionID = this.SyncSessionID,
+						ID = UtilityService.GetAppSetting("Users:SystemAccountID", "VIEAppsNGX-MMXVII-System-Account")
+					},
+					IP = "127.0.0.1",
+					DeviceID = $"{this.NodeID}@converter",
+					AppID = "vieapps-ngx-converter",
+					AppName = "VIEApps NGX Converter",
+					AppPlatform = $"{Extensions.GetRuntimeOS()} Daemon",
+					AppAgent = $"{UtilityService.DesktopUserAgent} VIEApps NGX Converter/{this.GetType().Assembly.GetVersion()}"
+				},
+				Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+				{
+					{ "SyncKey", this.SyncKey }
+				},
+				CorrelationID = UtilityService.NewUUID
+			};
+		}
+
+		/// <summary>
+		/// Registers the session to send a synchronize request
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		protected async Task RegisterSyncSessionAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
+		{
+			var body = new JObject
+			{
+				{ "ID", requestInfo.Session.SessionID },
+				{ "IssuedAt", DateTime.Now },
+				{ "RenewedAt", DateTime.Now },
+				{ "ExpiredAt", DateTime.Now.AddDays(3) },
+				{ "UserID", requestInfo.Session.User.ID },
+				{ "AccessToken", requestInfo.Session.User.GetAccessToken(ECCsecp256k1.GetPrivateKey(this.GetKey("Keys:ECC", "MD9g3THNC0Z1Ulk+5eGpijotaR5gtv/mzMzfMa5Oio3gOCCSbpCZe5SBIsvdzyof3rFVFgBxOXBM0QgyhBgaCSVkUGaLko5YAmX8qJ6ThORAwrOJNGqNx08y3l0b+A3jkWdvqVVnu6oS7QfnAPaOp4QjMC0Uxpl/2E3QpsI+vNZ9HkWx4mTJeW1AegNmmvov+KhzgWXt8HuT6Vys/MWGxoWPq+ooDGPAfmeVZiY+8GyY4zgMisdqUObEejaAj+gQd+nnnpI8YOFimjir8fp5eP/rT1t6urYcHNUGjsHvPZUAC7uczE3M3ZIhPXz4iT5MDBtonUGsTnrKZKh/NGGvaC/DAhptFIsnjOlLbAyiXmY=").Base64ToBytes().Decrypt())) },
+				{ "IP", requestInfo.Session.IP },
+				{ "DeviceID", requestInfo.Session.DeviceID },
+				{ "DeveloperID", requestInfo.Session.DeveloperID },
+				{ "AppID", requestInfo.Session.AppID },
+				{ "AppInfo", requestInfo.Session.AppName + " @ " + requestInfo.Session.AppPlatform },
+				{ "OSInfo", $"VIEApps NGX [{requestInfo.Session.AppAgent}]" },
+				{ "Verified", requestInfo.Session.Verified },
+				{ "Online", true }
+			}.ToString(Formatting.None);
+			await this.CallServiceAsync(new RequestInfo(requestInfo.Session, "Users", "Session", "POST")
+			{
+				Body = body,
+				Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+				{
+					{ "Signature", body.GetHMACSHA256(this.ValidationKey) }
+				},
+				CorrelationID = requestInfo.CorrelationID
+			}, cancellationToken).ConfigureAwait(false);
+		}
+
+		/// <summary>
+		/// Sends the sync request to a remote endpoint
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		protected virtual Task SendSyncRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
+			=> Task.CompletedTask;
+		#endregion
+
 		#region Forms controls & Expressions of JavaScript
 		/// <summary>
 		/// Generates the controls of this type (for working with input forms)
@@ -1906,6 +2012,22 @@ namespace net.vieapps.Services
 
 					// initialize all helper services
 					await this.InitializeHelperServicesAsync().ConfigureAwait(false);
+
+					// start the timer to send the sync request
+					if (string.IsNullOrWhiteSpace(this.SyncSessionID))
+						this.StartTimer(async () =>
+						{
+							try
+							{
+								var requestInfo = this.BuildSyncRequestInfo();
+								await this.RegisterSyncSessionAsync(requestInfo, this.CancellationTokenSource.Token).ConfigureAwait(false);
+								await this.SendSyncRequestAsync(requestInfo, this.CancellationTokenSource.Token).ConfigureAwait(false);
+							}
+							catch (Exception ex)
+							{
+								this.Logger?.LogError($"Error occurred while sending a sync request to API Gateway => {ex.Message}", ex);
+							}
+						}, UtilityService.GetAppSetting("TimerInterval:Sync", "7").CastAs<int>() * 60);
 
 					// send the service information to API Gateway
 					try
