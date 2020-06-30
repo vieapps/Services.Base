@@ -1,6 +1,7 @@
 ﻿#region Related components
 using System;
 using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Configuration;
@@ -878,6 +879,27 @@ namespace net.vieapps.Services
 		protected virtual string SyncKey => this.GetKey("Sync", "VIEApps-FD2CD7FA-NGX-40DE-Services-401D-Sync-93D9-Key-A47006F07048");
 
 		/// <summary>
+		/// Gets the key for validating/signing a JSON Web Token
+		/// </summary>
+		/// <returns></returns>
+		protected virtual string JWTKey => this.ValidationKey.GetHMACHash(this.EncryptionKey, "BLAKE256").ToBase64Url();
+
+		/// <summary>
+		/// Gets the key for encrypting/decrypting data with ECCsecp256k1
+		/// </summary>
+		protected virtual System.Numerics.BigInteger ECCKey => ECCsecp256k1.GetPrivateKey(this.GetKey("Keys:ECC", "MD9g3THNC0Z1Ulk+5eGpijotaR5gtv/mzMzfMa5Oio3gOCCSbpCZe5SBIsvdzyof3rFVFgBxOXBM0QgyhBgaCSVkUGaLko5YAmX8qJ6ThORAwrOJNGqNx08y3l0b+A3jkWdvqVVnu6oS7QfnAPaOp4QjMC0Uxpl/2E3QpsI+vNZ9HkWx4mTJeW1AegNmmvov+KhzgWXt8HuT6Vys/MWGxoWPq+ooDGPAfmeVZiY+8GyY4zgMisdqUObEejaAj+gQd+nnnpI8YOFimjir8fp5eP/rT1t6urYcHNUGjsHvPZUAC7uczE3M3ZIhPXz4iT5MDBtonUGsTnrKZKh/NGGvaC/DAhptFIsnjOlLbAyiXmY=").Base64ToBytes().Decrypt());
+
+		/// <summary>
+		/// Gets the key for encrypting/decrypting data with ECCsecp256k1
+		/// </summary>
+		protected virtual ECCsecp256k1.Point ECCPublicKey => ECCsecp256k1.GeneratePublicKey(this.ECCKey);
+
+		/// <summary>
+		/// Gets the key for encrypting/decrypting data with RSA
+		/// </summary>
+		protected virtual string RSAKey => this.GetKey("Keys:RSA", "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").Decrypt();
+
+		/// <summary>
 		/// Gets a key from app settings
 		/// </summary>
 		/// <param name="name"></param>
@@ -1736,6 +1758,12 @@ namespace net.vieapps.Services
 		protected RequestInfo BuildSyncRequestInfo()
 		{
 			this.SyncSessionID = this.SyncSessionID ?? UtilityService.NewUUID;
+			var ipAddresses = new List<IPAddress>();
+			try
+			{
+				ipAddresses = Dns.GetHostAddresses(Dns.GetHostName()).ToList();
+			}
+			catch { }
 			return new RequestInfo
 			{
 				Session = new Session
@@ -1746,12 +1774,12 @@ namespace net.vieapps.Services
 						SessionID = this.SyncSessionID,
 						ID = UtilityService.GetAppSetting("Users:SystemAccountID", "VIEAppsNGX-MMXVII-System-Account")
 					},
-					IP = "127.0.0.1",
-					DeviceID = $"{this.NodeID}@converter",
-					AppID = "vieapps-ngx-converter",
-					AppName = "VIEApps NGX Converter",
+					IP = ipAddresses.FirstOrDefault()?.ToString() ?? "127.0.0.1",
+					DeviceID = $"{this.NodeID}@synchronizer",
+					AppName = "VIEApps NGX Synchronizer",
 					AppPlatform = $"{Extensions.GetRuntimeOS()} Daemon",
-					AppAgent = $"{UtilityService.DesktopUserAgent} VIEApps NGX Converter/{this.GetType().Assembly.GetVersion()}"
+					AppAgent = $"{UtilityService.DesktopUserAgent} VIEApps NGX Sync Daemon/{this.GetType().Assembly.GetVersion(false)}",
+					AppOrigin = null
 				},
 				Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 				{
@@ -1764,7 +1792,7 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Registers the session to send a synchronize request
 		/// </summary>
-		/// <param name="requestInfo"></param>
+		/// <param name="requestInfo">The RequestInfo object that contains the session information need to register</param>
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
 		protected async Task RegisterSyncSessionAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
@@ -1774,9 +1802,9 @@ namespace net.vieapps.Services
 				{ "ID", requestInfo.Session.SessionID },
 				{ "IssuedAt", DateTime.Now },
 				{ "RenewedAt", DateTime.Now },
-				{ "ExpiredAt", DateTime.Now.AddDays(3) },
+				{ "ExpiredAt", DateTime.Now.AddDays(1) },
 				{ "UserID", requestInfo.Session.User.ID },
-				{ "AccessToken", requestInfo.Session.User.GetAccessToken(ECCsecp256k1.GetPrivateKey(this.GetKey("Keys:ECC", "MD9g3THNC0Z1Ulk+5eGpijotaR5gtv/mzMzfMa5Oio3gOCCSbpCZe5SBIsvdzyof3rFVFgBxOXBM0QgyhBgaCSVkUGaLko5YAmX8qJ6ThORAwrOJNGqNx08y3l0b+A3jkWdvqVVnu6oS7QfnAPaOp4QjMC0Uxpl/2E3QpsI+vNZ9HkWx4mTJeW1AegNmmvov+KhzgWXt8HuT6Vys/MWGxoWPq+ooDGPAfmeVZiY+8GyY4zgMisdqUObEejaAj+gQd+nnnpI8YOFimjir8fp5eP/rT1t6urYcHNUGjsHvPZUAC7uczE3M3ZIhPXz4iT5MDBtonUGsTnrKZKh/NGGvaC/DAhptFIsnjOlLbAyiXmY=").Base64ToBytes().Decrypt())) },
+				{ "AccessToken", requestInfo.Session.User.GetAccessToken(this.ECCKey) },
 				{ "IP", requestInfo.Session.IP },
 				{ "DeviceID", requestInfo.Session.DeviceID },
 				{ "DeveloperID", requestInfo.Session.DeveloperID },
@@ -1800,11 +1828,43 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Sends the sync request to a remote endpoint
 		/// </summary>
-		/// <param name="requestInfo"></param>
+		/// <param name="requestInfo">The RequestInfo object that contains the session information</param>
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
 		protected virtual Task SendSyncRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
 			=> Task.CompletedTask;
+
+		/// <summary>
+		/// Sends the sync request to a remote API Gateway using REST APIs with PATCH verb
+		/// </summary>
+		/// <param name="requestInfo">The RequestInfo object that contains the session information</param>
+		/// <param name="apiGatewayURI">The URI of the remote API Gateway</param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		protected virtual async Task SendSyncRequestAsync(RequestInfo requestInfo, string apiGatewayURI, CancellationToken cancellationToken = default)
+		{
+			// prepare URL
+			var url = apiGatewayURI;
+			if (string.IsNullOrWhiteSpace(url) || (!url.IsStartsWith("https://") && !url.IsStartsWith("http://")))
+				return;
+
+			while (url.EndsWith("/"))
+				url = url.Left(url.Length - 1);
+
+			url += $"/{requestInfo.ServiceName}/{requestInfo.ObjectName}?{requestInfo.Query.Select(kvp => $"{kvp.Key}={kvp.Value?.UrlEncode()}").Join("&")}";
+			url += (url.IsContains("&") ? "&" : "") + $"x-request-extra={requestInfo.Extra?.ToJson().ToString(Formatting.None).Url64Encode()}";
+
+			// send the request as HTTP request
+			try
+			{
+				await UtilityService.GetWebResponseAsync("PATCH", url, requestInfo.Header, null, requestInfo.Body, "application/json", 45, requestInfo.Session.AppAgent, null, null, null, cancellationToken).ConfigureAwait(false);
+			}
+			catch (Exception ex)
+			{
+				await this.WriteLogsAsync(requestInfo, $"Error occurred while sending a synchoronizing request to a remote API Gateway [{apiGatewayURI}] => {ex.Message}", ex).ConfigureAwait(false);
+				throw;
+			}
+		}
 		#endregion
 
 		#region Forms controls & Expressions of JavaScript
