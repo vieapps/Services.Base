@@ -180,7 +180,7 @@ namespace net.vieapps.Services
 				this.GatewayCommunicator = Router.IncomingChannel.RealmProxy.Services
 					.GetSubject<CommunicateMessage>("messages.services.apigateway")
 					.Subscribe(
-						async message => await this.ProcessGatewayCommunicateMessageAsync(message).ConfigureAwait(false),
+						async message => await (this.NodeID.IsEquals(message.ExcludedNodeID) ? Task.CompletedTask : this.ProcessGatewayCommunicateMessageAsync(message)).ConfigureAwait(false),
 						exception => this.Logger?.LogError($"Error occurred while fetching an inter-communicate message of API Gateway => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
 					);
 
@@ -1754,10 +1754,11 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Builds the RequestInfo to send a synchronize request
 		/// </summary>
+		/// <param name="sessionID"></param>
 		/// <returns></returns>
-		protected RequestInfo BuildSyncRequestInfo()
+		protected RequestInfo BuildSyncRequestInfo(string sessionID = null)
 		{
-			this.SyncSessionID = this.SyncSessionID ?? UtilityService.NewUUID;
+			this.SyncSessionID = sessionID ?? this.SyncSessionID ?? UtilityService.NewUUID;
 			var ipAddresses = new List<IPAddress>();
 			try
 			{
@@ -1779,7 +1780,8 @@ namespace net.vieapps.Services
 					AppName = "VIEApps NGX Synchronizer",
 					AppPlatform = $"{Extensions.GetRuntimeOS()} Daemon",
 					AppAgent = $"{UtilityService.DesktopUserAgent} VIEApps NGX Sync Daemon/{this.GetType().Assembly.GetVersion(false)}",
-					AppOrigin = null
+					AppOrigin = null,
+					Verified = true
 				},
 				Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 				{
@@ -1809,8 +1811,8 @@ namespace net.vieapps.Services
 				{ "DeviceID", requestInfo.Session.DeviceID },
 				{ "DeveloperID", requestInfo.Session.DeveloperID },
 				{ "AppID", requestInfo.Session.AppID },
-				{ "AppInfo", requestInfo.Session.AppName + " @ " + requestInfo.Session.AppPlatform },
-				{ "OSInfo", $"VIEApps NGX [{requestInfo.Session.AppAgent}]" },
+				{ "AppInfo", $"{requestInfo.Session.AppName} @ {requestInfo.Session.AppPlatform}" },
+				{ "OSInfo", Extensions.GetRuntimePlatform(false) },
 				{ "Verified", requestInfo.Session.Verified },
 				{ "Online", true }
 			}.ToString(Formatting.None);
@@ -2079,7 +2081,7 @@ namespace net.vieapps.Services
 						{
 							try
 							{
-								var requestInfo = this.BuildSyncRequestInfo();
+								var requestInfo = this.BuildSyncRequestInfo(UtilityService.NewUUID);
 								await this.RegisterSyncSessionAsync(requestInfo, this.CancellationTokenSource.Token).ConfigureAwait(false);
 								await this.SendSyncRequestAsync(requestInfo, this.CancellationTokenSource.Token).ConfigureAwait(false);
 							}

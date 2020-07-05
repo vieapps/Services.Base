@@ -135,20 +135,11 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the invoke information
 		/// </summary>
-		/// <param name="args"></param>
 		/// <returns></returns>
-		public static string GetInvokeInfo(IEnumerable<string> args = null)
+		public static string GetInvokeInfo()
 		{
 			var runtimeArguments = Extensions.GetRuntimeArguments();
-			var callingArguments = args ?? new string[] { };
-			return (callingArguments.FirstOrDefault(argument => argument.IsStartsWith("/call-user:"))?.Replace(StringComparison.OrdinalIgnoreCase, "/call-user:", "").UrlDecode() ?? runtimeArguments.Item1)
-				+ " [Host: "
-				+ (callingArguments.FirstOrDefault(argument => argument.IsStartsWith("/call-host:"))?.Replace(StringComparison.OrdinalIgnoreCase, "/call-host:", "").UrlDecode() ?? runtimeArguments.Item2)
-				+ " - Platform: "
-				+ (callingArguments.FirstOrDefault(argument => argument.IsStartsWith("/call-platform:"))?.Replace(StringComparison.OrdinalIgnoreCase, "/call-platform:", "").UrlDecode() ?? runtimeArguments.Item3)
-				+ " @ "
-				+ (callingArguments.FirstOrDefault(argument => argument.IsStartsWith("/call-os:"))?.Replace(StringComparison.OrdinalIgnoreCase, "/call-os:", "").UrlDecode() ?? runtimeArguments.Item4)
-				+ "]";
+			return $"{runtimeArguments.Item1} [Host: {runtimeArguments.Item2} - Platform: {runtimeArguments.Item3} @ {runtimeArguments.Item4}]";
 		}
 
 		/// <summary>
@@ -172,7 +163,7 @@ namespace net.vieapps.Services
 						Name = serviceName.ToLower(),
 						UniqueName = Extensions.GetUniqueName(serviceName, args),
 						ControllerID = args?.FirstOrDefault(arg => arg.IsStartsWith("/controller-id:"))?.Replace("/controller-id:", "") ?? "Unknown",
-						InvokeInfo = Extensions.GetInvokeInfo(args),
+						InvokeInfo = Extensions.GetInvokeInfo(),
 						Available = available,
 						Running = running
 					}.ToJson()
