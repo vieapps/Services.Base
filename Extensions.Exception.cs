@@ -24,9 +24,9 @@ namespace net.vieapps.Services
 		public static string GetStack(this Exception exception, bool onlyStack = true)
 		{
 			var stack = "";
-			if (exception != null && exception is WampException)
+			if (exception != null && exception is WampException wampException)
 			{
-				var details = (exception as WampException).GetDetails();
+				var details = wampException.GetDetails();
 				stack = details.Item6 != null
 					? (onlyStack ? details.Item6.Get<string>("Stack") : details.Item6.ToString(Formatting.Indented))?.Replace("\\r", "\r").Replace("\\n", "\n").Replace(@"\\", @"\")
 					: details.Item4?.Replace("\\r", "\r")?.Replace("\\n", "\n")?.Replace(@"\\", @"\");
@@ -52,10 +52,10 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the details of the WAMP exception
 		/// </summary>
-		/// <param name="exception"></param>
+		/// <param name="wampException"></param>
 		/// <param name="requestInfo"></param>
 		/// <returns></returns>
-		public static Tuple<int, string, string, string, Exception, JObject> GetDetails(this WampException exception, RequestInfo requestInfo = null)
+		public static Tuple<int, string, string, string, Exception, JObject> GetDetails(this WampException wampException, RequestInfo requestInfo = null)
 		{
 			var code = (int)HttpStatusCode.InternalServerError;
 			var message = "";
@@ -65,11 +65,11 @@ namespace net.vieapps.Services
 			JObject jsonException = null;
 
 			// unavailable
-			if (exception.ErrorUri.Equals("wamp.error.no_such_procedure") || exception.ErrorUri.Equals("wamp.error.no_such_registration") || exception.ErrorUri.Equals("wamp.error.callee_unregistered"))
+			if (wampException.ErrorUri.Equals("wamp.error.no_such_procedure") || wampException.ErrorUri.Equals("wamp.error.no_such_registration") || wampException.ErrorUri.Equals("wamp.error.callee_unregistered"))
 			{
-				if (exception.Arguments != null && exception.Arguments.Length > 0 && exception.Arguments[0] != null && exception.Arguments[0] is JValue)
+				if (wampException.Arguments != null && wampException.Arguments.Length > 0 && wampException.Arguments[0] != null && wampException.Arguments[0] is JValue)
 				{
-					message = (exception.Arguments[0] as JValue).Value.ToString();
+					message = (wampException.Arguments[0] as JValue).Value.ToString();
 					var start = message.IndexOf("'") + 1;
 					var end = message.IndexOf("'", start);
 					message = $"The service ({message.Substring(start, end - start).Replace("'", "")}) is unavailable";
@@ -78,41 +78,41 @@ namespace net.vieapps.Services
 					message = "The service is unavailable";
 
 				type = "ServiceUnavailableException";
-				stack = exception.StackTrace;
+				stack = wampException.StackTrace;
 			}
 
 			// cannot serialize
-			else if (exception.ErrorUri.Equals("wamp.error.invalid_argument"))
+			else if (wampException.ErrorUri.Equals("wamp.error.invalid_argument"))
 			{
 				message = "Cannot serialize or deserialize one of arguments, all arguments must be instance of a serializable class - interfaces are not be deserialized";
-				if (exception.Arguments != null && exception.Arguments.Length > 0 && exception.Arguments[0] != null && exception.Arguments[0] is JValue)
-					message += $" => {(exception.Arguments[0] as JValue).Value}";
+				if (wampException.Arguments != null && wampException.Arguments.Length > 0 && wampException.Arguments[0] != null && wampException.Arguments[0] is JValue)
+					message += $" => {(wampException.Arguments[0] as JValue).Value}";
 				type = "SerializationException";
-				stack = exception.StackTrace;
+				stack = wampException.StackTrace;
 			}
 
 			// runtime error
-			else if (exception.ErrorUri.Equals("wamp.error.runtime_error"))
+			else if (wampException.ErrorUri.Equals("wamp.error.runtime_error"))
 			{
-				inner = exception;
+				inner = wampException;
 
-				if (exception.Arguments != null && exception.Arguments.Length > 0 && exception.Arguments[0] != null && exception.Arguments[0] is JObject)
-					foreach (var info in exception.Arguments[0] as JObject)
+				if (wampException.Arguments != null && wampException.Arguments.Length > 0 && wampException.Arguments[0] != null && wampException.Arguments[0] is JObject)
+					foreach (var info in wampException.Arguments[0] as JObject)
 					{
 						if (info.Value != null && info.Value is JValue && (info.Value as JValue).Value != null)
 							stack += (stack.Equals("") ? "" : "\r\n" + $"----- Inner ({info.Key}) --------------------" + "\r\n")
 								+ (info.Value as JValue).Value.ToString();
 					}
 
-				if (requestInfo == null && exception.Arguments != null && exception.Arguments.Length > 2 && exception.Arguments[2] != null && exception.Arguments[2] is JObject)
+				if (requestInfo == null && wampException.Arguments != null && wampException.Arguments.Length > 2 && wampException.Arguments[2] != null && wampException.Arguments[2] is JObject)
 				{
-					var info = (exception.Arguments[2] as JObject).First;
+					var info = (wampException.Arguments[2] as JObject).First;
 					if (info != null && info is JProperty && (info as JProperty).Name.Equals("RequestInfo") && (info as JProperty).Value != null && (info as JProperty).Value is JObject)
 						requestInfo = ((info as JProperty).Value as JToken).FromJson<RequestInfo>();
 				}
 
-				jsonException = exception.Arguments != null && exception.Arguments.Length > 4 && exception.Arguments[4] != null && exception.Arguments[4] is JObject
-					? (exception.Arguments[4] as JObject).GetJsonException()
+				jsonException = wampException.Arguments != null && wampException.Arguments.Length > 4 && wampException.Arguments[4] != null && wampException.Arguments[4] is JObject
+					? (wampException.Arguments[4] as JObject).GetJsonException()
 					: null;
 
 				message = jsonException != null
@@ -127,10 +127,10 @@ namespace net.vieapps.Services
 			// unknown
 			else
 			{
-				message = exception.Message;
-				type = exception.GetTypeName(true);
-				stack = exception.StackTrace;
-				inner = exception.InnerException;
+				message = wampException.Message;
+				type = wampException.GetTypeName(true);
+				stack = wampException.StackTrace;
+				inner = wampException.InnerException;
 			}
 
 			// status code
