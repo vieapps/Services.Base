@@ -73,6 +73,8 @@ namespace net.vieapps.Services
 
 		IAsyncDisposable ServiceUniqueInstance { get; set; }
 
+		IAsyncDisposable ServiceSyncInstance { get; set; }
+
 		IDisposable ServiceCommunicator { get; set; }
 
 		IDisposable GatewayCommunicator { get; set; }
@@ -145,7 +147,7 @@ namespace net.vieapps.Services
 			{
 				this.ServiceInstance = await Router.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(this.ServiceName)).ConfigureAwait(false);
 				this.ServiceUniqueInstance = await Router.IncomingChannel.RealmProxy.Services.RegisterCallee<IUniqueService>(() => this, RegistrationInterceptor.Create(this.ServiceUniqueName, WampInvokePolicy.Single)).ConfigureAwait(false);
-				await Router.IncomingChannel.RealmProxy.Services.RegisterCallee<ISyncableService>(() => this, RegistrationInterceptor.Create(this.ServiceName)).ConfigureAwait(false);
+				this.ServiceSyncInstance = await Router.IncomingChannel.RealmProxy.Services.RegisterCallee<ISyncableService>(() => this, RegistrationInterceptor.Create(this.ServiceName)).ConfigureAwait(false);
 			}
 
 			async Task registerServiceAsync()
@@ -246,7 +248,8 @@ namespace net.vieapps.Services
 			{
 				await Task.WhenAll(
 					this.ServiceInstance != null ? this.ServiceInstance.DisposeAsync().AsTask() : Task.CompletedTask,
-					this.ServiceUniqueInstance != null ? this.ServiceUniqueInstance.DisposeAsync().AsTask() : Task.CompletedTask
+					this.ServiceUniqueInstance != null ? this.ServiceUniqueInstance.DisposeAsync().AsTask() : Task.CompletedTask,
+					this.ServiceSyncInstance != null ? this.ServiceSyncInstance.DisposeAsync().AsTask() : Task.CompletedTask
 				).ConfigureAwait(false);
 				onSuccess?.Invoke(this);
 			}
@@ -259,6 +262,7 @@ namespace net.vieapps.Services
 			{
 				this.ServiceInstance = null;
 				this.ServiceUniqueInstance = null;
+				this.ServiceSyncInstance = null;
 			}
 		}
 
