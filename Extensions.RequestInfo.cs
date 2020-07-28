@@ -40,7 +40,9 @@ namespace net.vieapps.Services
 		/// <param name="name">The string that presents name of parameter want to get</param>
 		/// <returns></returns>
 		public static string GetHeaderParameter(this RequestInfo requestInfo, string name)
-			=> requestInfo != null && requestInfo.Header != null && !string.IsNullOrWhiteSpace(name) && requestInfo.Header.ContainsKey(name.ToLower()) ? requestInfo.Header[name.ToLower()] : null;
+			=> requestInfo != null && requestInfo.Header != null && !string.IsNullOrWhiteSpace(name) 
+				? requestInfo.Header.TryGetValue(name, out var value) ? value : null
+				: null;
 
 		/// <summary>
 		/// Gets the parameter from the query
@@ -48,7 +50,9 @@ namespace net.vieapps.Services
 		/// <param name="name">The string that presents name of parameter want to get</param>
 		/// <returns></returns>
 		public static string GetQueryParameter(this RequestInfo requestInfo, string name)
-			=> requestInfo != null && requestInfo.Query != null && !string.IsNullOrWhiteSpace(name) && requestInfo.Query.ContainsKey(name.ToLower()) ? requestInfo.Query[name.ToLower()] : null;
+			=> requestInfo != null && requestInfo.Query != null && !string.IsNullOrWhiteSpace(name) 
+				? requestInfo.Query.TryGetValue(name, out var value) ? value : null
+				: null;
 
 		/// <summary>
 		/// Gets the parameter with two steps: first from header, then second step is from query if header has no value
