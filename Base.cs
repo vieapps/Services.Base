@@ -246,12 +246,12 @@ namespace net.vieapps.Services
 			// dispose all instances
 			try
 			{
-				await Task.WhenAll(
+				await Task.WhenAll
+				(
 					this.ServiceInstance != null ? this.ServiceInstance.DisposeAsync().AsTask() : Task.CompletedTask,
 					this.ServiceUniqueInstance != null ? this.ServiceUniqueInstance.DisposeAsync().AsTask() : Task.CompletedTask,
 					this.ServiceSyncInstance != null ? this.ServiceSyncInstance.DisposeAsync().AsTask() : Task.CompletedTask
 				).ConfigureAwait(false);
-				onSuccess?.Invoke(this);
 			}
 			catch (Exception ex)
 			{
@@ -263,6 +263,7 @@ namespace net.vieapps.Services
 				this.ServiceInstance = null;
 				this.ServiceUniqueInstance = null;
 				this.ServiceSyncInstance = null;
+				onSuccess?.Invoke(this);
 			}
 		}
 

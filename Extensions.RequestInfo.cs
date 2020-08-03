@@ -21,20 +21,6 @@ namespace net.vieapps.Services
 			=> requestInfo == null || string.IsNullOrWhiteSpace(requestInfo.Body) ? new ExpandoObject() : requestInfo.Body.ToExpandoObject();
 
 		/// <summary>
-		/// Gets the value of the 'x-request' parameter of the query (in Base64Url) and converts to JSON
-		/// </summary>
-		/// <returns></returns>
-		public static JToken GetRequestJson(this RequestInfo requestInfo)
-			=> (requestInfo != null && requestInfo.Query != null && requestInfo.Query.ContainsKey("x-request") ? requestInfo.Query["x-request"].Url64Decode() : "{}").ToJson();
-
-		/// <summary>
-		/// Gets the value of the 'x-request' parameter of the query (in Base64Url) and converts to ExpandoObject
-		/// </summary>
-		/// <returns></returns>
-		public static ExpandoObject GetRequestExpando(this RequestInfo requestInfo)
-			=> requestInfo != null && requestInfo.Query != null && requestInfo.Query.ContainsKey("x-request") ? requestInfo.Query["x-request"].Url64Decode().ToExpandoObject() : new ExpandoObject();
-
-		/// <summary>
 		/// Gets the parameter from the header
 		/// </summary>
 		/// <param name="name">The string that presents name of parameter want to get</param>
@@ -104,6 +90,20 @@ namespace net.vieapps.Services
 					? requestInfo.GetQueryParameter("id") ?? requestInfo.GetQueryParameter("object-id") ?? requestInfo.GetQueryParameter("x-object-id")
 					: null;
 		}
+
+		/// <summary>
+		/// Gets the value of the 'x-request' parameter of the query (in Base64Url) and converts to JSON
+		/// </summary>
+		/// <returns></returns>
+		public static JToken GetRequestJson(this RequestInfo requestInfo)
+			=> (requestInfo?.GetQueryParameter("x-request")?.Url64Decode() ?? "{}").ToJson();
+
+		/// <summary>
+		/// Gets the value of the 'x-request' parameter of the query (in Base64Url) and converts to ExpandoObject
+		/// </summary>
+		/// <returns></returns>
+		public static ExpandoObject GetRequestExpando(this RequestInfo requestInfo)
+			=> requestInfo?.GetQueryParameter("x-request")?.Url64Decode()?.ToExpandoObject() ?? new ExpandoObject();
 
 		/// <summary>
 		/// Gets the full URI
