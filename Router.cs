@@ -16,7 +16,6 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using net.vieapps.Components.Utility;
 using net.vieapps.Components.WebSockets;
-using DnsClient.Internal;
 #endregion
 
 namespace net.vieapps.Services
@@ -390,7 +389,7 @@ namespace net.vieapps.Services
 			=> Router.DisconnectAsync(message, onError).Wait(waitingTimes > 0 ? waitingTimes : 1234);
 		#endregion
 
-		#region Get and Call a service
+		#region Get & Call a service
 		internal static ConcurrentDictionary<string, IService> Services { get; } = new ConcurrentDictionary<string, IService>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>

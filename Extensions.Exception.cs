@@ -108,7 +108,7 @@ namespace net.vieapps.Services
 				{
 					var info = (wampException.Arguments[2] as JObject).First;
 					if (info != null && info is JProperty && (info as JProperty).Name.Equals("RequestInfo") && (info as JProperty).Value != null && (info as JProperty).Value is JObject)
-						requestInfo = ((info as JProperty).Value as JToken).FromJson<RequestInfo>();
+						requestInfo = (info as JProperty).Value.FromJson<RequestInfo>();
 				}
 
 				jsonException = wampException.Arguments != null && wampException.Arguments.Length > 4 && wampException.Arguments[4] != null && wampException.Arguments[4] is JObject
@@ -116,11 +116,11 @@ namespace net.vieapps.Services
 					: null;
 
 				message = jsonException != null
-					? (jsonException["Message"] as JValue).Value.ToString()
+					? jsonException.Get<string>("Message")
 					: $"Error occurred at \"services.{(requestInfo?.ServiceName ?? "unknown").ToLower()}\"";
 
 				type = jsonException != null && jsonException["Type"] != null
-					? ((jsonException["Type"] as JValue)?.Value?.ToString()?.ToArray('.').Last() ?? "ServiceOperationException")
+					? jsonException.Get<JValue>("Type")?.Value?.ToString()?.ToArray('.').Last() ?? "ServiceOperationException"
 					: "ServiceOperationException";
 			}
 

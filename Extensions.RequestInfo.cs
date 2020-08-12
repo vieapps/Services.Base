@@ -11,14 +11,18 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <returns></returns>
 		public static JToken GetBodyJson(this RequestInfo requestInfo)
-			=> requestInfo == null || string.IsNullOrWhiteSpace(requestInfo.Body) ? new JObject() : requestInfo.Body.ToJson();
+			=> requestInfo == null || string.IsNullOrWhiteSpace(requestInfo.Body)
+				? new JObject()
+				: requestInfo.Body.ToJson();
 
 		/// <summary>
 		/// Gets the request body in dynamic object (ExpandoObject)
 		/// </summary>
 		/// <returns></returns>
 		public static ExpandoObject GetBodyExpando(this RequestInfo requestInfo)
-			=> requestInfo == null || string.IsNullOrWhiteSpace(requestInfo.Body) ? new ExpandoObject() : requestInfo.Body.ToExpandoObject();
+			=> requestInfo == null || string.IsNullOrWhiteSpace(requestInfo.Body)
+				? new ExpandoObject()
+				: requestInfo.Body.ToExpandoObject();
 
 		/// <summary>
 		/// Gets the parameter from the header
@@ -53,21 +57,45 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <returns></returns>
 		public static string GetDeviceID(this RequestInfo requestInfo)
-			=> requestInfo != null && requestInfo.Session != null && !string.IsNullOrWhiteSpace(requestInfo.Session.DeviceID) ? requestInfo.Session.DeviceID : requestInfo?.GetParameter("x-device-id");
+			=> requestInfo != null && requestInfo.Session != null && !string.IsNullOrWhiteSpace(requestInfo.Session.DeviceID)
+				? requestInfo.Session.DeviceID
+				: requestInfo?.GetParameter("x-device-id");
+
+		/// <summary>
+		/// Gets the identity of the developer that send this request
+		/// </summary>
+		/// <returns></returns>
+		public static string GetDeveloperID(this RequestInfo requestInfo)
+			=> requestInfo != null && requestInfo.Session != null && !string.IsNullOrWhiteSpace(requestInfo.Session.DeveloperID)
+				? requestInfo.Session.DeveloperID
+				: requestInfo?.GetParameter("x-developer-id");
+
+		/// <summary>
+		/// Gets the identity of the app that send this request
+		/// </summary>
+		/// <returns></returns>
+		public static string GetAppID(this RequestInfo requestInfo)
+			=> requestInfo != null && requestInfo.Session != null && !string.IsNullOrWhiteSpace(requestInfo.Session.AppID)
+				? requestInfo.Session.AppID
+				: requestInfo?.GetParameter("x-app-id");
 
 		/// <summary>
 		/// Gets the name of the app that send this request
 		/// </summary>
 		/// <returns></returns>
 		public static string GetAppName(this RequestInfo requestInfo)
-			=> requestInfo != null && requestInfo.Session != null && !string.IsNullOrWhiteSpace(requestInfo.Session.AppName) ? requestInfo.Session.AppName : requestInfo?.GetParameter("x-app-name");
+			=> requestInfo != null && requestInfo.Session != null && !string.IsNullOrWhiteSpace(requestInfo.Session.AppName)
+				? requestInfo.Session.AppName
+				: requestInfo?.GetParameter("x-app-name");
 
 		/// <summary>
 		/// Gets the platform of the app that send this request
 		/// </summary>
 		/// <returns></returns>
 		public static string GetAppPlatform(this RequestInfo requestInfo)
-			=> requestInfo != null && requestInfo.Session != null && !string.IsNullOrWhiteSpace(requestInfo.Session.AppPlatform) ? requestInfo.Session.AppPlatform : requestInfo?.GetParameter("x-app-platform");
+			=> requestInfo != null && requestInfo.Session != null && !string.IsNullOrWhiteSpace(requestInfo.Session.AppPlatform)
+				? requestInfo.Session.AppPlatform
+				: requestInfo?.GetParameter("x-app-platform");
 
 		/// <summary>
 		/// Gets the object identity (from the parameter named 'object-identity' of the query)
