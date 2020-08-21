@@ -16,7 +16,7 @@ namespace net.vieapps.Services
 	public static partial class Extensions
 	{
 
-		#region Filter
+		#region Formula expressions
 		/// <summary>
 		/// Evaluates a formula
 		/// </summary>
@@ -37,7 +37,7 @@ namespace net.vieapps.Services
 
 			var position = formula.IndexOf("[");
 			if (position > 0 && !formula.EndsWith("]"))
-				throw new InformationInvalidException("The formula is invalid (open and close token is required when the formula got parameter (ex: @query[x-content-id] - just like a Javascript function)");
+				throw new InformationInvalidException("The formula is invalid (open and close token is required when the formula got a parameter (ex: @query[x-content-id] - just like a Javascript function)");
 
 			// prepare
 			object value = null;
@@ -52,28 +52,28 @@ namespace net.vieapps.Services
 			if (name.IsEquals("@current") || name.IsEquals("@object"))
 				value = formula.StartsWith("@") ? formula.Evaluate(@object, session, query, header, body, extra, @params) : @object?.GetAttributeValue(formula);
 
-			// value of session
-			else if (name.IsEquals("@session"))
+			// value of request's session
+			else if (name.IsEquals("@session") || name.IsEquals("@request.session"))
 				value = formula.StartsWith("@") ? formula.Evaluate(@object, session, query, header, body, extra, @params) : session?.Get(formula);
 
-			// value of query
-			else if (name.IsEquals("@query"))
+			// value of request's query
+			else if (name.IsEquals("@query") || name.IsEquals("@request.query"))
 				value = formula.StartsWith("@") ? formula.Evaluate(@object, session, query, header, body, extra, @params) : query?.Get(formula);
 
-			// value of header
-			else if (name.IsEquals("@header"))
+			// value of request's header
+			else if (name.IsEquals("@header") || name.IsEquals("@request.header"))
 				value = formula.StartsWith("@") ? formula.Evaluate(@object, session, query, header, body, extra, @params) : header?.Get(formula);
 
-			// value of body
-			else if (name.IsEquals("@body"))
+			// value of request's body
+			else if (name.IsEquals("@body") || name.IsEquals("@request.body"))
 				value = formula.StartsWith("@") ? formula.Evaluate(@object, session, query, header, body, extra, @params) : body?.Get(formula);
 
-			// value of extra
-			else if (name.IsEquals("@extra"))
+			// value of request's extra
+			else if (name.IsEquals("@extra") || name.IsEquals("@request.extra"))
 				value = formula.StartsWith("@") ? formula.Evaluate(@object, session, query, header, body, extra, @params) : extra?.Get(formula);
 
-			// value of additional params
-			else if (name.IsEquals("@params"))
+			// value of additional params or global information
+			else if (name.IsEquals("@params") || name.IsEquals("@global"))
 				value = formula.StartsWith("@") ? formula.Evaluate(@object, session, query, header, body, extra, @params) : @params?.Get(formula);
 
 			// pre-defined formula: today date-time => string with format yyyy/MM/dd
@@ -107,7 +107,9 @@ namespace net.vieapps.Services
 			=> !string.IsNullOrWhiteSpace(formula)
 				? formula.Evaluate(@object, requestInfo?.Session?.ToExpandoObject(), requestInfo?.Query?.ToExpandoObject(), requestInfo?.Header?.ToExpandoObject(), requestInfo?.Body?.ToExpandoObject(), requestInfo?.Extra?.ToExpandoObject(), @params)
 				: null;
+		#endregion
 
+		#region Filter
 		/// <summary>
 		/// Prepares the comparing values of the filtering expression (means evaluating all formulas/JavaScript expressions)
 		/// </summary>

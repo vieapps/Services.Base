@@ -1532,7 +1532,7 @@ namespace net.vieapps.Services
 			=> await this.IsDownloaderAsync(user, objectName, entityInfo, objectID, null, cancellationToken).ConfigureAwait(false) || await this.IsAuthorizedAsync(user, objectName, objectID, Components.Security.Action.Download, (await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges, null, null, null, cancellationToken).ConfigureAwait(false);
 		#endregion
 
-		#region Files, Thumbnails & Attachments
+		#region Files (Thumbnails & Attachments) & Form Controls
 		/// <summary>
 		/// Gets the collection of thumbnails
 		/// </summary>
@@ -1600,6 +1600,14 @@ namespace net.vieapps.Services
 			=> requestInfo == null
 				? Task.FromResult<JToken>(null)
 				: requestInfo.DeleteFilesAsync(systemID, entityInfo, objectID, this.ValidationKey, cancellationToken, this.GetTracker(requestInfo), this.JsonFormat);
+
+		/// <summary>
+		/// Generates the controls of this type (for working with input forms)
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <returns></returns>
+		protected virtual JToken GenerateFormControls<T>() where T : class
+			=> RepositoryMediator.GenerateFormControls<T>();
 		#endregion
 
 		#region Timers
@@ -1875,14 +1883,6 @@ namespace net.vieapps.Services
 		#endregion
 
 		#region Forms controls & Expressions of JavaScript
-		/// <summary>
-		/// Generates the controls of this type (for working with input forms)
-		/// </summary>
-		/// <typeparam name="T"></typeparam>
-		/// <returns></returns>
-		protected virtual JToken GenerateFormControls<T>() where T : class
-			=> RepositoryMediator.GenerateFormControls<T>();
-
 		/// <summary>
 		/// Gest the Javascript embed objects
 		/// </summary>
