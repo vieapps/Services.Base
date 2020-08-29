@@ -16,28 +16,24 @@ namespace net.vieapps.Services
 	public static partial class Extensions
 	{
 
-		#region Formula expressions
+		#region Evaluate a formula
 		/// <summary>
-		/// Evaluates a formula
+		/// Evaluates a Formula expression
 		/// </summary>
 		/// <param name="formula">The string that presents the formula</param>
 		/// <param name="object">The object for fetching data from</param>
-		/// <param name="session">The session for fetching data from</param>
-		/// <param name="query">The query for fetching data from</param>
-		/// <param name="header">The header for fetching data from</param>
-		/// <param name="body">The body for fetching data from</param>
-		/// <param name="extra">The extra for fetching data from</param>
+		/// <param name="requestInfo">The object that presents the information of the request information</param>
 		/// <param name="params">The additional parameters for fetching data from</param>
 		/// <returns></returns>
-		public static object Evaluate(this string formula, object @object = null, ExpandoObject session = null, ExpandoObject query = null, ExpandoObject header = null, ExpandoObject body = null, ExpandoObject extra = null, ExpandoObject @params = null)
+		public static object Evaluate(this string formula, object @object = null, RequestInfo requestInfo = null, ExpandoObject @params = null)
 		{
 			// check
 			if (string.IsNullOrWhiteSpace(formula) || !formula.StartsWith("@"))
-				throw new InformationInvalidException("The formula is invalid (the formula must start with at (@) character)");
+				throw new InformationInvalidException("The formula expression is invalid (the formula expression must started by the '@' character)");
 
-			var position = formula.IndexOf("[");
-			if (position > 0 && !formula.EndsWith("]"))
-				throw new InformationInvalidException("The formula is invalid (open and close token is required when the formula got a parameter (ex: @query[x-content-id] - just like a Javascript function)");
+			var position = formula.IndexOf("(");
+			if (position > 0 && !formula.EndsWith(")"))
+				throw new InformationInvalidException("The formula expression is invalid (the open and close tokens are required when the formula got a parameter (ex: @request.Body(ContentType.ID) - just like an Javascript function)");
 
 			// prepare
 			object value = null;
@@ -50,107 +46,109 @@ namespace net.vieapps.Services
 
 			// value of current object
 			if (name.IsEquals("@current") || name.IsEquals("@object"))
-				value = formula.StartsWith("@") ? formula.Evaluate(@object, session, query, header, body, extra, @params) : @object?.GetAttributeValue(formula);
+				value = formula.StartsWith("@") ? formula.Evaluate(@object, requestInfo, @params) : @object?.GetAttributeValue(formula);
 
 			// value of request's session
-			else if (name.IsEquals("@session") || name.IsEquals("@request.session"))
-				value = formula.StartsWith("@") ? formula.Evaluate(@object, session, query, header, body, extra, @params) : session?.Get(formula);
+			else if (name.IsEquals("@session") || name.IsEquals("@request.Session"))
+				value = formula.StartsWith("@") ? formula.Evaluate(@object, requestInfo, @params) : requestInfo?.Session?.ToExpandoObject()?.Get(formula);
 
 			// value of request's query
-			else if (name.IsEquals("@query") || name.IsEquals("@request.query"))
-				value = formula.StartsWith("@") ? formula.Evaluate(@object, session, query, header, body, extra, @params) : query?.Get(formula);
+			else if (name.IsEquals("@query") || name.IsEquals("@request.Query"))
+				value = formula.StartsWith("@") ? formula.Evaluate(@object, requestInfo, @params) : requestInfo?.Query?.ToExpandoObject()?.Get(formula);
 
 			// value of request's header
-			else if (name.IsEquals("@header") || name.IsEquals("@request.header"))
-				value = formula.StartsWith("@") ? formula.Evaluate(@object, session, query, header, body, extra, @params) : header?.Get(formula);
+			else if (name.IsEquals("@header") || name.IsEquals("@request.Header"))
+				value = formula.StartsWith("@") ? formula.Evaluate(@object, requestInfo, @params) : requestInfo?.Header?.ToExpandoObject()?.Get(formula);
 
 			// value of request's body
-			else if (name.IsEquals("@body") || name.IsEquals("@request.body"))
-				value = formula.StartsWith("@") ? formula.Evaluate(@object, session, query, header, body, extra, @params) : body?.Get(formula);
+			else if (name.IsEquals("@body") || name.IsEquals("@request.Body"))
+				value = formula.StartsWith("@") ? formula.Evaluate(@object, requestInfo, @params) : requestInfo?.Body?.ToExpandoObject()?.Get(formula);
 
 			// value of request's extra
-			else if (name.IsEquals("@extra") || name.IsEquals("@request.extra"))
-				value = formula.StartsWith("@") ? formula.Evaluate(@object, session, query, header, body, extra, @params) : extra?.Get(formula);
+			else if (name.IsEquals("@extra") || name.IsEquals("@request.Extra"))
+				value = formula.StartsWith("@") ? formula.Evaluate(@object, requestInfo, @params) : requestInfo?.Extra?.ToExpandoObject()?.Get(formula);
 
-			// value of additional params or global information
-			else if (name.IsEquals("@params") || name.IsEquals("@global"))
-				value = formula.StartsWith("@") ? formula.Evaluate(@object, session, query, header, body, extra, @params) : @params?.Get(formula);
+			// value of additional parameters
+			else if (name.IsEquals("@params"))
+				value = formula.StartsWith("@") ? formula.Evaluate(@object, requestInfo, @params) : @params?.Get(formula);
 
-			// pre-defined formula: today date-time => string with format yyyy/MM/dd
-			else if (name.IsEquals("@today") || name.IsStartsWith("@todayStr"))
-				value = DateTime.Now.ToDTString(false, false);
+			// value of an Javascript expression
+			else if (name.IsEquals("@js") || name.IsEquals("@javascript"))
+				value = Extensions.JsEvaluate(formula.GetJsExpression(@object, requestInfo, @params));
 
 			// pre-defined formula: current date-time
-			else if (name.IsEquals("@now"))
+			else if (name.IsEquals("@now") || name.IsEquals("@date.Now") || name.IsEquals("@datetime.Now"))
 				value = DateTime.Now;
 
-			// pre-defined formula: current date-time => string with format yyyy/MM/dd HH:mm:ss
-			else if (name.IsStartsWith("@nowStr"))
+			// pre-defined formula: convert current date-time to string with format yyyy/MM/dd
+			else if (name.IsEquals("@today") || name.IsStartsWith("@todayStr") || name.IsStartsWith("@date.Today") || name.IsStartsWith("@datetime.Today"))
+				value = DateTime.Now.ToDTString(false, false);
+
+			// pre-defined formula: convert current date-time to string with format yyyy/MM/dd HH:mm:ss
+			else if (name.IsStartsWith("@nowStr") || name.IsStartsWith("@date.NowStr") || name.IsStartsWith("@datetime.NowStr"))
 				value = DateTime.Now.ToDTString(false, true);
+
+			// pre-defined formula: convert date-time to string with format dd/MM/yyyy HH:mm:ss
+			else if (name.IsEquals("@date") && formula.StartsWith("@"))
+			{
+				var datetime = formula.Evaluate(@object, requestInfo, @params) as DateTime?;
+				value = datetime != null && datetime.HasValue ? datetime.Value.ToString("dd/MM/yyyy HH:mm:ss") : null;
+			}
+
+			// pre-defined formula: convert date-time to string with format hh:mm tt @ dd/MM/yyyy
+			else if (name.IsEquals("@time") && formula.StartsWith("@"))
+			{
+				var datetime = formula.Evaluate(@object, requestInfo, @params) as DateTime?;
+				value = datetime != null && datetime.HasValue ? datetime.Value.ToString("hh:mm tt @ dd/MM/yyyy") : null;
+			}
 
 			// convert the formula's value to string
 			else if (name.IsStartsWith("@toStr") && formula.StartsWith("@"))
-				value = formula.Evaluate(@object, session, query, header, body, extra, @params)?.ToString();
+				value = formula.Evaluate(@object, requestInfo, @params)?.ToString();
 
 			return value;
 		}
-
-		/// <summary>
-		/// Evaluates a formula
-		/// </summary>
-		/// <param name="formula">The string that presents the formula</param>
-		/// <param name="object">The object for fetching data from</param>
-		/// <param name="requestInfo">The object that presents the information of the request information</param>
-		/// <param name="params">The additional parameters for fetching data from</param>
-		/// <returns></returns>
-		public static object Evaluate(this string formula, object @object = null, RequestInfo requestInfo = null, ExpandoObject @params = null)
-			=> !string.IsNullOrWhiteSpace(formula)
-				? formula.Evaluate(@object, requestInfo?.Session?.ToExpandoObject(), requestInfo?.Query?.ToExpandoObject(), requestInfo?.Header?.ToExpandoObject(), requestInfo?.Body?.ToExpandoObject(), requestInfo?.Extra?.ToExpandoObject(), @params)
-				: null;
 		#endregion
 
 		#region Filter
 		/// <summary>
-		/// Prepares the comparing values of the filtering expression (means evaluating all formulas/JavaScript expressions)
+		/// Prepares the comparing values of the filtering expression (means evaluating all Formula/Javascript expressions)
 		/// </summary>
 		/// <param name="filterBy">The filtering expression</param>
 		/// <param name="jsEngine">The pooled JavaScript engine for evaluating all JavaScript expressions</param>
-		/// <param name="current">The object that presents information of current processing object (in JS expression, that is '__current' global variable and 'this' instance is bound to JSON stringify)</param>
-		/// <param name="requestInfo">The object that presents the information of the request information (in JS expression, that is '__requestInfo' global variable)</param>
+		/// <param name="object">The object for fetching data from</param>
+		/// <param name="requestInfo">The object that presents the information of the request information</param>
+		/// <param name="params">The additional parameters for fetching data from</param>
 		/// <param name="onCompleted">The action to run when the preparing process is completed</param>
 		/// <returns>The filtering expression with all formula/expression values had been evaluated</returns>
-		public static IFilterBy Prepare(this IFilterBy filterBy, PooledJsEngine jsEngine = null, object current = null, RequestInfo requestInfo = null, Action<IFilterBy> onCompleted = null)
+		public static IFilterBy Prepare(this IFilterBy filterBy, PooledJsEngine jsEngine = null, object @object = null, RequestInfo requestInfo = null, ExpandoObject @params = null, Action<IFilterBy> onCompleted = null)
 		{
-			ExpandoObject session = null, query = null, header = null, body = null, extra = null;
-
 			// prepare value of a single filter
 			if (filterBy is FilterBy filter)
 			{
 				if (filter?.Value != null && filter.Value is string value && value.StartsWith("@"))
 				{
 					// value of pre-defined objects/formulas
-					if (value.IsStartsWith("@current[") || value.IsStartsWith("@object[") || value.IsStartsWith("@session[") || value.IsStartsWith("@query[") || value.IsStartsWith("@header[") || value.IsStartsWith("@body[") || value.IsStartsWith("@extra[") || value.IsStartsWith("@today") || value.IsStartsWith("@now") || value.IsStartsWith("@toStr"))
-					{
-						session = session ?? requestInfo?.Session?.ToExpandoObject();
-						query = query ?? requestInfo?.Query?.ToExpandoObject();
-						header = header ?? requestInfo?.Header?.ToExpandoObject();
-						body = body ?? requestInfo?.Body?.ToExpandoObject();
-						extra = extra ?? requestInfo?.Extra?.ToExpandoObject();
-						filter.Value = value.Evaluate(current, session, query, header, body, extra);
-					}
+					if (value.IsStartsWith("@current(") || value.IsStartsWith("@object(")
+					|| value.IsStartsWith("@session(") || value.IsStartsWith("@request.Session(")
+					|| value.IsStartsWith("@query(") || value.IsStartsWith("@request.Query(")
+					|| value.IsStartsWith("@header(") || value.IsStartsWith("@request.Header(")
+					|| value.IsStartsWith("@body(") || value.IsStartsWith("@request.Body(")
+					|| value.IsStartsWith("@extra(") || value.IsStartsWith("@request.Extra(")
+					|| value.IsStartsWith("@params(") || value.IsStartsWith("@js(") || value.IsStartsWith("@javascript(")
+					|| value.IsStartsWith("@today") || value.IsStartsWith("@now") || value.IsStartsWith("@toStr")
+					|| value.IsStartsWith("@datetime.") || value.IsStartsWith("@date.") || value.IsStartsWith("@time."))
+						filter.Value = value.Evaluate(@object, requestInfo, @params);
 
 					// value of JavaScript expression
-					else if (jsEngine != null && !value.StartsWith("@["))
-					{
-						var jsExpression = Extensions.GetJsExpression(value, current, requestInfo);
-						filter.Value = jsEngine.JsEvaluate(jsExpression);
-					}
+					else if (jsEngine != null && value.StartsWith("@[") && value.EndsWith("]"))
+						filter.Value = jsEngine.JsEvaluate(value.GetJsExpression(@object, requestInfo, @params));
 				}
 			}
 
 			// prepare children of a group filter
 			else
-				(filterBy as FilterBys)?.Children?.ForEach(filterby => filterby?.Prepare(jsEngine, current, requestInfo, onCompleted));
+				(filterBy as FilterBys)?.Children?.ForEach(filterby => filterby?.Prepare(jsEngine, @object, requestInfo, @params, onCompleted));
 
 			// complete
 			onCompleted?.Invoke(filterBy);
@@ -158,52 +156,55 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Prepares the comparing values of the filtering expression (means evaluating all formulas/JavaScript expressions)
+		/// Prepares the comparing values of the filtering expression (means evaluating all Formula/Javascript expressions)
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
 		/// <param name="filterBy">The filtering expression</param>
 		/// <param name="jsEngine">The pooled JavaScript engine for evaluating all JavaScript expressions</param>
-		/// <param name="current">The object that presents information of current processing object (in JS expression, that is '__current' global variable and 'this' instance is bound to JSON stringify)</param>
-		/// <param name="requestInfo">The object that presents the information of the request information (in JS expression, that is '__requestInfo' global variable)</param>
+		/// <param name="object">The object for fetching data from</param>
+		/// <param name="requestInfo">The object that presents the information of the request information</param>
+		/// <param name="params">The additional parameters for fetching data from</param>
 		/// <param name="onCompleted">The action to run when the preparing process is completed</param>
 		/// <returns>The filtering expression with all formula/expression values had been evaluated</returns>
-		public static IFilterBy<T> Prepare<T>(this IFilterBy<T> filterBy, PooledJsEngine jsEngine = null, object current = null, RequestInfo requestInfo = null, Action<IFilterBy<T>> onCompleted = null) where T : class
-			=> (filterBy as IFilterBy)?.Prepare(jsEngine, current, requestInfo, onCompleted as Action<IFilterBy>) as IFilterBy<T>;
+		public static IFilterBy<T> Prepare<T>(this IFilterBy<T> filterBy, PooledJsEngine jsEngine = null, object @object = null, RequestInfo requestInfo = null, ExpandoObject @params = null, Action<IFilterBy<T>> onCompleted = null) where T : class
+			=> (filterBy as IFilterBy)?.Prepare(jsEngine, @object, requestInfo, @params, onCompleted as Action<IFilterBy>) as IFilterBy<T>;
 
 		/// <summary>
-		/// Prepares the comparing values of the filtering expression (means evaluating all formulas/JavaScript expressions)
+		/// Prepares the comparing values of the filtering expression (means evaluating all Formula/Javascript expressions)
 		/// </summary>
 		/// <param name="filterBy">The filtering expression</param>
-		/// <param name="current">The object that presents information of current processing object (in JS expression, that is '__current' global variable and 'this' instance is bound to JSON stringify)</param>
-		/// <param name="requestInfo">The object that presents the information of the request information (in JS expression, that is '__requestInfo' global variable)</param>
+		/// <param name="object">The object for fetching data from</param>
+		/// <param name="requestInfo">The object that presents the information of the request information</param>
+		/// <param name="params">The additional parameters for fetching data from</param>
 		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
 		/// <param name="onCompleted">The action to run when the preparing process is completed</param>
 		/// <returns>The filtering expression with all formula/expression values had been evaluated</returns>
-		public static IFilterBy Prepare(this IFilterBy filterBy, object current, RequestInfo requestInfo = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null, Action<IFilterBy, PooledJsEngine> onCompleted = null)
+		public static IFilterBy Prepare(this IFilterBy filterBy, object @object, RequestInfo requestInfo = null, ExpandoObject @params = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null, Action<IFilterBy, PooledJsEngine> onCompleted = null)
 		{
-			using (var jsEngine = Extensions.GetJsEngine(Extensions.GetJsEmbedObjects(current, requestInfo, embedObjects), Extensions.GetJsEmbedTypes(embedTypes)))
+			using (var jsEngine = Extensions.GetJsEngine(embedObjects, embedTypes))
 			{
-				return filterBy?.Prepare(jsEngine, current, requestInfo, filter => onCompleted?.Invoke(filter, jsEngine));
+				return filterBy?.Prepare(jsEngine, @object, requestInfo, @params, filter => onCompleted?.Invoke(filter, jsEngine));
 			}
 		}
 
 		/// <summary>
-		/// Prepares the comparing values of the filtering expression (means evaluating all formulas/JavaScript expressions)
+		/// Prepares the comparing values of the filtering expression (means evaluating all Formula/Javascript expressions)
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
 		/// <param name="filterBy">The filtering expression</param>
-		/// <param name="current">The object that presents information of current processing object (in JS expression, that is '__current' global variable and 'this' instance is bound to JSON stringify)</param>
-		/// <param name="requestInfo">The object that presents the information of the request information (in JS expression, that is '__requestInfo' global variable)</param>
+		/// <param name="object">The object for fetching data from</param>
+		/// <param name="requestInfo">The object that presents the information of the request information</param>
+		/// <param name="params">The additional parameters for fetching data from</param>
 		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
 		/// <param name="onCompleted">The action to run when the preparing process is completed</param>
 		/// <returns>The filtering expression with all formula/expression values had been evaluated</returns>
-		public static IFilterBy<T> Prepare<T>(this IFilterBy<T> filterBy, object current, RequestInfo requestInfo = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null, Action<IFilterBy<T>, PooledJsEngine> onCompleted = null) where T : class
-			=> (filterBy as IFilterBy)?.Prepare(current, requestInfo, embedObjects, embedTypes, onCompleted as Action<IFilterBy, PooledJsEngine>) as IFilterBy<T>;
+		public static IFilterBy<T> Prepare<T>(this IFilterBy<T> filterBy, object @object, RequestInfo requestInfo = null, ExpandoObject @params = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null, Action<IFilterBy<T>, PooledJsEngine> onCompleted = null) where T : class
+			=> (filterBy as IFilterBy)?.Prepare(@object, requestInfo, @params, embedObjects, embedTypes, onCompleted as Action<IFilterBy, PooledJsEngine>) as IFilterBy<T>;
 
 		/// <summary>
-		/// Prepares the comparing values of the filtering expression (means evaluating all formulas/JavaScript expressions)
+		/// Prepares the comparing values of the filtering expression (means evaluating all Formula/Javascript expressions)
 		/// </summary>
 		/// <param name="filterBy">The filtering expression</param>
 		/// <param name="requestInfo">The object that presents the information of the request information</param>
@@ -211,13 +212,13 @@ namespace net.vieapps.Services
 		/// <returns>The filtering expression with all formula/expression values had been evaluated</returns>
 		public static IFilterBy Prepare(this IFilterBy filterBy, RequestInfo requestInfo, Action<IFilterBy> onCompleted = null)
 		{
-			filterBy?.Prepare(null, null, requestInfo, null);
+			filterBy?.Prepare(null, null, requestInfo, null, null);
 			onCompleted?.Invoke(filterBy);
 			return filterBy;
 		}
 
 		/// <summary>
-		/// Prepares the comparing values of the filtering expression (means evaluating all formulas/JavaScript expressions)
+		/// Prepares the comparing values of the filtering expression (means evaluating all Formula/Javascript expressions)
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
 		/// <param name="filterBy">The filtering expression</param>
@@ -226,7 +227,7 @@ namespace net.vieapps.Services
 		/// <returns>The filtering expression with all formula/expression values had been evaluated</returns>
 		public static IFilterBy<T> Prepare<T>(this IFilterBy<T> filterBy, RequestInfo requestInfo, Action<IFilterBy<T>> onCompleted = null) where T : class
 		{
-			filterBy?.Prepare<T>(null, null, requestInfo, null);
+			filterBy?.Prepare<T>(null, null, requestInfo, null, null);
 			onCompleted?.Invoke(filterBy);
 			return filterBy;
 		}

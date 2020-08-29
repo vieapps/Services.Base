@@ -10,6 +10,7 @@ using System.Reflection;
 using System.Reactive.Linq;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
+using System.Dynamic;
 using WampSharp.V2;
 using WampSharp.V2.Rpc;
 using WampSharp.V2.Core.Contracts;
@@ -1878,106 +1879,6 @@ namespace net.vieapps.Services
 			{
 				await this.WriteLogsAsync(requestInfo, $"Error occurred while sending a synchoronizing request to a remote API Gateway [{apiGatewayURI}] => {ex.Message}", ex).ConfigureAwait(false);
 				throw;
-			}
-		}
-		#endregion
-
-		#region Forms controls & Expressions of JavaScript
-		/// <summary>
-		/// Gest the Javascript embed objects
-		/// </summary>
-		/// <param name="current">The object that presents information of current processing object - '__current' global variable and 'this' instance is bond to JSON stringify</param>
-		/// <param name="requestInfo">The object that presents the information - '__requestInfo' global variable</param>
-		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
-		/// <returns></returns>
-		protected virtual IDictionary<string, object> GetJsEmbedObjects(object current, RequestInfo requestInfo, IDictionary<string, object> embedObjects = null)
-			=> Extensions.GetJsEmbedObjects(current, requestInfo, embedObjects);
-
-		/// <summary>
-		/// Gest the Javascript embed types
-		/// </summary>
-		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
-		/// <returns></returns>
-		protected virtual IDictionary<string, Type> GetJsEmbedTypes(IDictionary<string, Type> embedTypes = null)
-			=> Extensions.GetJsEmbedTypes(embedTypes);
-
-		/// <summary>
-		/// Creates the Javascript engine for evaluating an expression
-		/// </summary>
-		/// <param name="current">The object that presents information of current processing object - '__current' global variable and 'this' instance is bond to JSON stringify</param>
-		/// <param name="requestInfo">The object that presents the information - '__requestInfo' global variable</param>
-		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
-		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
-		/// <returns></returns>
-		protected virtual JavaScriptEngineSwitcher.Core.IJsEngine CreateJsEngine(object current, RequestInfo requestInfo, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
-			=> Extensions.CreateJsEngine(this.GetJsEmbedObjects(current, requestInfo, embedObjects), this.GetJsEmbedTypes(embedTypes));
-
-		/// <summary>
-		/// Gets the Javascript engine for evaluating an expression
-		/// </summary>
-		/// <param name="current">The object that presents information of current processing object - '__current' global variable and 'this' instance is bond to JSON stringify</param>
-		/// <param name="requestInfo">The object that presents the information - '__requestInfo' global variable</param>
-		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
-		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
-		/// <returns></returns>
-		protected virtual JSPool.PooledJsEngine GetJsEngine(object current, RequestInfo requestInfo, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
-			=> Extensions.GetJsEngine(this.GetJsEmbedObjects(current, requestInfo, embedObjects), this.GetJsEmbedTypes(embedTypes));
-
-		/// <summary>
-		/// Gets the Javascript expression for evaluating
-		/// </summary>
-		/// <param name="expression">The string that presents an Javascript expression for evaluating, the expression must end by statement 'return ..;' to return a value</param>
-		/// <param name="current">The object that presents information of current processing object - '__current' global variable and 'this' instance is bond to JSON stringify</param>
-		/// <param name="requestInfo">The object that presents the information - '__requestInfoJSON' global variable</param>
-		/// <returns></returns>
-		protected virtual string GetJsExpression(string expression, object current, RequestInfo requestInfo)
-			=> Extensions.GetJsExpression(expression, current, requestInfo);
-
-		/// <summary>
-		/// Evaluates an Javascript expression
-		/// </summary>
-		/// <param name="expression">The string that presents an Javascript expression for evaluating, the expression must end by statement 'return ..;' to return a value</param>
-		/// <param name="current">The object that presents information of current processing object - '__current' global variable and 'this' instance is bond to JSON stringify</param>
-		/// <param name="requestInfo">The object that presents the information - '__requestInfo' global variable</param>
-		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
-		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
-		/// <returns>The object the presents the value that evaluated by the expression</returns>
-		protected virtual object JsEvaluate(string expression, object current = null, RequestInfo requestInfo = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
-		{
-			using (var jsEngine = this.GetJsEngine(current, requestInfo, embedObjects, embedTypes))
-			{
-				var jsExpression = this.GetJsExpression(expression, current, requestInfo);
-				return jsEngine.JsEvaluate(jsExpression);
-			}
-		}
-
-		/// <summary>
-		/// Evaluates an Javascript expression
-		/// </summary>
-		/// <typeparam name="T"></typeparam>
-		/// <param name="expression">The string that presents an Javascript expression for evaluating, the expression must end by statement 'return ..;' to return a value</param>
-		/// <param name="current">The object that presents information of current processing object - '__current' global variable and 'this' instance is bond to JSON stringify</param>
-		/// <param name="requestInfo">The object that presents the information - '__requestInfo' global variable</param>
-		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
-		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
-		/// <returns>The object the presents the value that evaluated by the expression</returns>
-		protected virtual T JsEvaluate<T>(string expression, object current = null, RequestInfo requestInfo = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
-			=> Extensions.JsCast<T>(this.JsEvaluate(expression, current, requestInfo, embedObjects, embedTypes));
-
-		/// <summary>
-		/// Evaluates the collection of Javascript expressions
-		/// </summary>
-		/// <param name="expressions">The collection of Javascript expression for evaluating, each expression must end by statement 'return ..;' to return a value</param>
-		/// <param name="current">The object that presents information of current processing object - '__current' global variable and 'this' instance is bond to JSON stringify</param>
-		/// <param name="requestInfo">The object that presents the information - '__requestInfo' global variable</param>
-		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
-		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
-		/// <returns>The collection of value that evaluated by the expressions</returns>
-		protected virtual IEnumerable<object> JsEvaluate(IEnumerable<string> expressions, object current = null, RequestInfo requestInfo = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
-		{
-			using (var jsEngine = this.GetJsEngine(current, requestInfo, embedObjects, embedTypes))
-			{
-				return expressions.Select(expression => jsEngine.JsEvaluate(this.GetJsExpression(expression, current, requestInfo))).ToList();
 			}
 		}
 		#endregion

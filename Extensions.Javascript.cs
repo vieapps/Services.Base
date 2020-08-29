@@ -1,10 +1,12 @@
 ﻿#region Related components
 using System;
 using System.Linq;
+using System.Dynamic;
 using System.Collections.Generic;
 using JSPool;
 using JavaScriptEngineSwitcher.Core;
 using JavaScriptEngineSwitcher.ChakraCore;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using net.vieapps.Components.Utility;
 #endregion
@@ -82,31 +84,53 @@ namespace net.vieapps.Services
 		static Func<string, bool, string> Func_GetAnsiUri => (name, lowerCase) => name.GetANSIUri(lowerCase);
 
 		/// <summary>
-		/// Gest the Javascript embed objects
+		/// Gets the Javascript expression for evaluating
 		/// </summary>
-		/// <param name="current">The object that presents information of current processing object - '__current' global variable and 'this' instance is bond to JSON stringify</param>
-		/// <param name="requestInfo">The object that presents the information - '__requestInfo' global variable</param>
-		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
+		/// <param name="expression">The string that presents an Javascript expression for evaluating, the expression must end by statement 'return ..;' to return a value</param>
+		/// <param name="object">The object that presents information of current processing object (the '__object' parameter variable and bound to 'this' instance)</param>
+		/// <param name="requestInfo">The object that presents the requesting information (the '__request' parameter variable)</param>
+		/// <param name="params">The object that presents the additional parameters (the '__params' parameter variable)</param>
 		/// <returns></returns>
-		public static IDictionary<string, object> GetJsEmbedObjects(object current, RequestInfo requestInfo, IDictionary<string, object> embedObjects = null)
-			=> new Dictionary<string, object>(embedObjects ?? new Dictionary<string, object>(), StringComparer.OrdinalIgnoreCase)
+		public static string GetJsExpression(this string expression, object @object = null, RequestInfo requestInfo = null, ExpandoObject @params = null)
+		{
+			if (!string.IsNullOrWhiteSpace(expression))
 			{
-				["__current"] = current,
-				["__requestInfo"] = requestInfo
-			};
-
-		/// <summary>
-		/// Gest the Javascript embed types
-		/// </summary>
-		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
-		/// <returns></returns>
-		public static IDictionary<string, Type> GetJsEmbedTypes(IDictionary<string, Type> embedTypes = null)
-			=> new Dictionary<string, Type>(embedTypes ?? new Dictionary<string, Type>(), StringComparer.OrdinalIgnoreCase)
-			{
-				["RequestInfo"] = typeof(RequestInfo),
-				["Session"] = typeof(Session),
-				["User"] = typeof(Components.Security.User)
-			};
+				if (expression.StartsWith("@[") && expression.EndsWith("]"))
+				{
+					expression = expression.Left(expression.Length - 1).Substring(2).Trim();
+					expression = $"return {(expression.Trim().EndsWith("();") || expression.Trim().EndsWith("()") ? "" : "();")}";
+				}
+				else
+					expression = expression.Trim();
+			}
+			return Extensions.JsFunctions + Environment.NewLine
+				+ "(function(__object,__request,__params){__object['__evaluate']=function(){"
+				+ Environment.NewLine
+				+ (string.IsNullOrWhiteSpace(expression) || expression.Trim().Equals(";") ? "return undefined;" : expression)
+				+ Environment.NewLine
+				+ "};"
+				+ Environment.NewLine
+				+ "return __object.__evaluate();})"
+				+ Environment.NewLine
+				+ "("
+				+ Environment.NewLine
+				+ (@object != null
+					? (@object is JToken
+						? @object as JToken
+						: @object.GetType().IsPrimitiveType()
+							? new JObject
+							{
+								{ "__value", new JValue(@object) }
+							}
+							: @object.ToJson()
+					).ToString(Formatting.None)
+					: "{}") + ","
+				+ Environment.NewLine
+				+ (requestInfo ?? new RequestInfo()).ToString(Formatting.None) + ","
+				+ Environment.NewLine
+				+ (@params?.ToJson(null).ToString(Formatting.None) ?? "{}")
+				+ ");";
+		}
 
 		/// <summary>
 		/// Prepare the Javascript engine
@@ -116,21 +140,19 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static IJsEngine PrepareJsEngine(this IJsEngine jsEngine, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 		{
-			new Dictionary<string, Type>(embedTypes ?? new Dictionary<string, Type>(), StringComparer.OrdinalIgnoreCase)
-			{
-				["Uri"] = typeof(Uri),
-				["DateTime"] = typeof(DateTime),
-			}
-			.Where(kvp => !string.IsNullOrWhiteSpace(kvp.Key) && kvp.Value != null)
-			.ForEach(kvp => jsEngine.EmbedHostType(kvp.Key, kvp.Value));
+			var objects = new Dictionary<string, object>(embedObjects ?? new Dictionary<string, object>(), StringComparer.OrdinalIgnoreCase);
+			if (!objects.ContainsKey("__sf_now"))
+				objects["__sf_now"] = Extensions.Func_Now;
+			if (!objects.ContainsKey("__sf_getAnsiUri"))
+				objects["__sf_getAnsiUri"] = Extensions.Func_GetAnsiUri;
+			objects.Where(kvp => !string.IsNullOrWhiteSpace(kvp.Key) && kvp.Value != null).ForEach(kvp => jsEngine.EmbedHostObject(kvp.Key, kvp.Value));
 
-			new Dictionary<string, object>(embedObjects ?? new Dictionary<string, object>(), StringComparer.OrdinalIgnoreCase)
-			{
-				["__sf_now"] = Extensions.Func_Now,
-				["__sf_getAnsiUri"] = Extensions.Func_GetAnsiUri,
-			}
-			.Where(kvp => !string.IsNullOrWhiteSpace(kvp.Key) && kvp.Value != null)
-			.ForEach(kvp => jsEngine.EmbedHostObject(kvp.Key, kvp.Value));
+			var types = new Dictionary<string, Type>(embedTypes ?? new Dictionary<string, Type>(), StringComparer.OrdinalIgnoreCase);
+			if (!types.ContainsKey("Uri"))
+				types["Uri"] = typeof(Uri);
+			if (!types.ContainsKey("DateTime"))
+				types["DateTime"] = typeof(DateTime);
+			types.Where(kvp => !string.IsNullOrWhiteSpace(kvp.Key) && kvp.Value != null).ForEach(kvp => jsEngine.EmbedHostType(kvp.Key, kvp.Value));
 
 			return jsEngine;
 		}
@@ -143,36 +165,6 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static IJsEngine CreateJsEngine(IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 			=> JsEngineSwitcher.Current.CreateDefaultEngine().PrepareJsEngine(embedObjects, embedTypes);
-
-		/// <summary>
-		/// Gets the Javascript expression for evaluating
-		/// </summary>
-		/// <param name="expression">The string that presents an Javascript expression for evaluating, the expression must end by statement 'return ..;' to return a value</param>
-		/// <param name="current">The object that presents information of current processing object - '__current' global variable and 'this' instance is bond to JSON stringify</param>
-		/// <param name="requestInfo">The object that presents the information - '__requestInfoJSON' global variable</param>
-		/// <returns></returns>
-		public static string GetJsExpression(string expression, object current, RequestInfo requestInfo)
-			=> Extensions.JsFunctions + Environment.NewLine
-				+ "var __requestInfoJSON = " + (requestInfo ?? new RequestInfo()).ToJson() + ";" + Environment.NewLine
-				+ "(function(__object){__object['__evaluate']=function(){" + Environment.NewLine
-				+ (string.IsNullOrWhiteSpace(expression) || expression.Trim().Equals(";")
-					? "return undefined;"
-					: expression.StartsWith("@")
-						? $"return {expression.Right(expression.Length - 1).Trim() + (expression.Trim().EndsWith("();") || expression.Trim().EndsWith("()") ? "" : "();")}"
-						: expression.Trim()) + Environment.NewLine
-				+ "};return __object.__evaluate();})" + Environment.NewLine
-				+ "(" + (current != null
-					? (current is JToken
-						? current as JToken
-						: current.GetType().IsPrimitiveType()
-							? new JObject
-							{
-								{ "__value", new JValue(current) }
-							}
-							: current.ToJson()
-					).ToString(Newtonsoft.Json.Formatting.None)
-					: "{}")
-				+ ");";
 
 		/// <summary>
 		/// Evaluates an Javascript expression
