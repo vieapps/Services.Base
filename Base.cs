@@ -375,7 +375,7 @@ namespace net.vieapps.Services
 			=> this.RTUService.SendServiceInfoAsync(this.ServiceName, args, running, available);
 		#endregion
 
-		#region Send email & web hook messages
+		#region Send email & web-hook messages
 		/// <summary>
 		/// Sends an email message
 		/// </summary>
@@ -472,7 +472,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected virtual Task SendWebHookAsync(WebHookMessage message, string developerID, string appID, string signAlgorithm = "SHA256", string signKey = null, string signatureName = null, bool signatureAsHex = true, bool signatureInQuery = false, Dictionary<string, string> additionalQuery = null, Dictionary<string, string> additionalHeader = null, CancellationToken cancellationToken = default)
-			=> this.MessagingService.SendWebHookAsync(message?.Normalize(signAlgorithm, signKey ?? appID, signatureName, signatureAsHex, signatureInQuery, additionalQuery, new Dictionary<string, string>(additionalHeader ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase)
+			=> this.SendWebHookAsync(message?.Normalize(signAlgorithm, signKey ?? appID, signatureName, signatureAsHex, signatureInQuery, additionalQuery, new Dictionary<string, string>(additionalHeader ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase)
 			{
 				{ "DeveloperID", developerID },
 				{ "AppID", appID }
@@ -541,9 +541,9 @@ namespace net.vieapps.Services
 
 			// write to centerlized logs
 			logs = logs ?? new List<string>();
-			if (exception != null && exception is WampException)
+			if (exception != null && exception is WampException wampException)
 			{
-				var details = (exception as WampException).GetDetails();
+				var details = wampException.GetDetails();
 				logs.Add($"> Message: {details.Item2}");
 				logs.Add($"> Type: {details.Item3}");
 			}

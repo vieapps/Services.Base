@@ -87,24 +87,21 @@ namespace net.vieapps.Services
 		/// Gets the Javascript expression for evaluating
 		/// </summary>
 		/// <param name="expression">The string that presents an Javascript expression for evaluating, the expression must end by statement 'return ..;' to return a value</param>
-		/// <param name="object">The object that presents information of current processing object (the '__object' parameter variable and bound to 'this' instance)</param>
 		/// <param name="requestInfo">The object that presents the requesting information (the '__request' parameter variable)</param>
+		/// <param name="object">The object that presents information of current processing object (the '__object' parameter variable and bound to 'this' instance)</param>
 		/// <param name="params">The object that presents the additional parameters (the '__params' parameter variable)</param>
 		/// <returns></returns>
-		public static string GetJsExpression(this string expression, object @object = null, RequestInfo requestInfo = null, ExpandoObject @params = null)
+		public static string GetJsExpression(this string expression, ExpandoObject requestInfo = null, ExpandoObject @object = null, ExpandoObject @params = null)
 		{
 			if (!string.IsNullOrWhiteSpace(expression))
 			{
-				if (expression.StartsWith("@[") && expression.EndsWith("]"))
-				{
-					expression = expression.Left(expression.Length - 1).Substring(2).Trim();
-					expression = $"return {(expression.Trim().EndsWith("();") || expression.Trim().EndsWith("()") ? "" : "();")}";
-				}
-				else
-					expression = expression.Trim();
+				expression = expression.StartsWith("@[") && expression.EndsWith("]")
+					? expression.Left(expression.Length - 1).Substring(2).Trim()
+					: expression.Trim();
 			}
-			return Extensions.JsFunctions + Environment.NewLine
-				+ "(function(__object,__request,__params){__object['__evaluate']=function(){"
+			return Extensions.JsFunctions
+				+ Environment.NewLine
+				+ "(function(__request,__object,__params){__object['__evaluate']=function(){"
 				+ Environment.NewLine
 				+ (string.IsNullOrWhiteSpace(expression) || expression.Trim().Equals(";") ? "return undefined;" : expression)
 				+ Environment.NewLine
@@ -114,23 +111,24 @@ namespace net.vieapps.Services
 				+ Environment.NewLine
 				+ "("
 				+ Environment.NewLine
-				+ (@object != null
-					? (@object is JToken
-						? @object as JToken
-						: @object.GetType().IsPrimitiveType()
-							? new JObject
-							{
-								{ "__value", new JValue(@object) }
-							}
-							: @object.ToJson()
-					).ToString(Formatting.None)
-					: "{}") + ","
+				+ (requestInfo?.ToJson().ToString(Formatting.None) ?? "{}") + ","
 				+ Environment.NewLine
-				+ (requestInfo ?? new RequestInfo()).ToString(Formatting.None) + ","
+				+ (@object?.ToJson().ToString(Formatting.None) ?? "{}") + ","
 				+ Environment.NewLine
-				+ (@params?.ToJson(null).ToString(Formatting.None) ?? "{}")
+				+ (@params?.ToJson().ToString(Formatting.None) ?? "{}")
 				+ ");";
 		}
+
+		/// <summary>
+		/// Gets the Javascript expression for evaluating
+		/// </summary>
+		/// <param name="expression">The string that presents an Javascript expression for evaluating, the expression must end by statement 'return ..;' to return a value</param>
+		/// <param name="requestInfo">The object that presents the requesting information (the '__request' parameter variable)</param>
+		/// <param name="object">The object that presents information of current processing object (the '__object' parameter variable and bound to 'this' instance)</param>
+		/// <param name="params">The object that presents the additional parameters (the '__params' parameter variable)</param>
+		/// <returns></returns>
+		public static string GetJsExpression(this string expression, RequestInfo requestInfo, object @object, ExpandoObject @params)
+			=> expression?.GetJsExpression(requestInfo?.ToExpandoObject(), @object?.ToExpandoObject(), @params);
 
 		/// <summary>
 		/// Prepare the Javascript engine

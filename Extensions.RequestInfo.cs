@@ -11,18 +11,14 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <returns></returns>
 		public static JToken GetBodyJson(this RequestInfo requestInfo)
-			=> requestInfo == null || string.IsNullOrWhiteSpace(requestInfo.Body)
-				? new JObject()
-				: requestInfo.Body.ToJson();
+			=> requestInfo?.BodyAsJson ?? new JObject();
 
 		/// <summary>
 		/// Gets the request body in dynamic object (ExpandoObject)
 		/// </summary>
 		/// <returns></returns>
 		public static ExpandoObject GetBodyExpando(this RequestInfo requestInfo)
-			=> requestInfo == null || string.IsNullOrWhiteSpace(requestInfo.Body)
-				? new ExpandoObject()
-				: requestInfo.Body.ToExpandoObject();
+			=> requestInfo?.BodyAsExpandoObject ?? new ExpandoObject();
 
 		/// <summary>
 		/// Gets the parameter from the header
