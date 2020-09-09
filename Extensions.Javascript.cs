@@ -81,6 +81,8 @@ namespace net.vieapps.Services
 
 		static Func<DateTime> Func_Now => () => DateTime.Now;
 
+		static Func<DateTime, bool, DateTime> Func_GetTimeQuarter => (time, getHighValue) => time.GetTimeQuarter(getHighValue);
+
 		static Func<string, bool, string> Func_GetAnsiUri => (name, lowerCase) => name.GetANSIUri(lowerCase);
 
 		/// <summary>
@@ -141,6 +143,8 @@ namespace net.vieapps.Services
 			var objects = new Dictionary<string, object>(embedObjects ?? new Dictionary<string, object>(), StringComparer.OrdinalIgnoreCase);
 			if (!objects.ContainsKey("__sf_now"))
 				objects["__sf_now"] = Extensions.Func_Now;
+			if (!objects.ContainsKey("__sf_getTimeQuarter"))
+				objects["__sf_getTimeQuarter"] = Extensions.Func_GetTimeQuarter;
 			if (!objects.ContainsKey("__sf_getAnsiUri"))
 				objects["__sf_getAnsiUri"] = Extensions.Func_GetAnsiUri;
 			objects.Where(kvp => !string.IsNullOrWhiteSpace(kvp.Key) && kvp.Value != null).ForEach(kvp => jsEngine.EmbedHostObject(kvp.Key, kvp.Value));

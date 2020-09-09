@@ -7,9 +7,9 @@
 		<RootNamespace>net.vieapps.Services</RootNamespace>
 		<AssemblyName>VIEApps.Services.Base</AssemblyName>
 		<AssemblyTitle>VIEApps NGX Service Base</AssemblyTitle>
-		<AssemblyVersion>10.3.2009.2</AssemblyVersion>
-		<FileVersion>10.3.2009.2</FileVersion>
-		<Version>10.3.2009.2</Version>
+		<AssemblyVersion>10.3.2009.3</AssemblyVersion>
+		<FileVersion>10.3.2009.3</FileVersion>
+		<Version>10.3.2009.3</Version>
 		<InformationalVersion>10.3.$([System.DateTime]::Now.Year).$([System.DateTime]::Now.Month).$([System.DateTime]::Now.Day)@$(TargetFramework)#let.it.be</InformationalVersion>
 		<Title>VIEApps NGX Service Base</Title>
 		<Description>The base class for all microservices in the VIEApps NGX</Description>
@@ -28,7 +28,7 @@
 		<PackageIcon>Icon.png</PackageIcon>
 		<PackageOutputPath>../../Components</PackageOutputPath>
 		<PackageTags>services;microservices;vieapps;vieapps.components;vieapps.services;vieapps.microservices</PackageTags>
-		<PackageReleaseNotes>Improvement: Fix bugs of formula expressions (body as expando)</PackageReleaseNotes>
+		<PackageReleaseNotes>Formula expressions</PackageReleaseNotes>
 		<PackageProjectUrl>https://vieapps.net</PackageProjectUrl>
 		<RepositoryUrl>https://github.com/vieapps/Services.Base</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
@@ -44,17 +44,17 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="JavaScriptEngineSwitcher.ChakraCore" Version="3.7.1" />
+		<PackageReference Include="JavaScriptEngineSwitcher.ChakraCore" Version="3.7.2" />
 		<PackageReference Include="JSPool" Version="4.0.0" />
-		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="3.1.7" />
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="3.1.8" />
 		<PackageReference Include="MySqlConnector" Version="1.0.1" />
 		<PackageReference Include="Npgsql" Version="4.1.4" />
 		<PackageReference Include="Serilog.Extensions.Logging.File" Version="2.0.0" />
 		<PackageReference Include="System.Data.SqlClient" Version="4.8.2" />
 		<PackageReference Include="System.Text.Encoding.Extensions" Version="4.3.0" />
-		<PackageReference Include="VIEApps.Components.Repository" Version="10.3.2009.2" />
-		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.3.2009.2" />
-		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.3.2009.2" />
+		<PackageReference Include="VIEApps.Components.Repository" Version="10.3.2009.3" />
+		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.3.2009.3" />
+		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.3.2009.3" />
 	</ItemGroup>
 
 </Project>
