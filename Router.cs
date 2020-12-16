@@ -364,7 +364,7 @@ namespace net.vieapps.Services
 				Router.ChannelsAreClosedBySystem = true;
 				onError?.Invoke(ex);
 				if (onError == null)
-					throw ex;
+					throw;
 			}
 		}
 
@@ -477,7 +477,7 @@ namespace net.vieapps.Services
 			catch (Exception ex)
 			{
 				onError?.Invoke(requestInfo, ex);
-				throw ex;
+				throw;
 			}
 			finally
 			{
@@ -552,7 +552,7 @@ namespace net.vieapps.Services
 			catch (Exception ex)
 			{
 				onError?.Invoke(requestInfo, ex);
-				throw ex;
+				throw;
 			}
 			finally
 			{

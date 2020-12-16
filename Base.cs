@@ -53,6 +53,9 @@ namespace net.vieapps.Services
 			return Task.FromResult<JToken>(null);
 		}
 
+		public virtual Task<JToken> FetchTemporaryFileAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
+			=> requestInfo.FetchTemporaryFileAsync(cancellationToken);
+
 		/// <summary>
 		/// Processes the inter-communicate messages between the services' instances
 		/// </summary>
@@ -1644,7 +1647,7 @@ namespace net.vieapps.Services
 			=> this.Timers.ForEach(timer => timer.Dispose());
 		#endregion
 
-		#region Caching keys
+		#region Caching keys & Runtime exceptions
 		/// <summary>
 		/// Gets the caching key for working with collection of objects
 		/// </summary>
@@ -1701,9 +1704,7 @@ namespace net.vieapps.Services
 		/// <returns>The string that presents a caching key</returns>
 		protected virtual string GetCacheKeyOfObjectsXml<T>(IFilterBy<T> filter, SortBy<T> sort, int pageSize = 0, int pageNumber = 0) where T : class
 			=> Extensions.GetCacheKeyOfObjectsXml(filter, sort, pageSize, pageNumber);
-		#endregion
 
-		#region Runtime exception
 		/// <summary>
 		/// Gets the runtime exception to throw to caller
 		/// </summary>
@@ -1713,55 +1714,15 @@ namespace net.vieapps.Services
 		/// <param name="message">The message</param>
 		/// <returns></returns>
 		public WampException GetRuntimeException(RequestInfo requestInfo, Exception exception, Stopwatch stopwatch = null, string message = null)
-		{
-			// normalize exception
-			exception = exception != null && exception is RepositoryOperationException
-				? exception.InnerException
-				: exception;
-
-			// prepare message
-			message = string.IsNullOrWhiteSpace(message)
-				? exception != null
-					? exception.Message
-					: $"Error occurred while processing"
-				: message;
-
-			// write into logs
-			stopwatch?.Stop();
-			this.WriteLogs(requestInfo, new List<string>
+			=> requestInfo.GetRuntimeException(exception, message, (msg, ex) => 
 			{
-				$"Error response: {message}{(stopwatch == null ? "" : $" - Execution times: {stopwatch.GetElapsedTimes()}")}",
-				$"Request: {requestInfo.ToString(this.JsonFormat)}"
-			}, exception);
-
-			// return the exception
-			if (exception is WampException)
-				return exception as WampException;
-
-			else
-			{
-				var details = exception != null
-					? new Dictionary<string, object> { ["0"] = exception.StackTrace }
-					: null;
-
-				var inner = exception?.InnerException;
-				var counter = 0;
-				while (inner != null)
+				stopwatch?.Stop();
+				this.WriteLogs(requestInfo, new List<string>
 				{
-					counter++;
-					details.Add(counter.ToString(), inner.StackTrace);
-					inner = inner.InnerException;
-				}
-
-				return new WampRpcRuntimeException(
-					details,
-					new Dictionary<string, object>(),
-					new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase) { ["RequestInfo"] = requestInfo.ToJson() },
-					message,
-					exception
-				);
-			}
-		}
+					$"Error response: {msg}{(stopwatch == null ? "" : $" - Execution times: {stopwatch.GetElapsedTimes()}")}",
+					$"Request: {requestInfo.ToString(this.JsonFormat)}"
+				}, ex);
+			});
 		#endregion
 
 		#region Sync

@@ -1,5 +1,6 @@
 ﻿#region Related components
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
@@ -172,6 +173,90 @@ namespace net.vieapps.Services
 		{
 			var nameElements = requestInfo.ObjectName.ToArray(".");
 			return nameElements.Length > 1 ? nameElements[1] : nameElements[0];
+		}
+
+		/// <summary>
+		/// Fetchs the content of a temporary file and response as Base64 string of binary data
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		public static async Task<JToken> FetchTemporaryFileAsync(this RequestInfo requestInfo, CancellationToken cancellationToken = default)
+		{
+			try
+			{
+				var directoryPath = UtilityService.GetAppSetting("Path:Temp", Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data-files", "temp"));
+				var fileName = requestInfo.GetParameter("Filename") ?? requestInfo.GetParameter("x-filename");
+				if (string.IsNullOrWhiteSpace(fileName))
+				{
+					var request = requestInfo.GetRequestExpando();
+					fileName = request.Get<string>("Filename") ?? request.Get<string>("x-filename");
+				}
+				var filePath = !string.IsNullOrWhiteSpace(fileName)
+					? Path.Combine(directoryPath, fileName)
+					: throw new FileNotFoundException();
+				if (!File.Exists(filePath))
+					throw new FileNotFoundException();
+
+				var offset = (requestInfo.GetParameter("Offset") ?? requestInfo.GetParameter("x-offset") ?? "0").CastAs<long>();
+				var buffer = new byte[1024 * 16];
+				var read = 0;
+				using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, buffer.Length, true))
+				{
+					if (offset < stream.Length)
+					{
+						if (offset > 0)
+							stream.Seek(offset, SeekOrigin.Begin);
+						read = await stream.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false);
+					}
+				}
+				return new JObject
+				{
+					{ "Data", (read > 0 ? buffer.Take(read) : new byte[0]).ToBase64() },
+					{ "Offset", offset + read }
+				};
+			}
+			catch (Exception)
+			{
+				throw;
+			}
+		}
+
+		/// <summary>
+		/// Downloads a temporary file
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		public static async Task<string> DownloadTemporaryFileAsync(this RequestInfo requestInfo, CancellationToken cancellationToken = default)
+		{
+			var directoryPath = UtilityService.GetAppSetting("Path:Temp", Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data-files", "temp"));
+			var fileName = requestInfo.GetParameter("Filename") ?? requestInfo.GetParameter("x-filename");
+			if (string.IsNullOrWhiteSpace(fileName))
+			{
+				var request = requestInfo.GetRequestExpando();
+				fileName = request.Get<string>("Filename") ?? request.Get<string>("x-filename");
+			}
+			var filePath = !string.IsNullOrWhiteSpace(fileName)
+				? Path.Combine(directoryPath, fileName)
+				: throw new FileNotFoundException();
+			if (File.Exists(filePath))
+				return fileName;
+			
+			requestInfo.Header["x-filename"] = fileName;
+			long offset = 0;
+			var service = Router.GetUniqueService(requestInfo.GetParameter("NodeID") ?? requestInfo.GetParameter("x-node"));
+			while (true)
+			{
+				requestInfo.Header["x-offset"] = $"{offset}";
+				var response = await service.FetchTemporaryFileAsync(requestInfo, cancellationToken).ConfigureAwait(false);
+				var data = response.Get<string>("Data").Base64ToBytes();
+				if (data.Length < 1)
+					break;
+				await UtilityService.WriteBinaryFileAsync(filePath, data, offset > 0, cancellationToken).ConfigureAwait(false);
+				offset = response.Get<long>("Offset");
+			}
+			return fileName;
 		}
 	}
 }
