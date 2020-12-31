@@ -842,7 +842,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="key">The pre-buid key</param>
 		/// <param name="pageSize">The size of one page</param>
-		/// <returns>The collection presents all related caching keys (100 first pages)</returns>
+		/// <returns>The collection presents all related caching keys (10 first pages)</returns>
 		public static List<string> GetRelatedCacheKeys(string key, int pageSize = 0)
 		{
 			var singleKey = Extensions.GetCacheKey(key, 0, 1);
@@ -853,7 +853,7 @@ namespace net.vieapps.Services
 				relatedKeys.Add($"{singleKey}:{pattern}");
 			});
 			var paginationKey = Extensions.GetCacheKey(key, pageSize > 0 ? pageSize : 20, 1, true);
-			for (var pageNumber = 1; pageNumber <= 100; pageNumber++)
+			for (var pageNumber = 1; pageNumber <= 10; pageNumber++)
 			{
 				var pageKey = paginationKey.Replace("{{pageNumber}}", $"{pageNumber}");
 				relatedKeys.Add(pageKey);
@@ -869,7 +869,7 @@ namespace net.vieapps.Services
 		/// <param name="filter">The filter expression</param>
 		/// <param name="sort">The sort expression</param>
 		/// <param name="pageSize">The size of one page</param>
-		/// <returns>The collection presents all related caching keys (100 first pages)</returns>
+		/// <returns>The collection presents all related caching keys (10 first pages)</returns>
 		public static List<string> GetRelatedCacheKeys<T>(IFilterBy<T> filter, SortBy<T> sort, int pageSize = 0) where T : class
 			=> Extensions.GetRelatedCacheKeys(Extensions.GetCacheKey<T>(filter, sort), pageSize);
 

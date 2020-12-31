@@ -1641,6 +1641,16 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
+		/// Stops a timer (and remove from the collection)
+		/// </summary>
+		/// <param name="timer"></param>
+		protected virtual void StopTimer(IDisposable timer)
+		{
+			timer.Dispose();
+			this.Timers.Remove(timer);
+		}
+
+		/// <summary>
 		/// Stops all timers
 		/// </summary>
 		protected virtual void StopTimers()
@@ -2036,7 +2046,8 @@ namespace net.vieapps.Services
 							new[] { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
 								.Where(a => !a.Name.IsStartsWith("System") && !a.Name.IsStartsWith("Microsoft") && !a.Name.IsStartsWith("mscorlib") && !a.Name.IsEquals("NETStandard")
 									&& !a.Name.IsStartsWith("Newtonsoft") && !a.Name.IsStartsWith("WampSharp") && !a.Name.IsStartsWith("Castle.") && !a.Name.IsStartsWith("StackExchange.")
-									&& !a.Name.IsStartsWith("MongoDB") && !a.Name.IsStartsWith("MySql") && !a.Name.IsStartsWith("Oracle") && !a.Name.IsStartsWith("Npgsql") && !a.Name.IsStartsWith("Serilog")
+									&& !a.Name.IsStartsWith("MongoDB") && !a.Name.IsStartsWith("MySql") && !a.Name.IsStartsWith("Oracle") && !a.Name.IsStartsWith("Npgsql")
+									&& !a.Name.IsStartsWith("Serilog") && !a.Name.IsStartsWith("MsgPack") && !a.Name.IsStartsWith("ExcelData") && !a.Name.IsEndsWith(".Abstractions")
 									&& !a.Name.IsStartsWith("VIEApps.Components.") && !a.Name.IsStartsWith("VIEApps.Services.Abstractions") && !a.Name.IsStartsWith("VIEApps.Services.Base")
 								)
 								.Select(assemblyName =>

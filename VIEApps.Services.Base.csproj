@@ -1,23 +1,23 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFrameworks>netstandard2.0;netstandard2.1;netcoreapp2.1;netcoreapp3.1;net5.0</TargetFrameworks>
+		<TargetFrameworks>net5.0;netcoreapp3.1;netcoreapp2.1;netstandard2.1;netstandard2.0</TargetFrameworks>
 		<WarningLevel>3</WarningLevel>
 		<NoWarn>1573,1591</NoWarn>
 		<DocumentationFile>bin/$(Configuration)/$(TargetFramework)/VIEApps.Services.Base.xml</DocumentationFile>
 		<RootNamespace>net.vieapps.Services</RootNamespace>
 		<AssemblyName>VIEApps.Services.Base</AssemblyName>
 		<AssemblyTitle>VIEApps NGX Service Base</AssemblyTitle>
-		<AssemblyVersion>10.3.2012.2</AssemblyVersion>
-		<FileVersion>10.3.2012.2</FileVersion>
-		<Version>10.3.2012.2</Version>
-		<InformationalVersion>10.3.$([System.DateTime]::Now.Year).$([System.DateTime]::Now.Month).$([System.DateTime]::Now.Day)@$(TargetFramework)#let.it.be</InformationalVersion>
+		<AssemblyVersion>10.4.2101.1</AssemblyVersion>
+		<FileVersion>10.4.2101.1</FileVersion>
+		<Version>10.4.2101.1</Version>
+		<InformationalVersion>10.4.$([System.DateTime]::Now.Year).$([System.DateTime]::Now.Month).$([System.DateTime]::Now.Day)@$(TargetFramework)#let.it.be</InformationalVersion>
 		<Title>VIEApps NGX Service Base</Title>
 		<Description>The base class for all microservices in the VIEApps NGX</Description>
 		<Authors>VIEApps.net</Authors>
 		<Company>VIEApps.net</Company>
 		<Product>VIEApps NGX</Product>
-		<Copyright>© 2020 VIEApps.net</Copyright>
+		<Copyright>© 2021 VIEApps.net</Copyright>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)' == 'Release'">
@@ -53,10 +53,9 @@
 		<PackageReference Include="Serilog.Extensions.Logging.File" Version="2.0.0" />
 		<PackageReference Include="System.Data.SqlClient" Version="4.8.2" />
 		<PackageReference Include="System.Text.Encoding.Extensions" Version="4.3.0" />
-		<PackageReference Include="VIEApps.Components.Repository" Version="10.3.2012.2" />
-		<PackageReference Include="VIEApps.Components.Utility.Excel" Version="10.3.2012.2" />
-		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.3.2012.2" />
-		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.3.2012.2" />
+		<PackageReference Include="VIEApps.Components.Repository" Version="10.4.2101.1" />
+		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.4.2101.1" />
+		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.4.2101.1" />
 	</ItemGroup>
 
 </Project>

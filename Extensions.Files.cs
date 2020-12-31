@@ -192,9 +192,11 @@ namespace net.vieapps.Services
 					var request = requestInfo.GetRequestExpando();
 					fileName = request.Get<string>("Filename") ?? request.Get<string>("x-filename");
 				}
+
 				var filePath = !string.IsNullOrWhiteSpace(fileName)
 					? Path.Combine(directoryPath, fileName)
 					: throw new FileNotFoundException();
+
 				if (!File.Exists(filePath))
 					throw new FileNotFoundException();
 
@@ -212,7 +214,7 @@ namespace net.vieapps.Services
 				}
 				return new JObject
 				{
-					{ "Data", (read > 0 ? buffer.Take(read) : new byte[0]).ToBase64() },
+					{ "Data", read > 0 ? buffer.Take(0, read).ToBase64() : "" },
 					{ "Offset", offset + read }
 				};
 			}
@@ -232,17 +234,20 @@ namespace net.vieapps.Services
 		{
 			var directoryPath = UtilityService.GetAppSetting("Path:Temp", Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "data-files", "temp"));
 			var fileName = requestInfo.GetParameter("Filename") ?? requestInfo.GetParameter("x-filename");
+
 			if (string.IsNullOrWhiteSpace(fileName))
 			{
 				var request = requestInfo.GetRequestExpando();
 				fileName = request.Get<string>("Filename") ?? request.Get<string>("x-filename");
 			}
+
 			var filePath = !string.IsNullOrWhiteSpace(fileName)
 				? Path.Combine(directoryPath, fileName)
 				: throw new FileNotFoundException();
+
 			if (File.Exists(filePath))
 				return fileName;
-			
+
 			requestInfo.Header["x-filename"] = fileName;
 			long offset = 0;
 			var service = Router.GetUniqueService(requestInfo.GetParameter("NodeID") ?? requestInfo.GetParameter("x-node"));
@@ -250,12 +255,15 @@ namespace net.vieapps.Services
 			{
 				requestInfo.Header["x-offset"] = $"{offset}";
 				var response = await service.FetchTemporaryFileAsync(requestInfo, cancellationToken).ConfigureAwait(false);
-				var data = response.Get<string>("Data").Base64ToBytes();
-				if (data.Length < 1)
+
+				var data = response.Get<string>("Data");
+				if (string.IsNullOrWhiteSpace(data))
 					break;
-				await UtilityService.WriteBinaryFileAsync(filePath, data, offset > 0, cancellationToken).ConfigureAwait(false);
+
+				await UtilityService.WriteBinaryFileAsync(filePath, data.Base64ToBytes(), offset > 0, cancellationToken).ConfigureAwait(false);
 				offset = response.Get<long>("Offset");
 			}
+
 			return fileName;
 		}
 	}
