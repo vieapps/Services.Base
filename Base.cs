@@ -104,6 +104,11 @@ namespace net.vieapps.Services
 		protected CancellationTokenSource CancellationTokenSource { get; } = new CancellationTokenSource();
 
 		/// <summary>
+		/// Gets the cancellation token source
+		/// </summary>
+		public CancellationToken CancellationToken => this.CancellationTokenSource.Token;
+
+		/// <summary>
 		/// Gets the collection of timers
 		/// </summary>
 		protected List<IDisposable> Timers { get; private set; } = new List<IDisposable>();
@@ -560,8 +565,8 @@ namespace net.vieapps.Services
 			try
 			{
 				while (this.Logs.TryDequeue(out log))
-					await this.LoggingService.WriteLogsAsync(log.Item1, log.Item2, log.Item3, log.Item4, log.Item5, log.Item6, log.Item7, this.CancellationTokenSource.Token).ConfigureAwait(false);
-				await this.LoggingService.WriteLogsAsync(correlationID, developerID, appID, serviceName ?? this.ServiceName ?? "APIGateway", objectName, logs, exception?.GetStack() ?? "", this.CancellationTokenSource.Token).ConfigureAwait(false);
+					await this.LoggingService.WriteLogsAsync(log.Item1, log.Item2, log.Item3, log.Item4, log.Item5, log.Item6, log.Item7, this.CancellationToken).ConfigureAwait(false);
+				await this.LoggingService.WriteLogsAsync(correlationID, developerID, appID, serviceName ?? this.ServiceName ?? "APIGateway", objectName, logs, exception?.GetStack() ?? "", this.CancellationToken).ConfigureAwait(false);
 			}
 			catch
 			{
@@ -1089,8 +1094,9 @@ namespace net.vieapps.Services
 				@is = user.IsAdministrator(this.ServiceName, objectName);
 				if (!@is)
 				{
-					privileges = (await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges ?? this.Privileges;
-					@is = user.IsAdministrator(privileges);
+					var @object = await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false);
+					privileges = @object?.WorkingPrivileges ?? this.Privileges;
+					@is = user.IsAdministrator(privileges, @object?.Parent?.WorkingPrivileges) || await this.IsSystemAdministratorAsync(user, correlationID, cancellationToken).ConfigureAwait(false);
 				}
 			}
 
@@ -1153,8 +1159,9 @@ namespace net.vieapps.Services
 				@is = user.IsModerator(this.ServiceName, objectName);
 				if (!@is)
 				{
-					privileges = (await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges ?? this.Privileges;
-					@is = user.IsModerator(privileges) || await this.IsSystemAdministratorAsync(user, correlationID, cancellationToken).ConfigureAwait(false);
+					var @object = await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false);
+					privileges = @object?.WorkingPrivileges ?? this.Privileges;
+					@is = user.IsModerator(privileges, @object?.Parent?.WorkingPrivileges) || await this.IsAdministratorAsync(user, objectName, entityInfo, objectID, correlationID, cancellationToken).ConfigureAwait(false);
 				}
 			}
 
@@ -1227,8 +1234,9 @@ namespace net.vieapps.Services
 				@is = user.IsEditor(this.ServiceName, objectName);
 				if (!@is)
 				{
-					privileges = (await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges ?? this.Privileges;
-					@is = user.IsEditor(privileges) || await this.IsSystemAdministratorAsync(user, correlationID, cancellationToken).ConfigureAwait(false);
+					var @object = await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false);
+					privileges = @object?.WorkingPrivileges ?? this.Privileges;
+					@is = user.IsEditor(privileges, @object?.Parent?.WorkingPrivileges) || await this.IsModeratorAsync(user, objectName, entityInfo, objectID, correlationID, cancellationToken).ConfigureAwait(false);
 				}
 			}
 
@@ -1272,8 +1280,9 @@ namespace net.vieapps.Services
 				@is = user.IsContributor(this.ServiceName, objectName);
 				if (!@is)
 				{
-					privileges = (await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges ?? this.Privileges;
-					@is = user.IsContributor(privileges) || await this.IsSystemAdministratorAsync(user, correlationID, cancellationToken).ConfigureAwait(false);
+					var @object = await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false);
+					privileges = @object?.WorkingPrivileges ?? this.Privileges;
+					@is = user.IsContributor(privileges, @object?.Parent?.WorkingPrivileges) || await this.IsEditorAsync(user, objectName, entityInfo, objectID, correlationID, cancellationToken).ConfigureAwait(false);
 				}
 			}
 
@@ -1317,8 +1326,9 @@ namespace net.vieapps.Services
 				@is = user.IsViewer(this.ServiceName, objectName);
 				if (!@is)
 				{
-					privileges = (await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges ?? this.Privileges;
-					@is = user.IsViewer(privileges) || await this.IsSystemAdministratorAsync(user, correlationID, cancellationToken).ConfigureAwait(false);
+					var @object = await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false);
+					privileges = @object?.WorkingPrivileges ?? this.Privileges;
+					@is = user.IsViewer(privileges, @object?.Parent?.WorkingPrivileges) || await this.IsContributorAsync(user, objectName, entityInfo, objectID, correlationID, cancellationToken).ConfigureAwait(false);
 				}
 			}
 
@@ -1362,8 +1372,9 @@ namespace net.vieapps.Services
 				@is = user.IsDownloader(this.ServiceName, objectName);
 				if (!@is)
 				{
-					privileges = (await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false))?.WorkingPrivileges ?? this.Privileges;
-					@is = user.IsDownloader(privileges) || await this.IsSystemAdministratorAsync(user, correlationID, cancellationToken).ConfigureAwait(false);
+					var @object = await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false);
+					privileges = @object?.WorkingPrivileges ?? this.Privileges;
+					@is = user.IsDownloader(privileges, @object?.Parent?.WorkingPrivileges) || await this.IsSystemAdministratorAsync(user, correlationID, cancellationToken).ConfigureAwait(false);
 				}
 			}
 
@@ -1917,7 +1928,7 @@ namespace net.vieapps.Services
 					else if (Router.IncomingChannel != null)
 					{
 						this.Logger?.LogDebug($"The incoming channel to API Gateway Router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
-						Router.IncomingChannel.ReOpen(this.CancellationTokenSource.Token, (msg, ex) => this.Logger?.LogDebug(msg, ex), "Incoming");
+						Router.IncomingChannel.ReOpen(this.CancellationToken, (msg, ex) => this.Logger?.LogDebug(msg, ex), "Incoming");
 					}
 
 					// handling the broken event
@@ -1959,8 +1970,8 @@ namespace net.vieapps.Services
 							try
 							{
 								var requestInfo = this.BuildSyncRequestInfo(UtilityService.NewUUID);
-								await this.RegisterSyncSessionAsync(requestInfo, this.CancellationTokenSource.Token).ConfigureAwait(false);
-								await this.SendSyncRequestAsync(requestInfo, this.CancellationTokenSource.Token).ConfigureAwait(false);
+								await this.RegisterSyncSessionAsync(requestInfo, this.CancellationToken).ConfigureAwait(false);
+								await this.SendSyncRequestAsync(requestInfo, this.CancellationToken).ConfigureAwait(false);
 							}
 							catch (Exception ex)
 							{
@@ -1997,7 +2008,7 @@ namespace net.vieapps.Services
 					else if (Router.OutgoingChannel != null)
 					{
 						this.Logger?.LogDebug($"The outgoing channel to API Gateway Router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
-						Router.OutgoingChannel.ReOpen(this.CancellationTokenSource.Token, (msg, ex) => this.Logger?.LogDebug(msg, ex), "Outgoing");
+						Router.OutgoingChannel.ReOpen(this.CancellationToken, (msg, ex) => this.Logger?.LogDebug(msg, ex), "Outgoing");
 					}
 
 					// handling the broken event
@@ -2023,7 +2034,7 @@ namespace net.vieapps.Services
 						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionError)}\" => {ex.Message}", ex);
 					}
 				},
-				this.CancellationTokenSource.Token,
+				this.CancellationToken,
 				exception => this.Logger?.LogError($"Error occurred while connecting to API Gateway Router => {exception.Message}", exception)
 			);
 		}

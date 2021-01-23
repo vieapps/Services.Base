@@ -838,7 +838,7 @@ namespace net.vieapps.Services
 
 		static List<string> KeyPatterns => "total,json,xml".ToList();
 
-		static List<string> RelatedKeyPatterns => "thumbnails,attachments,relateds,newers,olders,others".ToList();
+		static List<string> RelatedKeyPatterns => "thumbnails,attachments,others,newers,olders".ToList();
 
 		/// <summary>
 		/// Gets the related caching key for working with collection of objects
