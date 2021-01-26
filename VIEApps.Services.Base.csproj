@@ -13,7 +13,7 @@
 		<Version>10.4.2101.1</Version>
 		<InformationalVersion>10.4.$([System.DateTime]::Now.Year).$([System.DateTime]::Now.Month).$([System.DateTime]::Now.Day)@$(TargetFramework)#let.it.be</InformationalVersion>
 		<Title>VIEApps NGX Service Base</Title>
-		<Description>The base class for all microservices in the VIEApps NGX</Description>
+		<Description>The base of all microservices in the VIEApps NGX</Description>
 		<Authors>VIEApps.net</Authors>
 		<Company>VIEApps.net</Company>
 		<Product>VIEApps NGX</Product>
