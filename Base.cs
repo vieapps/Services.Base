@@ -51,6 +51,9 @@ namespace net.vieapps.Services
 		public virtual Task<JToken> FetchTemporaryFileAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
 			=> requestInfo.FetchTemporaryFileAsync(cancellationToken);
 
+		public virtual Task ProcessWebHookMessageAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
+			=> Task.CompletedTask;
+
 		/// <summary>
 		/// Processes the inter-communicate messages between the services' instances
 		/// </summary>
@@ -138,13 +141,6 @@ namespace net.vieapps.Services
 		#endregion
 
 		#region Register/Unregister the service
-		/// <summary>
-		/// Registers the service with API Gateway
-		/// </summary>
-		/// <param name="args">The arguments for registering</param>
-		/// <param name="onSuccess">The action to run when the service was registered successful</param>
-		/// <param name="onError">The action to run when got any error</param>
-		/// <returns></returns>
 		public virtual async Task RegisterServiceAsync(IEnumerable<string> args, Action<IService> onSuccess = null, Action<Exception> onError = null)
 		{
 			async Task registerCalleesAsync()
@@ -215,13 +211,6 @@ namespace net.vieapps.Services
 			}
 		}
 
-		/// <summary>
-		/// Unregisters the service with API Gateway
-		/// </summary>
-		/// <param name="args">The arguments for unregistering</param>
-		/// <param name="available">true to mark the service still available</param>
-		/// <param name="onSuccess">The action to run when the service was unregistered successful</param>
-		/// <param name="onError">The action to run when got any error</param>
 		public virtual async Task UnregisterServiceAsync(IEnumerable<string> args, bool available = true, Action<IService> onSuccess = null, Action<Exception> onError = null)
 		{
 			// send information to API Gateway

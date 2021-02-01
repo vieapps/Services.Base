@@ -1,16 +1,16 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFrameworks>net5.0;netcoreapp3.1;netcoreapp2.1;netstandard2.1;netstandard2.0</TargetFrameworks>
+		<TargetFrameworks>net5.0;netstandard2.0</TargetFrameworks>
 		<WarningLevel>3</WarningLevel>
 		<NoWarn>1573,1591</NoWarn>
 		<DocumentationFile>bin/$(Configuration)/$(TargetFramework)/VIEApps.Services.Base.xml</DocumentationFile>
 		<RootNamespace>net.vieapps.Services</RootNamespace>
 		<AssemblyName>VIEApps.Services.Base</AssemblyName>
 		<AssemblyTitle>VIEApps NGX Service Base</AssemblyTitle>
-		<AssemblyVersion>10.4.2101.1</AssemblyVersion>
-		<FileVersion>10.4.2101.1</FileVersion>
-		<Version>10.4.2101.1</Version>
+		<AssemblyVersion>10.4.2102.1</AssemblyVersion>
+		<FileVersion>10.4.2102.1</FileVersion>
+		<Version>10.4.2102.1</Version>
 		<InformationalVersion>10.4.$([System.DateTime]::Now.Year).$([System.DateTime]::Now.Month).$([System.DateTime]::Now.Day)@$(TargetFramework)#let.it.be</InformationalVersion>
 		<Title>VIEApps NGX Service Base</Title>
 		<Description>The base of all microservices in the VIEApps NGX</Description>
@@ -29,7 +29,7 @@
 		<PackageIcon>Icon.png</PackageIcon>
 		<PackageOutputPath>../../Components</PackageOutputPath>
 		<PackageTags>services;microservices;vieapps;vieapps.components;vieapps.services;vieapps.microservices</PackageTags>
-		<PackageReleaseNotes>Improvement: normalize runtime exceptions and working with temporary files</PackageReleaseNotes>
+		<PackageReleaseNotes>Breaking changes: only support .NET 5 and .NET Standard 2.0</PackageReleaseNotes>
 		<PackageProjectUrl>https://vieapps.net</PackageProjectUrl>
 		<RepositoryUrl>https://github.com/vieapps/Services.Base</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
@@ -49,13 +49,13 @@
 		<PackageReference Include="JSPool" Version="4.0.0" />
 		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="5.0.1" />
 		<PackageReference Include="MySqlConnector" Version="1.2.1" />
-		<PackageReference Include="Npgsql" Version="5.0.1.1" />
+		<PackageReference Include="Npgsql" Version="5.0.3" />
 		<PackageReference Include="Serilog.Extensions.Logging.File" Version="2.0.0" />
 		<PackageReference Include="System.Data.SqlClient" Version="4.8.2" />
 		<PackageReference Include="System.Text.Encoding.Extensions" Version="4.3.0" />
-		<PackageReference Include="VIEApps.Components.Repository" Version="10.4.2101.1" />
-		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.4.2101.1" />
-		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.4.2101.1" />
+		<PackageReference Include="VIEApps.Components.Repository" Version="10.4.2102.1" />
+		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.4.2102.1" />
+		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.4.2102.1" />
 	</ItemGroup>
 
 </Project>
