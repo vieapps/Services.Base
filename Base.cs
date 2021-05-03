@@ -82,11 +82,6 @@ namespace net.vieapps.Services
 		IDisposable GatewayCommunicator { get; set; }
 
 		/// <summary>
-		/// Gets the real-time updater (RTU) service
-		/// </summary>
-		protected IRTUService RTUService { get; private set; }
-
-		/// <summary>
 		/// Gets the logging service
 		/// </summary>
 		protected ILoggingService LoggingService { get; private set; }
@@ -273,7 +268,6 @@ namespace net.vieapps.Services
 				while (Router.OutgoingChannel == null)
 					await Task.Delay(UtilityService.GetRandomNumber(234, 567)).ConfigureAwait(false);
 
-				this.RTUService = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IRTUService>(ProxyInterceptor.Create());
 				this.MessagingService = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IMessagingService>(ProxyInterceptor.Create());
 				this.LoggingService = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<ILoggingService>(ProxyInterceptor.Create());
 				this.Logger?.LogDebug($"The helper services are{(this.State == ServiceState.Disconnected ? " re-" : " ")}initialized");
@@ -296,7 +290,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected virtual Task SendUpdateMessageAsync(UpdateMessage message, CancellationToken cancellationToken = default)
-			=> this.RTUService.SendUpdateMessageAsync(message, cancellationToken);
+			=> message != null ? message.SendAsync(cancellationToken) : Task.CompletedTask;
 
 		/// <summary>
 		/// Sends the updating messages to all connected clients
@@ -305,7 +299,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected virtual Task SendUpdateMessagesAsync(List<UpdateMessage> messages, CancellationToken cancellationToken = default)
-			=> messages.ForEachAsync((message, token) => this.RTUService.SendUpdateMessageAsync(message, token), cancellationToken);
+			=> messages != null ? messages.SendAsync(cancellationToken) : Task.CompletedTask;
 
 		/// <summary>
 		/// Sends the updating messages to all connected clients
@@ -316,7 +310,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected virtual Task SendUpdateMessagesAsync(List<BaseMessage> messages, string deviceID, string excludedDeviceID = null, CancellationToken cancellationToken = default)
-			=> this.RTUService.SendUpdateMessagesAsync(messages, deviceID, excludedDeviceID, cancellationToken);
+			=> messages != null ? messages.SendAsync(deviceID, excludedDeviceID, cancellationToken) : Task.CompletedTask;
 
 		/// <summary>
 		/// Send a message for updating data of other service
@@ -326,7 +320,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected virtual Task SendInterCommunicateMessageAsync(string serviceName, BaseMessage message, CancellationToken cancellationToken = default)
-			=> this.RTUService.SendInterCommunicateMessageAsync(serviceName, message, cancellationToken);
+			=> message != null ? new CommunicateMessage(serviceName, message).SendAsync(cancellationToken) : Task.CompletedTask;
 
 		/// <summary>
 		/// Send a message for communicating of other services
@@ -335,7 +329,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected virtual Task SendInterCommunicateMessageAsync(CommunicateMessage message, CancellationToken cancellationToken = default)
-			=> this.RTUService.SendInterCommunicateMessageAsync(message, cancellationToken);
+			=> message != null ? message.SendAsync(cancellationToken) : Task.CompletedTask;
 
 		/// <summary>
 		/// Send a message for updating data of other service
@@ -345,7 +339,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected virtual Task SendInterCommunicateMessagesAsync(string serviceName, List<BaseMessage> messages, CancellationToken cancellationToken = default)
-			=> this.RTUService.SendInterCommunicateMessagesAsync(serviceName, messages, cancellationToken);
+			=> messages != null ? messages.SendAsync(serviceName, cancellationToken) : Task.CompletedTask;
 
 		/// <summary>
 		/// Send a message for communicating of other services
@@ -354,7 +348,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected virtual Task SendInterCommunicateMessagesAsync(List<CommunicateMessage> messages, CancellationToken cancellationToken = default)
-			=> this.RTUService.SendInterCommunicateMessagesAsync(messages, cancellationToken);
+			=> messages != null ? messages.SendAsync(cancellationToken) : Task.CompletedTask;
 
 		/// <summary>
 		/// Sends the service information to API Gateway
@@ -364,7 +358,7 @@ namespace net.vieapps.Services
 		/// <param name="available">The available state</param>
 		/// <returns></returns>
 		protected virtual Task SendServiceInfoAsync(IEnumerable<string> args, bool running, bool available = true)
-			=> this.RTUService.SendServiceInfoAsync(this.ServiceName, args, running, available);
+			=> Extensions.SendServiceInfoAsync(this.ServiceName, args, running, available);
 		#endregion
 
 		#region Send email & web-hook messages

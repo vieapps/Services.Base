@@ -145,17 +145,16 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Sends the service information to API Gateway
 		/// </summary>
-		/// <param name="rtuService"></param>
 		/// <param name="serviceName">The service name</param>
 		/// <param name="args">The services' arguments (for prepare the unique name)</param>
 		/// <param name="running">The running state</param>
 		/// <param name="available">The available state</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static Task SendServiceInfoAsync(this IRTUService rtuService, string serviceName, IEnumerable<string> args, bool running, bool available = true, CancellationToken cancellationToken = default)
-			=> rtuService == null || string.IsNullOrWhiteSpace(serviceName)
+		public static Task SendServiceInfoAsync(string serviceName, IEnumerable<string> args, bool running, bool available = true, CancellationToken cancellationToken = default)
+			=> string.IsNullOrWhiteSpace(serviceName)
 				? Task.CompletedTask
-				: rtuService.SendInterCommunicateMessageAsync(new CommunicateMessage("APIGateway")
+				: new CommunicateMessage("APIGateway")
 				{
 					Type = "Service#Info",
 					Data = new ServiceInfo
@@ -167,7 +166,7 @@ namespace net.vieapps.Services
 						Available = available,
 						Running = running
 					}.ToJson()
-				}, cancellationToken);
+				}.SendAsync(cancellationToken);
 		#endregion
 
 	}

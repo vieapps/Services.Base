@@ -1,4 +1,5 @@
 ﻿using System.Dynamic;
+using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 using net.vieapps.Components.Utility;
 
@@ -158,5 +159,58 @@ namespace net.vieapps.Services
 			return uri.ToLower();
 		}
 
+		/// <summary>
+		/// Validates a web-hook message
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <param name="signAlgorithm"></param>
+		/// <param name="signKey"></param>
+		/// <param name="signatureName"></param>
+		/// <param name="signatureAsHex"></param>
+		/// <param name="signatureInQuery"></param>
+		/// <param name="query"></param>
+		/// <param name="header"></param>
+		public static void ValidateWebHookMessage(this RequestInfo requestInfo, string signAlgorithm, string signKey, string signatureName, bool signatureAsHex = true, bool signatureInQuery = false, IDictionary<string, string> query = null, IDictionary<string, string> header = null)
+		{
+			if (string.IsNullOrWhiteSpace(signAlgorithm) || !CryptoService.HmacHashAlgorithmFactories.ContainsKey(signAlgorithm))
+				signAlgorithm = "SHA256";
+
+			var signature = "";
+			using (var hasher = CryptoService.GetHMACHashAlgorithm((signKey ?? CryptoService.DEFAULT_PASS_PHRASE).ToBytes(), signAlgorithm))
+			{
+				var body = (requestInfo.Body ?? "").ToBytes();
+				signature = signatureAsHex
+					? hasher.ComputeHash(body).ToHex()
+					: hasher.ComputeHash(body).ToBase64();
+			}
+
+			if (string.IsNullOrWhiteSpace(signatureName))
+				signatureName = $"Hmac{signAlgorithm.GetCapitalizedFirstLetter()}Signature";
+
+			var signatureOfMessage = signatureInQuery
+				? requestInfo.Query != null && requestInfo.Query.ContainsKey(signatureName) ? requestInfo.Query[signatureName] : ""
+				: requestInfo.Header != null && requestInfo.Header.ContainsKey(signatureName) ? requestInfo.Header[signatureName] : "";
+
+			if (!signature.IsEquals(signatureOfMessage))
+				throw new InformationInvalidException("Invalid (signature)");
+
+			if (query != null && query.Count > 0)
+				foreach (var kvp in query)
+				{
+					var key = kvp.Key;
+					var value = kvp.Value;
+					if (!string.IsNullOrWhiteSpace(key) && !string.IsNullOrWhiteSpace(value) && !value.IsEquals(requestInfo.Query != null && requestInfo.Query.ContainsKey(key) ? requestInfo.Query[key] : ""))
+						throw new InformationInvalidException("Invalid (query)");
+				}
+
+			if (header != null && header.Count > 0)
+				foreach (var kvp in header)
+				{
+					var key = kvp.Key;
+					var value = kvp.Value;
+					if (!string.IsNullOrWhiteSpace(key) && !string.IsNullOrWhiteSpace(value) && !value.IsEquals(requestInfo.Header != null && requestInfo.Header.ContainsKey(key) ? requestInfo.Header[key] : ""))
+						throw new InformationInvalidException("Invalid (header)");
+				}
+		}
 	}
 }
