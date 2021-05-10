@@ -36,13 +36,13 @@ namespace net.vieapps.Services
 		{
 			// validate
 			if (requestInfo.Extra == null || !requestInfo.Extra.TryGetValue("SyncKey", out var syncKey) || !this.SyncKey.Equals(syncKey))
-				throw new InformationInvalidException("The sync key (in the request) is not found or invalid");
+				return Task.FromException<JToken>(new InformationInvalidException("The sync key (in the request) is not found or invalid"));
 
 			if (string.IsNullOrWhiteSpace(requestInfo.Body))
-				throw new InformationInvalidException("The request body (data to sync) is invalid");
+				return Task.FromException<JToken>(new InformationInvalidException("The request body (data to sync) is invalid"));
 
 			if (requestInfo.Extra == null || !requestInfo.Extra.TryGetValue("Signature", out var signature) || string.IsNullOrWhiteSpace(signature) || !signature.Equals(requestInfo.Body.GetHMACSHA256(this.ValidationKey)))
-				throw new InformationInvalidException("The signature is not found or invalid");
+				return Task.FromException<JToken>(new InformationInvalidException("The signature is not found or invalid"));
 
 			// do the process
 			return Task.FromResult<JToken>(null);
@@ -169,7 +169,7 @@ namespace net.vieapps.Services
 				this.ServiceCommunicator = Router.IncomingChannel.RealmProxy.Services
 					.GetSubject<CommunicateMessage>($"messages.services.{this.ServiceName.Trim().ToLower()}")
 					.Subscribe(
-						async message => await (this.NodeID.IsEquals(message.ExcludedNodeID) ? Task.CompletedTask : this.ProcessInterCommunicateMessageAsync(message)).ConfigureAwait(false),
+						async message => await (this.NodeID.IsEquals(message.ExcludedNodeID) ? Task.CompletedTask : this.ProcessInterCommunicateMessageAsync(message, this.CancellationToken)).ConfigureAwait(false),
 						exception => this.Logger?.LogError($"Error occurred while fetching an inter-communicate message => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
 					);
 
@@ -177,7 +177,7 @@ namespace net.vieapps.Services
 				this.GatewayCommunicator = Router.IncomingChannel.RealmProxy.Services
 					.GetSubject<CommunicateMessage>("messages.services.apigateway")
 					.Subscribe(
-						async message => await (this.NodeID.IsEquals(message.ExcludedNodeID) ? Task.CompletedTask : this.ProcessGatewayCommunicateMessageAsync(message)).ConfigureAwait(false),
+						async message => await (this.NodeID.IsEquals(message.ExcludedNodeID) ? Task.CompletedTask : this.ProcessGatewayCommunicateMessageAsync(message, this.CancellationToken)).ConfigureAwait(false),
 						exception => this.Logger?.LogError($"Error occurred while fetching an inter-communicate message of API Gateway => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
 					);
 
@@ -234,25 +234,59 @@ namespace net.vieapps.Services
 			// dispose all instances
 			try
 			{
-				await Task.WhenAll
-				(
-					this.ServiceInstance != null ? this.ServiceInstance.DisposeAsync().AsTask() : Task.CompletedTask,
-					this.ServiceUniqueInstance != null ? this.ServiceUniqueInstance.DisposeAsync().AsTask() : Task.CompletedTask,
-					this.ServiceSyncInstance != null ? this.ServiceSyncInstance.DisposeAsync().AsTask() : Task.CompletedTask
-				).ConfigureAwait(false);
+				if (this.ServiceInstance != null)
+					await this.ServiceInstance.DisposeAsync().ConfigureAwait(false);
 			}
 			catch (Exception ex)
 			{
-				this.Logger?.LogError($"Error occurred while disposing the services' instances => {ex.Message}", ex);
-				onError?.Invoke(ex);
+				if (!(ex is WampException) || !ex.Message.IsContains("wamp.error.no_such_registration"))
+				{
+					this.Logger?.LogError($"Error occurred while disposing the service's instance => {ex.Message}", ex);
+					onError?.Invoke(ex);
+				}
 			}
 			finally
 			{
 				this.ServiceInstance = null;
-				this.ServiceUniqueInstance = null;
-				this.ServiceSyncInstance = null;
-				onSuccess?.Invoke(this);
 			}
+
+			try
+			{
+				if (this.ServiceUniqueInstance != null)
+					await this.ServiceUniqueInstance.DisposeAsync().ConfigureAwait(false);
+			}
+			catch (Exception ex)
+			{
+				if (!(ex is WampException) || !ex.Message.IsContains("wamp.error.no_such_registration"))
+				{
+					this.Logger?.LogError($"Error occurred while disposing the unique service's instance => {ex.Message}", ex);
+					onError?.Invoke(ex);
+				}
+			}
+			finally
+			{
+				this.ServiceUniqueInstance = null;
+			}
+
+			try
+			{
+				if (this.ServiceSyncInstance != null)
+					await this.ServiceSyncInstance.DisposeAsync().ConfigureAwait(false);
+			}
+			catch (Exception ex)
+			{
+				if (!(ex is WampException) || !ex.Message.IsContains("wamp.error.no_such_registration"))
+				{
+					this.Logger?.LogError($"Error occurred while disposing the sync service's instance => {ex.Message}", ex);
+					onError?.Invoke(ex);
+				}
+			}
+			finally
+			{
+				this.ServiceSyncInstance = null;
+			}
+
+			onSuccess?.Invoke(this);
 		}
 
 		/// <summary>
@@ -358,7 +392,7 @@ namespace net.vieapps.Services
 		/// <param name="available">The available state</param>
 		/// <returns></returns>
 		protected virtual Task SendServiceInfoAsync(IEnumerable<string> args, bool running, bool available = true)
-			=> Extensions.SendServiceInfoAsync(this.ServiceName, args, running, available);
+			=> Extensions.SendServiceInfoAsync(this.ServiceName, args, running, available, this.CancellationToken);
 		#endregion
 
 		#region Send email & web-hook messages
@@ -689,7 +723,13 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected virtual void WriteLogs(string correlationID, string developerID, string appID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> Task.Run(() => this.WriteLogsAsync(correlationID, developerID, appID, logger, logs, exception, serviceName, objectName, mode)).ConfigureAwait(false);
+			=> Task.Run(async () => await this.WriteLogsAsync(correlationID, developerID, appID, logger, logs, exception, serviceName, objectName, mode).ConfigureAwait(false), this.CancellationToken)
+			.ContinueWith(task =>
+			{
+				if (task.Exception != null)
+					this.Logger?.LogError($"Error occurred while writting log => {task.Exception.Message}", task.Exception);
+			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
+			.ConfigureAwait(false);
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -702,7 +742,13 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected virtual void WriteLogs(string correlationID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> Task.Run(() => this.WriteLogsAsync(correlationID, null, null, logger, logs, exception, serviceName, objectName, mode)).ConfigureAwait(false);
+			=> Task.Run(async () => await this.WriteLogsAsync(correlationID, null, null, logger, logs, exception, serviceName, objectName, mode).ConfigureAwait(false), this.CancellationToken)
+			.ContinueWith(task =>
+			{
+				if (task.Exception != null)
+					this.Logger?.LogError($"Error occurred while writting log => {task.Exception.Message}", task.Exception);
+			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
+			.ConfigureAwait(false);
 
 		/// <summary>
 		/// Writes the logs into centerlized logging system
@@ -717,7 +763,13 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected virtual void WriteLogs(string correlationID, string developerID, string appID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> Task.Run(() => this.WriteLogsAsync(correlationID, developerID, appID, logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode)).ConfigureAwait(false);
+			=> Task.Run(async () => await this.WriteLogsAsync(correlationID, developerID, appID, logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode).ConfigureAwait(false), this.CancellationToken)
+			.ContinueWith(task =>
+			{
+				if (task.Exception != null)
+					this.Logger?.LogError($"Error occurred while writting log => {task.Exception.Message}", task.Exception);
+			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
+			.ConfigureAwait(false);
 
 		/// <summary>
 		/// Writes the logs into centerlized logging system
@@ -730,7 +782,13 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected virtual void WriteLogs(string correlationID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> Task.Run(() => this.WriteLogsAsync(correlationID, null, null, logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode)).ConfigureAwait(false);
+			=> Task.Run(async () => await this.WriteLogsAsync(correlationID, null, null, logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode).ConfigureAwait(false), this.CancellationToken)
+			.ContinueWith(task =>
+			{
+				if (task.Exception != null)
+					this.Logger?.LogError($"Error occurred while writting log => {task.Exception.Message}", task.Exception);
+			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
+			.ConfigureAwait(false);
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -744,7 +802,13 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected virtual void WriteLogs(string correlationID, string developerID, string appID, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> Task.Run(() => this.WriteLogsAsync(correlationID, developerID, appID, this.Logger, logs, exception, serviceName, objectName, mode)).ConfigureAwait(false);
+			=> Task.Run(async () => await this.WriteLogsAsync(correlationID, developerID, appID, this.Logger, logs, exception, serviceName, objectName, mode).ConfigureAwait(false), this.CancellationToken)
+			.ContinueWith(task =>
+			{
+				if (task.Exception != null)
+					this.Logger?.LogError($"Error occurred while writting log => {task.Exception.Message}", task.Exception);
+			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
+			.ConfigureAwait(false);
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -756,7 +820,13 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected virtual void WriteLogs(string correlationID, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> Task.Run(() => this.WriteLogsAsync(correlationID, null, null, this.Logger, logs, exception, serviceName, objectName, mode)).ConfigureAwait(false);
+			=> Task.Run(async () => await this.WriteLogsAsync(correlationID, null, null, this.Logger, logs, exception, serviceName, objectName, mode).ConfigureAwait(false), this.CancellationToken)
+			.ContinueWith(task =>
+			{
+				if (task.Exception != null)
+					this.Logger?.LogError($"Error occurred while writting log => {task.Exception.Message}", task.Exception);
+			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
+			.ConfigureAwait(false);
 
 		/// <summary>
 		/// Writes the logs into centerlized logging system
@@ -770,7 +840,13 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected virtual void WriteLogs(string correlationID, string developerID, string appID, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> Task.Run(() => this.WriteLogsAsync(correlationID, developerID, appID, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode)).ConfigureAwait(false);
+			=> Task.Run(async () => await this.WriteLogsAsync(correlationID, developerID, appID, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode).ConfigureAwait(false), this.CancellationToken)
+			.ContinueWith(task =>
+			{
+				if (task.Exception != null)
+					this.Logger?.LogError($"Error occurred while writting log => {task.Exception.Message}", task.Exception);
+			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
+			.ConfigureAwait(false);
 
 		/// <summary>
 		/// Writes the logs into centerlized logging system
@@ -782,7 +858,13 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected virtual void WriteLogs(string correlationID, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> Task.Run(() => this.WriteLogsAsync(correlationID, null, null, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode)).ConfigureAwait(false);
+			=> Task.Run(async () => await this.WriteLogsAsync(correlationID, null, null, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode).ConfigureAwait(false), this.CancellationToken)
+			.ContinueWith(task =>
+			{
+				if (task.Exception != null)
+					this.Logger?.LogError($"Error occurred while writting log => {task.Exception.Message}", task.Exception);
+			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
+			.ConfigureAwait(false);
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -793,7 +875,13 @@ namespace net.vieapps.Services
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
 		protected virtual void WriteLogs(RequestInfo requestInfo, List<string> logs, Exception exception = null, LogLevel mode = LogLevel.Information)
-			=> Task.Run(() => this.WriteLogsAsync(requestInfo.CorrelationID, requestInfo.Session?.DeveloperID, requestInfo.Session?.AppID, this.Logger, logs, exception, requestInfo.ServiceName, requestInfo.ObjectName, mode)).ConfigureAwait(false);
+			=> Task.Run(async () => await this.WriteLogsAsync(requestInfo.CorrelationID, requestInfo.Session?.DeveloperID, requestInfo.Session?.AppID, this.Logger, logs, exception, requestInfo.ServiceName, requestInfo.ObjectName, mode).ConfigureAwait(false), this.CancellationToken)
+			.ContinueWith(task =>
+			{
+				if (task.Exception != null)
+					this.Logger?.LogError($"Error occurred while writting log => {task.Exception.Message}", task.Exception);
+			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
+			.ConfigureAwait(false);
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -804,7 +892,13 @@ namespace net.vieapps.Services
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
 		protected virtual void WriteLogs(RequestInfo requestInfo, string log, Exception exception = null, LogLevel mode = LogLevel.Information)
-			=> Task.Run(() => this.WriteLogsAsync(requestInfo.CorrelationID, requestInfo.Session?.DeveloperID, requestInfo.Session?.AppID, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, requestInfo.ServiceName, requestInfo.ObjectName, mode)).ConfigureAwait(false);
+			=> Task.Run(async () => await this.WriteLogsAsync(requestInfo.CorrelationID, requestInfo.Session?.DeveloperID, requestInfo.Session?.AppID, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, requestInfo.ServiceName, requestInfo.ObjectName, mode).ConfigureAwait(false), this.CancellationToken)
+			.ContinueWith(task =>
+			{
+				if (task.Exception != null)
+					this.Logger?.LogError($"Error occurred while writting log => {task.Exception.Message}", task.Exception);
+			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
+			.ConfigureAwait(false);
 		#endregion
 
 		#region Call services
@@ -987,7 +1081,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected virtual Task<RepositoryBase> GetBusinessObjectAsync(EntityDefinition definition, string objectID, CancellationToken cancellationToken = default)
-			=> definition  == null || string.IsNullOrWhiteSpace(objectID)
+			=> definition == null || string.IsNullOrWhiteSpace(objectID)
 				? Task.FromResult<RepositoryBase>(null)
 				: RepositoryMediator.GetAsync(definition, objectID, cancellationToken);
 		#endregion
@@ -1022,12 +1116,12 @@ namespace net.vieapps.Services
 					}
 
 					if (this.IsDebugAuthorizationsEnabled)
-						this.WriteLogs(correlationID, $"Determines the user ({user.ID}) is system administrator => {@is}", null, this.ServiceName, "Authorization");
+						await this.WriteLogsAsync(correlationID, $"Determines the user ({user.ID}) is system administrator => {@is}", null, this.ServiceName, "Authorization").ConfigureAwait(false);
 					return @is;
 				}
 				catch (Exception ex)
 				{
-					this.WriteLogs(correlationID, $"Error occurred while determining the user ({user.ID}) is system administrator => {ex.Message}", ex, this.ServiceName, "Authorization", LogLevel.Error);
+					await this.WriteLogsAsync(correlationID, $"Error occurred while determining the user ({user.ID}) is system administrator => {ex.Message}", ex, this.ServiceName, "Authorization", LogLevel.Error).ConfigureAwait(false);
 				}
 			}
 			return false;
@@ -1210,10 +1304,10 @@ namespace net.vieapps.Services
 			correlationID = correlationID ?? UtilityService.NewUUID;
 			var @is = await this.IsAdministratorAsync(user, objectName, await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false), correlationID, cancellationToken).ConfigureAwait(false);
 			if (this.IsDebugAuthorizationsEnabled)
-				this.WriteLogs(correlationID, $"Determines the user is administrator of service/object => {@is}" + "\r\n" +
+				await this.WriteLogsAsync(correlationID, $"Determines the user is administrator of service/object => {@is}" + "\r\n" +
 					$"Object: {objectName ?? "N/A"}{(string.IsNullOrWhiteSpace(objectID) ? "" : $"#{objectID} (Entity: {entityInfo ?? "N/A"})")}" + "\r\n" +
 					$"User: {user?.ID ?? "N/A"}" + "\r\n\t" + $"- Roles: {user?.Roles?.ToString(", ")}" + "\r\n\t" + $"- Privileges: {(user?.Privileges == null || user.Privileges.Count < 1 ? "None" : user.Privileges.ToJArray().ToString())}"
-				, null, this.ServiceName, "Authorization");
+				, null, this.ServiceName, "Authorization").ConfigureAwait(false);
 			return @is;
 		}
 
@@ -1255,10 +1349,10 @@ namespace net.vieapps.Services
 			correlationID = correlationID ?? UtilityService.NewUUID;
 			var @is = await this.IsModeratorAsync(user, objectName, await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false), correlationID, cancellationToken).ConfigureAwait(false);
 			if (this.IsDebugAuthorizationsEnabled)
-				this.WriteLogs(correlationID, $"Determines the user is moderator of service/object => {@is}" + "\r\n" +
+				await this.WriteLogsAsync(correlationID, $"Determines the user is moderator of service/object => {@is}" + "\r\n" +
 					$"Object: {objectName ?? "N/A"}{(string.IsNullOrWhiteSpace(objectID) ? "" : $"#{objectID} (Entity: {entityInfo ?? "N/A"})")}" + "\r\n" +
 					$"User: {user?.ID ?? "N/A"}" + "\r\n\t" + $"- Roles: {user?.Roles?.ToString(", ")}" + "\r\n\t" + $"- Privileges: {(user?.Privileges == null || user.Privileges.Count < 1 ? "None" : user.Privileges.ToJArray().ToString())}"
-				, null, this.ServiceName, "Authorization");
+				, null, this.ServiceName, "Authorization").ConfigureAwait(false);
 			return @is;
 		}
 
@@ -1300,10 +1394,10 @@ namespace net.vieapps.Services
 			correlationID = correlationID ?? UtilityService.NewUUID;
 			var @is = await this.IsEditorAsync(user, objectName, await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false), correlationID, cancellationToken).ConfigureAwait(false);
 			if (this.IsDebugAuthorizationsEnabled)
-				this.WriteLogs(correlationID, $"Determines the user is editor of service/object => {@is}" + "\r\n" +
+				await this.WriteLogsAsync(correlationID, $"Determines the user is editor of service/object => {@is}" + "\r\n" +
 					$"Object: {objectName ?? "N/A"}{(string.IsNullOrWhiteSpace(objectID) ? "" : $"#{objectID} (Entity: {entityInfo ?? "N/A"})")}" + "\r\n" +
 					$"User: {user?.ID ?? "N/A"}" + "\r\n\t" + $"- Roles: {user?.Roles?.ToString(", ")}" + "\r\n\t" + $"- Privileges: {(user?.Privileges == null || user.Privileges.Count < 1 ? "None" : user.Privileges.ToJArray().ToString())}"
-				, null, this.ServiceName, "Authorization");
+				, null, this.ServiceName, "Authorization").ConfigureAwait(false);
 			return @is;
 		}
 
@@ -1345,10 +1439,10 @@ namespace net.vieapps.Services
 			correlationID = correlationID ?? UtilityService.NewUUID;
 			var @is = await this.IsContributorAsync(user, objectName, await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false), correlationID, cancellationToken).ConfigureAwait(false);
 			if (this.IsDebugAuthorizationsEnabled)
-				this.WriteLogs(correlationID, $"Determines the user is contributor of service/object => {@is}" + "\r\n" +
+				await this.WriteLogsAsync(correlationID, $"Determines the user is contributor of service/object => {@is}" + "\r\n" +
 					$"Object: {objectName ?? "N/A"}{(string.IsNullOrWhiteSpace(objectID) ? "" : $"#{objectID} (Entity: {entityInfo ?? "N/A"})")}" + "\r\n" +
 					$"User: {user?.ID ?? "N/A"}" + "\r\n\t" + $"- Roles: {user?.Roles?.ToString(", ")}" + "\r\n\t" + $"- Privileges: {(user?.Privileges == null || user.Privileges.Count < 1 ? "None" : user.Privileges.ToJArray().ToString())}"
-				, null, this.ServiceName, "Authorization");
+				, null, this.ServiceName, "Authorization").ConfigureAwait(false);
 			return @is;
 		}
 
@@ -1390,10 +1484,10 @@ namespace net.vieapps.Services
 			correlationID = correlationID ?? UtilityService.NewUUID;
 			var @is = await this.IsViewerAsync(user, objectName, await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false), correlationID, cancellationToken).ConfigureAwait(false);
 			if (this.IsDebugAuthorizationsEnabled)
-				this.WriteLogs(correlationID, $"Determines the user is viewer of service/object => {@is}" + "\r\n" +
+				await this.WriteLogsAsync(correlationID, $"Determines the user is viewer of service/object => {@is}" + "\r\n" +
 					$"Object: {objectName ?? "N/A"}{(string.IsNullOrWhiteSpace(objectID) ? "" : $"#{objectID} (Entity: {entityInfo ?? "N/A"})")}" + "\r\n" +
 					$"User: {user?.ID ?? "N/A"}" + "\r\n\t" + $"- Roles: {user?.Roles?.ToString(", ")}" + "\r\n\t" + $"- Privileges: {(user?.Privileges == null || user.Privileges.Count < 1 ? "None" : user.Privileges.ToJArray().ToString())}"
-				, null, this.ServiceName, "Authorization");
+				, null, this.ServiceName, "Authorization").ConfigureAwait(false);
 			return @is;
 		}
 
@@ -1435,10 +1529,10 @@ namespace net.vieapps.Services
 			correlationID = correlationID ?? UtilityService.NewUUID;
 			var @is = await this.IsDownloaderAsync(user, objectName, await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false), correlationID, cancellationToken).ConfigureAwait(false);
 			if (this.IsDebugAuthorizationsEnabled)
-				this.WriteLogs(correlationID, $"Determines the user is downloader of service/object => {@is}" + "\r\n" +
+				await this.WriteLogsAsync(correlationID, $"Determines the user is downloader of service/object => {@is}" + "\r\n" +
 					$"Object: {objectName ?? "N/A"}{(string.IsNullOrWhiteSpace(objectID) ? "" : $"#{objectID} (Entity: {entityInfo ?? "N/A"})")}" + "\r\n" +
 					$"User: {user?.ID ?? "N/A"}" + "\r\n\t" + $"- Roles: {user?.Roles?.ToString(", ")}" + "\r\n\t" + $"- Privileges: {(user?.Privileges == null || user.Privileges.Count < 1 ? "None" : user.Privileges.ToJArray().ToString())}"
-				, null, this.ServiceName, "Authorization");
+				, null, this.ServiceName, "Authorization").ConfigureAwait(false);
 			return @is;
 		}
 		#endregion
@@ -1479,11 +1573,12 @@ namespace net.vieapps.Services
 			}
 
 			if (this.IsDebugAuthorizationsEnabled)
-				this.WriteLogs(correlationID, $"Determines the user can perform the '{action}' action => {@is}" + "\r\n" +
+				await this.WriteLogsAsync(correlationID, $"Determines the user can perform the '{action}' action => {@is}" + "\r\n" +
 					$"Object: {objectName ?? "N/A"}{(string.IsNullOrWhiteSpace(objectID) ? "" : $"#{objectID}")}" + "\r\n" +
 					$"User: {user?.ID ?? "N/A"}" + "\r\n\t" + $"- Roles: {user?.Roles?.ToString(", ")}" + "\r\n\t" + $"- Privileges: {(user?.Privileges == null || user.Privileges.Count < 1 ? "None" : user.Privileges.ToJArray().ToString())}" + "\r\n" +
 					$"Privileges for determining: {(privileges ?? this.Privileges)?.ToJson().ToString() ?? "None"}"
-				, null, this.ServiceName, "Authorization");
+				, null, this.ServiceName, "Authorization").ConfigureAwait(false);
+
 			return @is;
 		}
 
@@ -2069,7 +2164,7 @@ namespace net.vieapps.Services
 		/// <param name="message">The message</param>
 		/// <returns></returns>
 		public WampException GetRuntimeException(RequestInfo requestInfo, Exception exception, Stopwatch stopwatch = null, string message = null)
-			=> requestInfo.GetRuntimeException(exception, message, (msg, ex) => 
+			=> requestInfo.GetRuntimeException(exception, message, (msg, ex) =>
 			{
 				stopwatch?.Stop();
 				this.WriteLogs(requestInfo, new List<string>
@@ -2127,7 +2222,7 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo">The RequestInfo object that contains the session information need to register</param>
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		protected async Task RegisterSyncSessionAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
+		protected Task RegisterSyncSessionAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
 		{
 			var body = new JObject
 			{
@@ -2146,7 +2241,7 @@ namespace net.vieapps.Services
 				{ "Verified", requestInfo.Session.Verified },
 				{ "Online", true }
 			}.ToString(Formatting.None);
-			await this.CallServiceAsync(new RequestInfo(requestInfo.Session, "Users", "Session", "POST")
+			return this.CallServiceAsync(new RequestInfo(requestInfo.Session, "Users", "Session", "POST")
 			{
 				Body = body,
 				Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -2154,7 +2249,7 @@ namespace net.vieapps.Services
 					{ "Signature", body.GetHMACSHA256(this.ValidationKey) }
 				},
 				CorrelationID = requestInfo.CorrelationID
-			}, cancellationToken).ConfigureAwait(false);
+			}, cancellationToken);
 		}
 
 		/// <summary>
@@ -2231,7 +2326,7 @@ namespace net.vieapps.Services
 				async (sender, arguments) =>
 				{
 					// update session info
-					Router.IncomingChannel.Update(arguments.SessionId, this.ServiceName, $"Incoming ({this.ServiceURI})");
+					await Router.IncomingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Incoming ({this.ServiceURI})").ConfigureAwait(false);
 					this.Logger?.LogInformation($"The incoming channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
 					if (this.State == ServiceState.Initializing)
 						this.State = ServiceState.Ready;
@@ -2256,7 +2351,7 @@ namespace net.vieapps.Services
 						this.State = ServiceState.Disconnected;
 
 					// re-connect
-					if (Router.ChannelsAreClosedBySystem || arguments.CloseType.Equals(SessionCloseType.Goodbye))
+					if (Router.ChannelsAreClosedBySystem || (arguments.CloseType.Equals(SessionCloseType.Goodbye) && "wamp.close.normal".IsEquals(arguments.Reason)))
 						this.Logger?.LogDebug($"The incoming channel to API Gateway Router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
 
 					else if (Router.IncomingChannel != null)
@@ -2291,7 +2386,7 @@ namespace net.vieapps.Services
 				async (sender, arguments) =>
 				{
 					// update session info
-					Router.OutgoingChannel.Update(arguments.SessionId, this.ServiceName, $"Outgoing ({this.ServiceURI})");
+					await Router.OutgoingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Outgoing ({this.ServiceURI})").ConfigureAwait(false);
 					this.Logger?.LogInformation($"The outgoing channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
 
 					// initialize all helper services
@@ -2311,7 +2406,7 @@ namespace net.vieapps.Services
 							{
 								this.Logger?.LogError($"Error occurred while sending a sync request to API Gateway => {ex.Message}", ex);
 							}
-						}, UtilityService.GetAppSetting("TimerInterval:Sync", "7").CastAs<int>() * 60);
+						}, (Int32.TryParse(UtilityService.GetAppSetting("TimerInterval:Sync", "7"), out var syncInterval) && syncInterval > 0 ? syncInterval : 7) * 60);
 
 					// send the service information to API Gateway
 					try
@@ -2336,7 +2431,7 @@ namespace net.vieapps.Services
 				(sender, arguments) =>
 				{
 					// re-connect
-					if (Router.ChannelsAreClosedBySystem || arguments.CloseType.Equals(SessionCloseType.Goodbye))
+					if (Router.ChannelsAreClosedBySystem || (arguments.CloseType.Equals(SessionCloseType.Goodbye) && "wamp.close.normal".IsEquals(arguments.Reason)))
 						this.Logger?.LogDebug($"The outgoing channel to API Gateway Router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
 
 					else if (Router.OutgoingChannel != null)
@@ -2392,7 +2487,7 @@ namespace net.vieapps.Services
 								.Where(a => !a.Name.IsStartsWith("System") && !a.Name.IsStartsWith("Microsoft") && !a.Name.IsStartsWith("mscorlib") && !a.Name.IsEquals("NETStandard")
 									&& !a.Name.IsStartsWith("Newtonsoft") && !a.Name.IsStartsWith("WampSharp") && !a.Name.IsStartsWith("Castle.") && !a.Name.IsStartsWith("StackExchange.")
 									&& !a.Name.IsStartsWith("MongoDB") && !a.Name.IsStartsWith("MySql") && !a.Name.IsStartsWith("Oracle") && !a.Name.IsStartsWith("Npgsql")
-									&& !a.Name.IsStartsWith("Serilog") && !a.Name.IsStartsWith("MsgPack") && !a.Name.IsStartsWith("ExcelData") && !a.Name.IsEndsWith(".Abstractions")
+									&& !a.Name.IsStartsWith("Serilog") && !a.Name.IsStartsWith("MsgPack") && !a.Name.IsStartsWith("ExcelData") && !a.Name.IsStartsWith("JavaScript")
 									&& !a.Name.IsStartsWith("VIEApps.Components.") && !a.Name.IsStartsWith("VIEApps.Services.Abstractions") && !a.Name.IsStartsWith("VIEApps.Services.Base")
 								)
 								.Select(assemblyName =>
@@ -2435,7 +2530,14 @@ namespace net.vieapps.Services
 			});
 
 		public virtual void Start(string[] args = null, bool initializeRepository = true, Action<IService> next = null)
-			=> this.StartAsync(args, initializeRepository, next).Wait();
+			=> this.StartAsync(args, initializeRepository, next)
+#if NETSTANDARD2_0
+				.Wait();
+#else
+				.ConfigureAwait(false)
+				.GetAwaiter()
+				.GetResult();
+#endif
 		#endregion
 
 		#region Stop the service
@@ -2458,7 +2560,15 @@ namespace net.vieapps.Services
 			{
 				// assign the flag and do unregister the services
 				this.Stopped = true;
-				await this.UnregisterServiceAsync(args, available).ConfigureAwait(false);
+
+				try
+				{
+					await this.UnregisterServiceAsync(args, available).ConfigureAwait(false);
+				}
+				catch (Exception ex)
+				{
+					this.Logger?.LogDebug($"Error occurred while unregistering up the service => {ex.Message}", ex);
+				}
 
 				// clean up
 				try
@@ -2509,10 +2619,24 @@ namespace net.vieapps.Services
 		/// <param name="disconnect">true to disconnect from API Gateway Router and close all WAMP channels</param>
 		/// <param name="next">The next action to run when the service was stopped</param>
 		protected virtual void Stop(string[] args, bool available, bool disconnect, Action<IService> next = null)
-			=> this.StopAsync(args, available, disconnect, next).Wait();
+			=> this.StopAsync(args, available, disconnect, next)
+#if NETSTANDARD2_0
+				.Wait();
+#else
+				.ConfigureAwait(false)
+				.GetAwaiter()
+				.GetResult();
+#endif
 
 		public virtual void Stop(string[] args = null, Action<IService> next = null)
-			=> this.StopAsync(args, next).Wait();
+			=> this.StopAsync(args, next)
+#if NETSTANDARD2_0
+				.Wait();
+#else
+				.ConfigureAwait(false)
+				.GetAwaiter()
+				.GetResult();
+#endif
 		#endregion
 
 		#region Dispose the service
@@ -2525,7 +2649,6 @@ namespace net.vieapps.Services
 			=> new ValueTask(this.Disposed ? Task.CompletedTask : this.StopAsync(args, available, disconnect, _ =>
 			{
 				// clean up
-				GC.SuppressFinalize(this);
 				this.Disposed = true;
 				try
 				{
@@ -2558,13 +2681,23 @@ namespace net.vieapps.Services
 			=> this.DisposeAsync(null);
 
 		public virtual void Dispose(string[] args, bool available = true, bool disconnect = true, Action<IService> next = null)
-			=> this.DisposeAsync(args, available, disconnect, next).AsTask().Wait();
+			=> this.DisposeAsync(args, available, disconnect, next)
+#if NETSTANDARD2_0
+				.AsTask().Wait();
+#else
+				.ConfigureAwait(false)
+				.GetAwaiter()
+				.GetResult();
+#endif
 
 		/// <summary>
 		/// Disposes the service (unregister the service, disconnect from API Gateway and do the clean-up tasks)
 		/// </summary>
 		public virtual void Dispose()
-			=> this.Dispose(null);
+		{
+			GC.SuppressFinalize(this);
+			this.Dispose(null);
+		}
 
 		~ServiceBase()
 			=> this.Dispose();

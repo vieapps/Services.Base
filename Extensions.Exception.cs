@@ -2,8 +2,6 @@
 using System;
 using System.Net;
 using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -282,7 +280,7 @@ namespace net.vieapps.Services
 					["InnerJson"] = null,
 					["RequestInfo"] = requestInfo.ToJson()
 				};
-				return new WampException(details, "wamp.error.runtime_error", new object[0]);
+				return new WampException(details, "wamp.error.runtime_error", Array.Empty<object>());
 			}
 		}
 	}

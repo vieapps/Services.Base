@@ -152,9 +152,9 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		public static Task SendServiceInfoAsync(string serviceName, IEnumerable<string> args, bool running, bool available = true, CancellationToken cancellationToken = default)
-			=> string.IsNullOrWhiteSpace(serviceName)
-				? Task.CompletedTask
-				: new CommunicateMessage("APIGateway")
+		{
+			if (string.IsNullOrWhiteSpace(serviceName))
+				new CommunicateMessage("APIGateway")
 				{
 					Type = "Service#Info",
 					Data = new ServiceInfo
@@ -166,7 +166,9 @@ namespace net.vieapps.Services
 						Available = available,
 						Running = running
 					}.ToJson()
-				}.SendAsync(cancellationToken);
+				}.Send();
+			return Task.CompletedTask;
+		}
 		#endregion
 
 	}

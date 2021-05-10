@@ -3,10 +3,8 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Collections.Generic;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using WampSharp.Binding;
 using WampSharp.Core.Listener;
 using WampSharp.V2;
 using WampSharp.V2.Realm;
@@ -133,10 +131,7 @@ namespace net.vieapps.Services
 			var realm = routerInfo.Item2;
 			var useJsonChannel = routerInfo.Item3;
 
-			var wampChannel = useJsonChannel
-				? new DefaultWampChannelFactory().CreateJsonChannel(address, realm)
-				: new DefaultWampChannelFactory().CreateMsgpackChannel(address, realm);
-
+			var wampChannel = useJsonChannel ? new DefaultWampChannelFactory().CreateJsonChannel(address, realm) : new DefaultWampChannelFactory().CreateMsgpackChannel(address, realm);
 			return wampChannel.OpenAsync(cancellationToken, onConnectionEstablished, onConnectionBroken, onConnectionError);
 		}
 
@@ -158,12 +153,13 @@ namespace net.vieapps.Services
 				}
 				catch (Exception ex)
 				{
-					tracker?.Invoke($"{(string.IsNullOrWhiteSpace(prefix) ? "" : $"[{prefix}] => ")}Cancelled", ex is OperationCanceledException ? null : ex);
+					tracker?.Invoke($"{(string.IsNullOrWhiteSpace(prefix) ? "" : $"[{prefix}] => ")}Canceled", ex is OperationCanceledException ? null : ex);
 					return;
 				}
 
 				try
 				{
+					tracker?.Invoke($"{(string.IsNullOrWhiteSpace(prefix) ? "" : $"[{prefix}] => ")}Reconnecting", null);
 					await wampChannel.OpenAsync(cancellationToken).ConfigureAwait(false);
 					tracker?.Invoke($"{(string.IsNullOrWhiteSpace(prefix) ? "" : $"[{prefix}] => ")}Reconnected", null);
 				}
@@ -323,8 +319,14 @@ namespace net.vieapps.Services
 		/// <param name="sessionID"></param>
 		/// <param name="name"></param>
 		/// <param name="description"></param>
-		public static void Update(this IWampChannel wampChannel, long sessionID, string name, string description)
-			=> Task.Run(() => wampChannel.UpdateAsync(sessionID, name, description)).ConfigureAwait(false);
+		public static void Update(this IWampChannel wampChannel, long sessionID, string name, string description, Microsoft.Extensions.Logging.ILogger logger = null)
+			=> Task.Run(async () => await wampChannel.UpdateAsync(sessionID, name, description).ConfigureAwait(false))
+			.ContinueWith(task =>
+			{
+				if (task.Exception != null)
+					logger?.LogError($"Error occurred while updating a channel => {task.Exception.Message}", task.Exception);
+			}, CancellationToken.None, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
+			.ConfigureAwait(false);
 		#endregion
 
 		#region Connect & Disconnect
@@ -353,7 +355,8 @@ namespace net.vieapps.Services
 		{
 			try
 			{
-				await Task.WhenAll(
+				await Task.WhenAll
+				(
 					Router.OpenIncomingChannelAsync(onIncomingConnectionEstablished, onIncomingConnectionBroken, onIncomingConnectionError, cancellationToken),
 					Router.OpenOutgoingChannelAsync(onOutgoingConnectionEstablished, onOutgoingConnectionBroken, onOutgoingConnectionError, cancellationToken)
 				).ConfigureAwait(false);
@@ -367,6 +370,37 @@ namespace net.vieapps.Services
 					throw;
 			}
 		}
+
+		/// <summary>
+		/// Connects to API Gateway Router
+		/// </summary>
+		/// <param name="onIncomingConnectionEstablished">The action to run when the incomming connection is established</param>
+		/// <param name="onIncomingConnectionBroken">The action to run when the incomming connection is broken</param>
+		/// <param name="onIncomingConnectionError">The action to run when the incomming connection got any error</param>
+		/// <param name="onOutgoingConnectionEstablished">The action to run when the outgoing connection is established</param>
+		/// <param name="onOutgoingConnectionBroken">The action to run when the outgoing connection is broken</param>
+		/// <param name="onOutgoingConnectionError">The action to run when the outgoing connection got any error</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <param name="onError">The action to run when got any error</param>
+		/// <returns></returns>
+		public static void Connect(
+			Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null,
+			Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null,
+			Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null,
+			Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null,
+			Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null,
+			Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null,
+			CancellationToken cancellationToken = default,
+			Action<Exception> onError = null
+		)
+			=> Router.ConnectAsync(onIncomingConnectionEstablished, onIncomingConnectionBroken, onIncomingConnectionError, onOutgoingConnectionEstablished, onOutgoingConnectionBroken, onOutgoingConnectionError, cancellationToken, onError)
+#if NETSTANDARD2_0
+				.Wait();
+#else
+				.ConfigureAwait(false)
+				.GetAwaiter()
+				.GetResult();
+#endif
 
 		/// <summary>
 		/// Disconnects from API Gateway Router (means close all WAMP channels)
@@ -404,8 +438,9 @@ namespace net.vieapps.Services
 
 			if (!Router.Services.TryGetValue(name, out var service))
 			{
-				service = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IService>(ProxyInterceptor.Create(name));
-				Router.Services.Add(name, service);
+				service = Router.OutgoingChannel?.RealmProxy.Services.GetCalleeProxy<IService>(ProxyInterceptor.Create(name));
+				if (service != null)
+					Router.Services.TryAdd(name, service);
 			}
 
 			return service ?? throw new ServiceNotFoundException($"The service \"{name.ToLower()}\" is not found");
@@ -425,8 +460,9 @@ namespace net.vieapps.Services
 
 			if (!Router.UniqueServices.TryGetValue(name, out var service))
 			{
-				service = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IUniqueService>(ProxyInterceptor.Create(name));
-				Router.UniqueServices.Add(name, service);
+				service = Router.OutgoingChannel?.RealmProxy.Services.GetCalleeProxy<IUniqueService>(ProxyInterceptor.Create(name));
+				if (service != null)
+					Router.UniqueServices.TryAdd(name, service);
 			}
 
 			return service ?? throw new ServiceNotFoundException($"The service with unique URI \"{name.ToLower()}\" is not found");
@@ -452,7 +488,8 @@ namespace net.vieapps.Services
 				onStart?.Invoke(requestInfo);
 				tracker?.Invoke($"Start call service {requestInfo.Verb} {requestInfo.GetURI()} - {requestInfo.Session.AppName} ({requestInfo.Session.AppPlatform}) @ {requestInfo.Session.IP}", null);
 
-				var json = await Router.GetService(requestInfo.ServiceName).ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false);
+				var service = Router.GetService(requestInfo.ServiceName);
+				var json = service != null ? await service.ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false) : null;
 				onSuccess?.Invoke(requestInfo, json);
 
 				tracker?.Invoke("Call service successful" + "\r\n" + $"Request: {requestInfo.ToString(jsonFormat)}" + "\r\n" + $"Response: {json?.ToString(jsonFormat)}", null);
@@ -463,7 +500,8 @@ namespace net.vieapps.Services
 				await Task.Delay(UtilityService.GetRandomNumber(567, 789), cancellationToken).ConfigureAwait(false);
 				try
 				{
-					var json = await Router.GetService(requestInfo.ServiceName).ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false);
+					var service = Router.GetService(requestInfo.ServiceName);
+					var json = service != null ? await service.ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false) : null;
 					onSuccess?.Invoke(requestInfo, json);
 
 					tracker?.Invoke("Re-call service successful" + "\r\n" + $"Request: {requestInfo.ToString(jsonFormat)}" + "\r\n" + $"Response: {json?.ToString(jsonFormat)}", null);
@@ -500,8 +538,9 @@ namespace net.vieapps.Services
 
 			if (!Router.SyncableServices.TryGetValue(name, out var service))
 			{
-				service = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<ISyncableService>(ProxyInterceptor.Create(name));
-				Router.SyncableServices.Add(name, service);
+				service = Router.OutgoingChannel?.RealmProxy.Services.GetCalleeProxy<ISyncableService>(ProxyInterceptor.Create(name));
+				if (service != null)
+					Router.SyncableServices.TryAdd(name, service);
 			}
 
 			return service ?? throw new ServiceNotFoundException($"The service \"{name.ToLower()}\" is not found");
@@ -527,7 +566,8 @@ namespace net.vieapps.Services
 				onStart?.Invoke(requestInfo);
 				tracker?.Invoke($"Start call service [for synchronizing] {requestInfo.Verb} {requestInfo.GetURI()} - {requestInfo.Session.AppName} ({requestInfo.Session.AppPlatform}) @ {requestInfo.Session.IP}", null);
 
-				var json = await Router.GetSyncableService(requestInfo.ServiceName).SyncAsync(requestInfo, cancellationToken).ConfigureAwait(false);
+				var service = Router.GetSyncableService(requestInfo.ServiceName);
+				var json = service != null ? await service.SyncAsync(requestInfo, cancellationToken).ConfigureAwait(false) : null;
 				onSuccess?.Invoke(requestInfo, json);
 
 				tracker?.Invoke("Call service [for synchronizing] successful" + "\r\n" + $"Request: {requestInfo.ToString(jsonFormat)}" + "\r\n" + $"Response: {json?.ToString(jsonFormat)}", null);
@@ -538,7 +578,8 @@ namespace net.vieapps.Services
 				await Task.Delay(UtilityService.GetRandomNumber(567, 789), cancellationToken).ConfigureAwait(false);
 				try
 				{
-					var json = await Router.GetSyncableService(requestInfo.ServiceName).SyncAsync(requestInfo, cancellationToken).ConfigureAwait(false);
+					var service = Router.GetSyncableService(requestInfo.ServiceName);
+					var json = service != null ? await service.SyncAsync(requestInfo, cancellationToken).ConfigureAwait(false) : null;
 					onSuccess?.Invoke(requestInfo, json);
 
 					tracker?.Invoke("Re-call service [for synchronizing] successful" + "\r\n" + $"Request: {requestInfo.ToString(jsonFormat)}" + "\r\n" + $"Response: {json?.ToString(jsonFormat)}", null);

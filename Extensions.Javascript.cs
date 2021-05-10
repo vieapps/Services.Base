@@ -7,7 +7,6 @@ using JSPool;
 using JavaScriptEngineSwitcher.Core;
 using JavaScriptEngineSwitcher.ChakraCore;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using net.vieapps.Components.Utility;
 #endregion
 
@@ -32,7 +31,7 @@ namespace net.vieapps.Services
 			});
 
 			Extensions.JsFunctions = @"
-			var __toDateTime = function (value) {
+			var __toDateTime = function(value) {
 				if (value !== undefined) {
 					if (value instanceof Date || (typeof value === 'string' && value.trim() !== '')) {
 						var date = new Date(value);
@@ -46,14 +45,14 @@ namespace net.vieapps.Services
 					return new DateTime();
 				}
 			};
-			var __now = function () {
+			var __now = function() {
 				return new Date().toJSON();
 			};
-			var __today = function () {
+			var __today = function() {
 				var date = new Date().toJSON();
 				return date.substr(0, date.indexOf('T')).replace(/\-/g, '/');
 			};
-			var __getAnsiUri = function (value, lowerCase) {
+			var __getAnsiUri = function(value, lowerCase) {
 				return value === undefined || typeof value !== 'string' || value.trim() === '' ? '' : __sf_getAnsiUri(value, lowerCase !== undefined ? lowerCase : true);
 			};
 			".Replace("\t", "").Replace("\r", "").Replace("\n", " ");
