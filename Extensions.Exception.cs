@@ -108,6 +108,7 @@ namespace net.vieapps.Services
 					var innerStack = wampException.Details["InnerStack"] as string;
 					stack = $"{wampException.Details["Stack"]}{(string.IsNullOrWhiteSpace(innerStack) ? "" : $"\r\n{innerStack}")}";
 					innerJson = wampException.Details["InnerJson"] as JObject;
+					type = wampException.Details["Type"] as string ?? "ServiceOperationException";
 				}
 				else
 				{
@@ -159,10 +160,6 @@ namespace net.vieapps.Services
 		{
 			switch (type)
 			{
-				case "FileNotFoundException":
-				case "InformationNotFoundException":
-					return (int)HttpStatusCode.NotFound;
-
 				case "MethodNotAllowedException":
 					return (int)HttpStatusCode.MethodNotAllowed;
 
@@ -178,12 +175,11 @@ namespace net.vieapps.Services
 				default:
 					if (type.Contains("Invalid"))
 						return (int)HttpStatusCode.BadRequest;
-					else if (type.Equals("ServiceNotFoundException") || type.Contains("Unavailable"))
+					if (type.Equals("ServiceNotFoundException") || type.Contains("Unavailable"))
 						return (int)HttpStatusCode.ServiceUnavailable;
-					else if (type.EndsWith("NotFoundException"))
+					if (type.EndsWith("NotFoundException"))
 						return (int)HttpStatusCode.NotFound;
-					else
-						return (int)HttpStatusCode.InternalServerError;
+					return (int)HttpStatusCode.InternalServerError;
 			}
 		}
 
