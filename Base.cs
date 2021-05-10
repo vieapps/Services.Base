@@ -508,7 +508,7 @@ namespace net.vieapps.Services
 
 		public ILogger Logger { get; private set; }
 
-		ConcurrentQueue<Tuple<string, string, string, string, string, List<string>, string>> Logs { get; } = new ConcurrentQueue<Tuple<string, string, string, string, string, List<string>, string>>();
+		ConcurrentQueue<Tuple<Tuple<DateTime, string, string, string, string, string>, List<string>, string>> Logs { get; } = new ConcurrentQueue<Tuple<Tuple<DateTime, string, string, string, string, string>, List<string>, string>>();
 
 		string _isDebugResultsEnabled = null, _isDebugStacksEnabled = null, _isDebugAuthorizationsEnabled = null;
 
@@ -545,12 +545,12 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
-		protected virtual async Task WriteLogsAsync(string correlationID, string developerID, string appID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+		protected virtual Task WriteLogsAsync(string correlationID, string developerID, string appID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
 		{
 			// prepare
 			correlationID = correlationID ?? UtilityService.NewUUID;
 
-			// write to local logs
+			// local logs
 			if (exception == null)
 				logs?.ForEach(message => logger.Log(mode, $"{message} [{correlationID}]"));
 			else
@@ -559,7 +559,7 @@ namespace net.vieapps.Services
 				logger.Log(LogLevel.Error, $"{exception.Message} [{correlationID}]", exception);
 			}
 
-			// write to centerlized logs
+			// centerlized logs
 			logs = logs ?? new List<string>();
 			if (exception != null && exception is WampException wampException)
 			{
@@ -573,19 +573,13 @@ namespace net.vieapps.Services
 				logs.Add($"> Type: {exception.GetType()}");
 			}
 
-			Tuple<string, string, string, string, string, List<string>, string> log = null;
-			try
+			// update queue & write to centerlized logs
+			this.Logs.Enqueue(new Tuple<Tuple<DateTime, string, string, string, string, string>, List<string>, string>(new Tuple<DateTime, string, string, string, string, string>(DateTime.Now, correlationID, developerID, appID, serviceName ?? this.ServiceName ?? "APIGateway", objectName), logs, exception?.GetStack()));
+			return this.LoggingService.WriteLogsAsync(this.Logs, () => this.BuildSyncRequestInfo(UtilityService.NewUUID, requestInfo =>
 			{
-				while (this.Logs.TryDequeue(out log))
-					await this.LoggingService.WriteLogsAsync(log.Item1, log.Item2, log.Item3, log.Item4, log.Item5, log.Item6, log.Item7, this.CancellationToken).ConfigureAwait(false);
-				await this.LoggingService.WriteLogsAsync(correlationID, developerID, appID, serviceName ?? this.ServiceName ?? "APIGateway", objectName, logs, exception?.GetStack() ?? "", this.CancellationToken).ConfigureAwait(false);
-			}
-			catch
-			{
-				if (log != null)
-					this.Logs.Enqueue(log);
-				this.Logs.Enqueue(new Tuple<string, string, string, string, string, List<string>, string>(correlationID, developerID, appID, serviceName ?? this.ServiceName ?? "APIGateway", objectName, logs, exception?.GetStack() ?? ""));
-			}
+				requestInfo.Session.DeviceID = $"{this.NodeID}@logger";
+				requestInfo.Session.AppName = "VIEApps NGX Logger";
+			}).Session, this.Logger, this.CancellationToken);
 		}
 
 		/// <summary>
@@ -727,7 +721,7 @@ namespace net.vieapps.Services
 			.ContinueWith(task =>
 			{
 				if (task.Exception != null)
-					this.Logger?.LogError($"Error occurred while writting log => {task.Exception.Message}", task.Exception);
+					this.Logger?.LogError($"Error occurred while writting logs => {task.Exception.Message}", task.Exception);
 			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
 			.ConfigureAwait(false);
 
@@ -746,7 +740,7 @@ namespace net.vieapps.Services
 			.ContinueWith(task =>
 			{
 				if (task.Exception != null)
-					this.Logger?.LogError($"Error occurred while writting log => {task.Exception.Message}", task.Exception);
+					this.Logger?.LogError($"Error occurred while writting logs => {task.Exception.Message}", task.Exception);
 			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
 			.ConfigureAwait(false);
 
@@ -767,7 +761,7 @@ namespace net.vieapps.Services
 			.ContinueWith(task =>
 			{
 				if (task.Exception != null)
-					this.Logger?.LogError($"Error occurred while writting log => {task.Exception.Message}", task.Exception);
+					this.Logger?.LogError($"Error occurred while writting logs => {task.Exception.Message}", task.Exception);
 			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
 			.ConfigureAwait(false);
 
@@ -786,7 +780,7 @@ namespace net.vieapps.Services
 			.ContinueWith(task =>
 			{
 				if (task.Exception != null)
-					this.Logger?.LogError($"Error occurred while writting log => {task.Exception.Message}", task.Exception);
+					this.Logger?.LogError($"Error occurred while writting logs => {task.Exception.Message}", task.Exception);
 			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
 			.ConfigureAwait(false);
 
@@ -806,7 +800,7 @@ namespace net.vieapps.Services
 			.ContinueWith(task =>
 			{
 				if (task.Exception != null)
-					this.Logger?.LogError($"Error occurred while writting log => {task.Exception.Message}", task.Exception);
+					this.Logger?.LogError($"Error occurred while writting logs => {task.Exception.Message}", task.Exception);
 			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
 			.ConfigureAwait(false);
 
@@ -824,7 +818,7 @@ namespace net.vieapps.Services
 			.ContinueWith(task =>
 			{
 				if (task.Exception != null)
-					this.Logger?.LogError($"Error occurred while writting log => {task.Exception.Message}", task.Exception);
+					this.Logger?.LogError($"Error occurred while writting logs => {task.Exception.Message}", task.Exception);
 			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
 			.ConfigureAwait(false);
 
@@ -844,7 +838,7 @@ namespace net.vieapps.Services
 			.ContinueWith(task =>
 			{
 				if (task.Exception != null)
-					this.Logger?.LogError($"Error occurred while writting log => {task.Exception.Message}", task.Exception);
+					this.Logger?.LogError($"Error occurred while writting logs => {task.Exception.Message}", task.Exception);
 			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
 			.ConfigureAwait(false);
 
@@ -862,7 +856,7 @@ namespace net.vieapps.Services
 			.ContinueWith(task =>
 			{
 				if (task.Exception != null)
-					this.Logger?.LogError($"Error occurred while writting log => {task.Exception.Message}", task.Exception);
+					this.Logger?.LogError($"Error occurred while writting logs => {task.Exception.Message}", task.Exception);
 			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
 			.ConfigureAwait(false);
 
@@ -879,7 +873,7 @@ namespace net.vieapps.Services
 			.ContinueWith(task =>
 			{
 				if (task.Exception != null)
-					this.Logger?.LogError($"Error occurred while writting log => {task.Exception.Message}", task.Exception);
+					this.Logger?.LogError($"Error occurred while writting logs => {task.Exception.Message}", task.Exception);
 			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
 			.ConfigureAwait(false);
 
@@ -896,7 +890,7 @@ namespace net.vieapps.Services
 			.ContinueWith(task =>
 			{
 				if (task.Exception != null)
-					this.Logger?.LogError($"Error occurred while writting log => {task.Exception.Message}", task.Exception);
+					this.Logger?.LogError($"Error occurred while writting logs => {task.Exception.Message}", task.Exception);
 			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
 			.ConfigureAwait(false);
 		#endregion
@@ -2181,7 +2175,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="sessionID"></param>
 		/// <returns></returns>
-		protected RequestInfo BuildSyncRequestInfo(string sessionID = null)
+		protected RequestInfo BuildSyncRequestInfo(string sessionID = null, Action<RequestInfo> onCompleted = null)
 		{
 			this.SyncSessionID = sessionID ?? this.SyncSessionID ?? UtilityService.NewUUID;
 			var ipAddresses = new List<IPAddress>();
@@ -2190,7 +2184,7 @@ namespace net.vieapps.Services
 				ipAddresses = Dns.GetHostAddresses(Dns.GetHostName()).ToList();
 			}
 			catch { }
-			return new RequestInfo
+			var requestInfo = new RequestInfo
 			{
 				Session = new Session
 				{
@@ -2214,6 +2208,8 @@ namespace net.vieapps.Services
 				},
 				CorrelationID = UtilityService.NewUUID
 			};
+			onCompleted?.Invoke(requestInfo);
+			return requestInfo;
 		}
 
 		/// <summary>

@@ -7,6 +7,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Reactive.Subjects;
 using System.Reactive.Linq;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using WampSharp.V2.Core.Contracts;
+using net.vieapps.Components.Security;
 using net.vieapps.Components.Utility;
 #endregion
 
@@ -220,6 +225,78 @@ namespace net.vieapps.Services
 			catch (Exception ex)
 			{
 				return Task.FromException(ex);
+			}
+		}
+
+		/// <summary>
+		/// Writes the log messages into centerlized log storage
+		/// </summary>
+		/// <param name="loggingService"></param>
+		/// <param name="logs"></param>
+		/// <param name="sessionBuilder"></param>
+		/// <param name="logger"></param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		public static async Task WriteLogsAsync(this ILoggingService loggingService, ConcurrentQueue<Tuple<Tuple<DateTime, string, string, string, string, string>, List<string>, string>> logs, Func<Session> sessionBuilder = null, ILogger logger = null, CancellationToken cancellationToken = default)
+		{
+			Tuple<Tuple<DateTime, string, string, string, string, string>, List<string>, string> log = null;
+			try
+			{
+				while (logs.TryDequeue(out log))
+					await loggingService.WriteLogsAsync(log.Item1.Item2, log.Item1.Item3, log.Item1.Item4, log.Item1.Item5, log.Item1.Item6, log.Item2, log.Item3, cancellationToken).ConfigureAwait(false);
+			}
+			catch (Exception ex)
+			{
+				if (log != null)
+					logs.Enqueue(log);
+
+				if (ex is WampException && ex.Message.IsEquals("wamp.error.no_such_procedure"))
+					try
+					{
+						var sessionID = UtilityService.NewUUID;
+						var session = sessionBuilder?.Invoke() ?? new Session
+						{
+							SessionID = sessionID,
+							User = new User
+							{
+								SessionID = sessionID,
+								ID = UtilityService.GetAppSetting("Users:SystemAccountID", "VIEAppsNGX-MMXVII-System-Account")
+							},
+							IP = "127.0.0.1",
+							DeviceID = $"{ServiceBase.ServiceComponent?.NodeID ?? UtilityService.NewUUID}@logger",
+							AppName = "VIEApps NGX Logger",
+							AppPlatform = $"{Extensions.GetRuntimeOS()} Daemon",
+							AppAgent = $"{UtilityService.DesktopUserAgent} VIEApps NGX Logging Daemon/{typeof(ServiceBase).Assembly.GetVersion(false)}",
+							AppOrigin = null,
+							Verified = true
+						};
+						while (logs.TryDequeue(out log))
+							await Router.CallServiceAsync(new RequestInfo
+							{
+								Session = session,
+								ServiceName = "logs",
+								ObjectName = "service",
+								Verb = "POST",
+								Body = new JObject
+								{
+									{ "Time", log.Item1.Item1 },
+									{ "CorrelationID", log.Item1.Item2 },
+									{ "DeveloperID", log.Item1.Item3 },
+									{ "AppID", log.Item1.Item4 },
+									{ "ServiceName", log.Item1.Item5 },
+									{ "ObjectName", log.Item1.Item6 },
+									{ "Logs", log.Item2?.Join("\r\n") ?? "" },
+									{ "Stack", log.Item3 }
+								}.ToString(Formatting.None),
+								CorrelationID = log.Item1.Item2
+							}, cancellationToken).ConfigureAwait(false);
+					}
+					catch (Exception e)
+					{
+						logger?.LogError($"Cannot write logs by the alternative logging service => {e.Message}", e);
+						if (log != null)
+							logs.Enqueue(log);
+					}
 			}
 		}
 	}
