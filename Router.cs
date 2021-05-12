@@ -108,7 +108,7 @@ namespace net.vieapps.Services
 
 			// open the channel
 			await wampChannel.Open().WithCancellationToken(cancellationToken).ConfigureAwait(false);
-
+			
 			return wampChannel;
 		}
 
@@ -194,7 +194,11 @@ namespace net.vieapps.Services
 					Router.IncomingChannelSessionID = args.SessionId;
 					onConnectionEstablished?.Invoke(sender, args);
 				},
-				onConnectionBroken,
+				(sender, args) =>
+				{
+					Router.IncomingChannelSessionID = 0;
+					onConnectionBroken?.Invoke(sender, args);
+				},
 				onConnectionError,
 				cancellationToken
 			).ConfigureAwait(false));
@@ -219,7 +223,11 @@ namespace net.vieapps.Services
 					Router.OutgoingChannelSessionID = args.SessionId;
 					onConnectionEstablished?.Invoke(sender, args);
 				},
-				onConnectionBroken,
+				(sender, args) =>
+				{
+					Router.OutgoingChannelSessionID = 0;
+					onConnectionBroken?.Invoke(sender, args);
+				},
 				onConnectionError,
 				cancellationToken
 			).ConfigureAwait(false));
@@ -438,6 +446,7 @@ namespace net.vieapps.Services
 		public static Task DisconnectAsync(string message = null, Action<Exception> onError = null)
 		{
 			Router.ChannelsAreClosedBySystem = true;
+			Router.ReconnectTimer?.Dispose();
 			return Task.WhenAll(Router.CloseIncomingChannelAsync(message, onError), Router.CloseOutgoingChannelAsync(message, onError));
 		}
 
@@ -449,6 +458,22 @@ namespace net.vieapps.Services
 		/// <param name="onError">The action to run when got any error</param>
 		public static void Disconnect(int waitingTimes = 1234, string message = null, Action<Exception> onError = null)
 			=> Router.DisconnectAsync(message, onError).Wait(waitingTimes > 0 ? waitingTimes : 1234);
+
+		static IDisposable ReconnectTimer { get; set; }
+
+		/// <summary>
+		/// Runs the reconnect timer to re-connect when the connections were broken
+		/// </summary>
+		public static void RunReconnectTimer()
+		{
+			Router.ReconnectTimer = System.Reactive.Linq.Observable.Timer(TimeSpan.FromMinutes(3), TimeSpan.FromSeconds(13)).Subscribe(_ =>
+			{
+				if (Router.IncomingChannel != null && (!Router.ChannelsAreClosedBySystem || Router.IncomingChannelSessionID < 1))
+					Router.IncomingChannel.ReOpen();
+				if (Router.OutgoingChannel != null && (!Router.ChannelsAreClosedBySystem || Router.OutgoingChannelSessionID < 1))
+					Router.OutgoingChannel.ReOpen();
+			});
+		}
 		#endregion
 
 		#region Get & Call a service
