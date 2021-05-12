@@ -5,13 +5,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using WampSharp.Core.Listener;
 using WampSharp.V2;
 using WampSharp.V2.Realm;
-using WampSharp.V2.Core.Contracts;
 using WampSharp.V2.Client;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using WampSharp.V2.Core.Contracts;
 using net.vieapps.Components.Utility;
 using net.vieapps.Components.WebSockets;
 #endregion
@@ -277,6 +278,39 @@ namespace net.vieapps.Services
 		#endregion
 
 		#region Update channels
+		static void ConnectStatisticsWebSocket(ILogger logger = null)
+		{
+			if (Router.StatisticsWebSocketState == null || Router.StatisticsWebSocketState == "initializing" || Router.StatisticsWebSocketState == "closed")
+			{
+				Router.StatisticsWebSocketState = "connecting";
+				var uri = new Uri(Router.GetRouterStrInfo());
+				Router.StatisticsWebSocket.Connect
+				(
+					$"{uri.Scheme}://{uri.Host}:56429/",
+					websocket => Router.StatisticsWebSocketState = "connected",
+					exception =>
+					{
+						logger?.LogError($"Cannot connect to statistic websocket => {exception.Message}", exception);
+						Router.StatisticsWebSocketState = "closed";
+						Router.ReconnectStatisticsWebSocket(logger);
+					}
+				);
+			}
+		}
+
+		static void ReconnectStatisticsWebSocket(ILogger logger = null)
+			=> Task.Run(async () =>
+			{
+				await Task.Delay(UtilityService.GetRandomNumber(456, 789)).ConfigureAwait(false);
+				Router.ConnectStatisticsWebSocket(logger);
+			})
+			.ContinueWith(task =>
+			{
+				if (task.Exception != null)
+					logger?.LogError($"Error occurred while reconnecting to statistic websocket => {task.Exception.Message}", task.Exception);
+			}, CancellationToken.None, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
+			.ConfigureAwait(false);
+
 		/// <summary>
 		/// Updates related information of the channel
 		/// </summary>
@@ -284,7 +318,7 @@ namespace net.vieapps.Services
 		/// <param name="sessionID"></param>
 		/// <param name="name"></param>
 		/// <param name="description"></param>
-		public static async Task UpdateAsync(this IWampChannel wampChannel, long sessionID, string name, string description)
+		public static async Task UpdateAsync(this IWampChannel wampChannel, long sessionID, string name, string description, ILogger logger = null)
 		{
 			if (Router.StatisticsWebSocket == null)
 			{
@@ -292,17 +326,11 @@ namespace net.vieapps.Services
 				Router.StatisticsWebSocketState = "initializing";
 			}
 
-			if (Router.StatisticsWebSocketState == null || Router.StatisticsWebSocketState == "initializing")
-			{
-				Router.StatisticsWebSocketState = "connecting";
-				var uri = new Uri(Router.GetRouterStrInfo());
-				Router.StatisticsWebSocket.Connect($"{uri.Scheme}://{uri.Host}:56429/", websocket => Router.StatisticsWebSocketState = "connected", exception => Router.StatisticsWebSocketState = "closed");
-			}
-
+			Router.ConnectStatisticsWebSocket(logger);
 			while (Router.StatisticsWebSocketState == null || Router.StatisticsWebSocketState == "initializing" || Router.StatisticsWebSocketState == "connecting")
 				await Task.Delay(UtilityService.GetRandomNumber(234, 567)).ConfigureAwait(false);
 
-			if (Router.StatisticsWebSocketState == "connected")
+			if (Router.StatisticsWebSocketState == "connected" && Router.StatisticsWebSocket.GetWebSockets().Any())
 				await Router.StatisticsWebSocket.GetWebSockets().First().SendAsync(new JObject
 				{
 					{ "Command", "Update" },
@@ -319,8 +347,8 @@ namespace net.vieapps.Services
 		/// <param name="sessionID"></param>
 		/// <param name="name"></param>
 		/// <param name="description"></param>
-		public static void Update(this IWampChannel wampChannel, long sessionID, string name, string description, Microsoft.Extensions.Logging.ILogger logger = null)
-			=> Task.Run(async () => await wampChannel.UpdateAsync(sessionID, name, description).ConfigureAwait(false))
+		public static void Update(this IWampChannel wampChannel, long sessionID, string name, string description, ILogger logger = null)
+			=> Task.Run(async () => await wampChannel.UpdateAsync(sessionID, name, description, logger).ConfigureAwait(false))
 			.ContinueWith(task =>
 			{
 				if (task.Exception != null)
@@ -498,6 +526,10 @@ namespace net.vieapps.Services
 			catch (WampSessionNotEstablishedException)
 			{
 				await Task.Delay(UtilityService.GetRandomNumber(567, 789), cancellationToken).ConfigureAwait(false);
+				Router.IncomingChannel?.ReOpen(cancellationToken);
+				Router.OutgoingChannel?.ReOpen(cancellationToken);
+				await Task.Delay(UtilityService.GetRandomNumber(567, 789), cancellationToken).ConfigureAwait(false);
+
 				try
 				{
 					var service = Router.GetService(requestInfo.ServiceName);
@@ -576,6 +608,10 @@ namespace net.vieapps.Services
 			catch (WampSessionNotEstablishedException)
 			{
 				await Task.Delay(UtilityService.GetRandomNumber(567, 789), cancellationToken).ConfigureAwait(false);
+				Router.IncomingChannel?.ReOpen(cancellationToken);
+				Router.OutgoingChannel?.ReOpen(cancellationToken);
+				await Task.Delay(UtilityService.GetRandomNumber(567, 789), cancellationToken).ConfigureAwait(false);
+
 				try
 				{
 					var service = Router.GetSyncableService(requestInfo.ServiceName);

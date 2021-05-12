@@ -575,11 +575,7 @@ namespace net.vieapps.Services
 
 			// update queue & write to centerlized logs
 			this.Logs.Enqueue(new Tuple<Tuple<DateTime, string, string, string, string, string>, List<string>, string>(new Tuple<DateTime, string, string, string, string, string>(DateTime.Now, correlationID, developerID, appID, serviceName ?? this.ServiceName ?? "APIGateway", objectName), logs, exception?.GetStack()));
-			return this.LoggingService.WriteLogsAsync(this.Logs, () => this.BuildSyncRequestInfo(UtilityService.NewUUID, requestInfo =>
-			{
-				requestInfo.Session.DeviceID = $"{this.NodeID}@logger";
-				requestInfo.Session.AppName = "VIEApps NGX Logger";
-			}).Session, this.Logger, this.CancellationToken);
+			return this.LoggingService.WriteLogsAsync(this.Logs, () => this.BuildRequestInfo(UtilityService.NewUUID, $"{this.NodeID}@logger", "VIEApps NGX Logger").Session, this.Logger, this.CancellationToken);
 		}
 
 		/// <summary>
@@ -2171,13 +2167,12 @@ namespace net.vieapps.Services
 
 		#region Sync
 		/// <summary>
-		/// Builds the RequestInfo to send a synchronize request
+		/// Builds the RequestInfo
 		/// </summary>
 		/// <param name="sessionID"></param>
 		/// <returns></returns>
-		protected RequestInfo BuildSyncRequestInfo(string sessionID = null, Action<RequestInfo> onCompleted = null)
+		protected RequestInfo BuildRequestInfo(string sessionID, string deviceID = null, string appName = null, string appAgent = null, Action<RequestInfo> onCompleted = null)
 		{
-			this.SyncSessionID = sessionID ?? this.SyncSessionID ?? UtilityService.NewUUID;
 			var ipAddresses = new List<IPAddress>();
 			try
 			{
@@ -2188,28 +2183,42 @@ namespace net.vieapps.Services
 			{
 				Session = new Session
 				{
-					SessionID = this.SyncSessionID,
+					SessionID = sessionID,
 					User = new User
 					{
-						SessionID = this.SyncSessionID,
+						SessionID = sessionID,
 						ID = UtilityService.GetAppSetting("Users:SystemAccountID", "VIEAppsNGX-MMXVII-System-Account")
 					},
 					IP = ipAddresses.FirstOrDefault()?.ToString() ?? "127.0.0.1",
-					DeviceID = $"{this.NodeID}@synchronizer",
-					AppName = "VIEApps NGX Synchronizer",
+					DeviceID = deviceID ?? $"{this.NodeID}@synchronizer",
+					AppName = appName ?? "VIEApps NGX Synchronizer",
 					AppPlatform = $"{Extensions.GetRuntimeOS()} Daemon",
-					AppAgent = $"{UtilityService.DesktopUserAgent} VIEApps NGX Sync Daemon/{this.GetType().Assembly.GetVersion(false)}",
+					AppAgent = appAgent ?? $"{UtilityService.DesktopUserAgent} VIEApps NGX Daemon/{this.GetType().Assembly.GetVersion(false)}",
 					AppOrigin = null,
 					Verified = true
-				},
-				Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-				{
-					{ "SyncKey", this.SyncKey }
 				},
 				CorrelationID = UtilityService.NewUUID
 			};
 			onCompleted?.Invoke(requestInfo);
 			return requestInfo;
+		}
+
+		/// <summary>
+		/// Builds the RequestInfo to send a synchronize request
+		/// </summary>
+		/// <param name="sessionID"></param>
+		/// <returns></returns>
+		protected RequestInfo BuildSyncRequestInfo(string sessionID = null, Action<RequestInfo> onCompleted = null)
+		{
+			this.SyncSessionID = sessionID ?? this.SyncSessionID ?? UtilityService.NewUUID;
+			return this.BuildRequestInfo(this.SyncSessionID, null, null, null, requestInfo =>
+			{
+				requestInfo.Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+				{
+					{ "SyncKey", this.SyncKey }
+				};
+				onCompleted?.Invoke(requestInfo);
+			});
 		}
 
 		/// <summary>
@@ -2322,8 +2331,8 @@ namespace net.vieapps.Services
 				async (sender, arguments) =>
 				{
 					// update session info
-					await Router.IncomingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Incoming ({this.ServiceURI})").ConfigureAwait(false);
-					this.Logger?.LogInformation($"The incoming channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
+					await Router.IncomingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Incoming ({this.ServiceURI})", this.Logger).ConfigureAwait(false);
+					this.Logger?.LogInformation($"The incoming channel to API Gateway Router is established - Session ID: {arguments.SessionId} [{Router.IncomingChannel.GetTypeName()}]");
 					if (this.State == ServiceState.Initializing)
 						this.State = ServiceState.Ready;
 
@@ -2382,8 +2391,8 @@ namespace net.vieapps.Services
 				async (sender, arguments) =>
 				{
 					// update session info
-					await Router.OutgoingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Outgoing ({this.ServiceURI})").ConfigureAwait(false);
-					this.Logger?.LogInformation($"The outgoing channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
+					await Router.OutgoingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Outgoing ({this.ServiceURI})", this.Logger).ConfigureAwait(false);
+					this.Logger?.LogInformation($"The outgoing channel to API Gateway Router is established - Session ID: {arguments.SessionId} [{Router.OutgoingChannel.GetTypeName()}]");
 
 					// initialize all helper services
 					await this.InitializeHelperServicesAsync().ConfigureAwait(false);
@@ -2465,65 +2474,58 @@ namespace net.vieapps.Services
 		}
 
 		public virtual Task StartAsync(string[] args = null, bool initializeRepository = true, Action<IService> next = null)
-			=> this.StartAsync(args, _ =>
-			{
-				// show privileges
-				if (this.IsDebugLogEnabled)
-					this.Logger?.LogDebug($"Default working privileges\r\n{this.Privileges?.ToJson()}");
+		{
+			// show privileges
+			if (this.IsDebugLogEnabled)
+				this.Logger?.LogDebug($"Default working privileges\r\n{this.Privileges?.ToJson()}");
 
-				// initialize repository
-				if (initializeRepository)
-					try
-					{
-						if (this.IsDebugLogEnabled)
-							this.Logger?.LogDebug("Initializing the repository");
-
-						RepositoryStarter.Initialize(
-							new[] { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
-								.Where(a => !a.Name.IsStartsWith("System") && !a.Name.IsStartsWith("Microsoft") && !a.Name.IsStartsWith("mscorlib") && !a.Name.IsEquals("NETStandard")
-									&& !a.Name.IsStartsWith("Newtonsoft") && !a.Name.IsStartsWith("WampSharp") && !a.Name.IsStartsWith("Castle.") && !a.Name.IsStartsWith("StackExchange.")
-									&& !a.Name.IsStartsWith("MongoDB") && !a.Name.IsStartsWith("MySql") && !a.Name.IsStartsWith("Oracle") && !a.Name.IsStartsWith("Npgsql")
-									&& !a.Name.IsStartsWith("Serilog") && !a.Name.IsStartsWith("MsgPack") && !a.Name.IsStartsWith("ExcelData") && !a.Name.IsStartsWith("JavaScript")
-									&& !a.Name.IsStartsWith("VIEApps.Components.") && !a.Name.IsStartsWith("VIEApps.Services.Abstractions") && !a.Name.IsStartsWith("VIEApps.Services.Base")
-								)
-								.Select(assemblyName =>
-								{
-									try
-									{
-										return Assembly.Load(assemblyName);
-									}
-									catch (Exception ex)
-									{
-										this.Logger?.LogError($"Error occurred while loading an assembly [{assemblyName.Name}] => {ex.Message}", ex);
-										return null;
-									}
-								})
-								.Where(assembly => assembly != null)
-							),
-							(msg, ex) =>
-							{
-								if (ex != null)
-									this.Logger?.LogError(msg, ex);
-								else if (this.IsDebugLogEnabled)
-									this.Logger?.LogDebug(msg);
-							}
-						);
-					}
-					catch (Exception ex)
-					{
-						this.Logger?.LogError($"Error occurred while initializing the repository => {ex.Message}", ex);
-					}
-
-				// run the next action
+			// initialize repository
+			if (initializeRepository)
 				try
 				{
-					next?.Invoke(this);
+					if (this.IsDebugLogEnabled)
+						this.Logger?.LogDebug("Initializing the repository");
+
+					RepositoryStarter.Initialize
+					(
+						new[] { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
+							.Where(a => !a.Name.IsStartsWith("System") && !a.Name.IsStartsWith("Microsoft") && !a.Name.IsStartsWith("mscorlib") && !a.Name.IsEquals("NETStandard")
+								&& !a.Name.IsStartsWith("Newtonsoft") && !a.Name.IsStartsWith("WampSharp") && !a.Name.IsStartsWith("Castle.") && !a.Name.IsStartsWith("StackExchange.")
+								&& !a.Name.IsStartsWith("MongoDB") && !a.Name.IsStartsWith("MySql") && !a.Name.IsStartsWith("Oracle") && !a.Name.IsStartsWith("Npgsql")
+								&& !a.Name.IsStartsWith("Serilog") && !a.Name.IsStartsWith("MsgPack") && !a.Name.IsStartsWith("ExcelData") && !a.Name.IsStartsWith("JavaScript")
+								&& !a.Name.IsStartsWith("VIEApps.Components.") && !a.Name.IsStartsWith("VIEApps.Services.Abstractions") && !a.Name.IsStartsWith("VIEApps.Services.Base")
+							)
+							.Select(assemblyName =>
+							{
+								try
+								{
+									return Assembly.Load(assemblyName);
+								}
+								catch (Exception ex)
+								{
+									this.Logger?.LogError($"Error occurred while loading an assembly [{assemblyName.Name}] => {ex.Message}", ex);
+									return null;
+								}
+							})
+							.Where(assembly => assembly != null)
+						),
+						(msg, ex) =>
+						{
+							if (ex != null)
+								this.Logger?.LogError(msg, ex);
+							else if (this.IsDebugLogEnabled)
+								this.Logger?.LogDebug(msg);
+						}
+					);
 				}
 				catch (Exception ex)
 				{
-					this.Logger?.LogError($"Error occurred while invoking the next action when start the service => {ex.Message}", ex);
+					this.Logger?.LogError($"Error occurred while initializing the repository => {ex.Message}", ex);
 				}
-			});
+
+			// start the service (means register the service with API Gateway and do other actions)
+			return this.StartAsync(args, next);
+		}
 
 		public virtual void Start(string[] args = null, bool initializeRepository = true, Action<IService> next = null)
 			=> this.StartAsync(args, initializeRepository, next)

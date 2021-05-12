@@ -1,5 +1,6 @@
 ﻿#region Related components
 using System;
+using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
@@ -228,6 +229,8 @@ namespace net.vieapps.Services
 			}
 		}
 
+		static string LogsPath = UtilityService.GetAppSetting("Path:Logs", "logs");
+
 		/// <summary>
 		/// Writes the log messages into centerlized log storage
 		/// </summary>
@@ -251,52 +254,65 @@ namespace net.vieapps.Services
 					logs.Enqueue(log);
 
 				if (ex is WampException && ex.Message.IsEquals("wamp.error.no_such_procedure"))
-					try
+				{
+					var sessionID = UtilityService.NewUUID;
+					var session = sessionBuilder?.Invoke() ?? new Session
 					{
-						var sessionID = UtilityService.NewUUID;
-						var session = sessionBuilder?.Invoke() ?? new Session
+						SessionID = sessionID,
+						User = new User
 						{
 							SessionID = sessionID,
-							User = new User
+							ID = UtilityService.GetAppSetting("Users:SystemAccountID", "VIEAppsNGX-MMXVII-System-Account")
+						},
+						IP = "127.0.0.1",
+						DeviceID = $"{ServiceBase.ServiceComponent?.NodeID ?? UtilityService.NewUUID}@logger",
+						AppName = "VIEApps NGX Logger",
+						AppPlatform = $"{Extensions.GetRuntimeOS()} Daemon",
+						AppAgent = $"{UtilityService.DesktopUserAgent} VIEApps NGX Daemon/{typeof(ServiceBase).Assembly.GetVersion(false)}",
+						AppOrigin = null,
+						Verified = true
+					};
+
+					var flushIntoFiles = false;
+					while (logs.TryDequeue(out log))
+						try
+						{
+							var json = new JObject
 							{
-								SessionID = sessionID,
-								ID = UtilityService.GetAppSetting("Users:SystemAccountID", "VIEAppsNGX-MMXVII-System-Account")
-							},
-							IP = "127.0.0.1",
-							DeviceID = $"{ServiceBase.ServiceComponent?.NodeID ?? UtilityService.NewUUID}@logger",
-							AppName = "VIEApps NGX Logger",
-							AppPlatform = $"{Extensions.GetRuntimeOS()} Daemon",
-							AppAgent = $"{UtilityService.DesktopUserAgent} VIEApps NGX Logging Daemon/{typeof(ServiceBase).Assembly.GetVersion(false)}",
-							AppOrigin = null,
-							Verified = true
-						};
-						while (logs.TryDequeue(out log))
-							await Router.CallServiceAsync(new RequestInfo
-							{
-								Session = session,
-								ServiceName = "logs",
-								ObjectName = "service",
-								Verb = "POST",
-								Body = new JObject
+								{ "Time", log.Item1.Item1 },
+								{ "CorrelationID", log.Item1.Item2 },
+								{ "DeveloperID", log.Item1.Item3 },
+								{ "AppID", log.Item1.Item4 },
+								{ "ServiceName", log.Item1.Item5 },
+								{ "ObjectName", log.Item1.Item6 },
+								{ "Logs", log.Item2?.Join("\r\n") ?? "" },
+								{ "Stack", log.Item3 }
+							};
+							if (flushIntoFiles)
+								try
 								{
-									{ "Time", log.Item1.Item1 },
-									{ "CorrelationID", log.Item1.Item2 },
-									{ "DeveloperID", log.Item1.Item3 },
-									{ "AppID", log.Item1.Item4 },
-									{ "ServiceName", log.Item1.Item5 },
-									{ "ObjectName", log.Item1.Item6 },
-									{ "Logs", log.Item2?.Join("\r\n") ?? "" },
-									{ "Stack", log.Item3 }
-								}.ToString(Formatting.None),
-								CorrelationID = log.Item1.Item2
-							}, cancellationToken).ConfigureAwait(false);
-					}
-					catch (Exception e)
-					{
-						logger?.LogError($"Cannot write logs by the alternative logging service => {e.Message}", e);
-						if (log != null)
-							logs.Enqueue(log);
-					}
+									var filePath = Path.Combine(Extensions.LogsPath, $"logs.services.{DateTime.Now:yyyyMMddHHmmss}.{UtilityService.NewUUID}.json");
+									await UtilityService.WriteTextFileAsync(filePath, json.ToString(Formatting.Indented), false, null, cancellationToken).ConfigureAwait(false);
+								}
+								catch { }
+							else
+								await Router.CallServiceAsync(new RequestInfo
+								{
+									Session = session,
+									ServiceName = "logs",
+									ObjectName = "service",
+									Verb = "POST",
+									Body = json.ToString(Formatting.None),
+									CorrelationID = log.Item1.Item2
+								}, cancellationToken).ConfigureAwait(false);
+						}
+						catch
+						{
+							flushIntoFiles = true;
+							if (log != null)
+								logs.Enqueue(log);
+						}
+				}
 			}
 		}
 	}
