@@ -54,6 +54,8 @@ namespace net.vieapps.Services
 		public virtual Task ProcessWebHookMessageAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
 			=> Task.CompletedTask;
 
+		public virtual void DoWork(string[] args = null) { }
+
 		/// <summary>
 		/// Processes the inter-communicate messages between the services' instances
 		/// </summary>
@@ -133,187 +135,6 @@ namespace net.vieapps.Services
 		/// Gets or sets the single instance of current playing service component
 		/// </summary>
 		public static ServiceBase ServiceComponent { get; set; }
-		#endregion
-
-		#region Register/Unregister the service
-		public virtual async Task RegisterServiceAsync(IEnumerable<string> args, Action<IService> onSuccess = null, Action<Exception> onError = null)
-		{
-			async Task registerCalleesAsync()
-			{
-				this.ServiceInstance = await Router.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(this.ServiceName)).ConfigureAwait(false);
-				this.ServiceUniqueInstance = await Router.IncomingChannel.RealmProxy.Services.RegisterCallee<IUniqueService>(() => this, RegistrationInterceptor.Create(this.ServiceUniqueName, WampInvokePolicy.Single)).ConfigureAwait(false);
-				this.ServiceSyncInstance = await Router.IncomingChannel.RealmProxy.Services.RegisterCallee<ISyncableService>(() => this, RegistrationInterceptor.Create(this.ServiceName)).ConfigureAwait(false);
-			}
-
-			async Task registerServiceAsync()
-			{
-				try
-				{
-					await registerCalleesAsync().ConfigureAwait(false);
-				}
-				catch
-				{
-					await Task.Delay(UtilityService.GetRandomNumber(456, 789)).ConfigureAwait(false);
-					try
-					{
-						await registerCalleesAsync().ConfigureAwait(false);
-					}
-					catch (Exception)
-					{
-						throw;
-					}
-				}
-				this.Logger?.LogInformation($"The service was{(this.State == ServiceState.Disconnected ? " re-" : " ")}registered successful");
-
-				this.ServiceCommunicator?.Dispose();
-				this.ServiceCommunicator = Router.IncomingChannel.RealmProxy.Services
-					.GetSubject<CommunicateMessage>($"messages.services.{this.ServiceName.Trim().ToLower()}")
-					.Subscribe(
-						async message => await (this.NodeID.IsEquals(message.ExcludedNodeID) ? Task.CompletedTask : this.ProcessInterCommunicateMessageAsync(message, this.CancellationToken)).ConfigureAwait(false),
-						exception => this.Logger?.LogError($"Error occurred while fetching an inter-communicate message => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
-					);
-
-				this.GatewayCommunicator?.Dispose();
-				this.GatewayCommunicator = Router.IncomingChannel.RealmProxy.Services
-					.GetSubject<CommunicateMessage>("messages.services.apigateway")
-					.Subscribe(
-						async message => await (this.NodeID.IsEquals(message.ExcludedNodeID) ? Task.CompletedTask : this.ProcessGatewayCommunicateMessageAsync(message, this.CancellationToken)).ConfigureAwait(false),
-						exception => this.Logger?.LogError($"Error occurred while fetching an inter-communicate message of API Gateway => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
-					);
-
-				this.Logger?.LogInformation($"The inter-communicate message updater was{(this.State == ServiceState.Disconnected ? " re-" : " ")}subscribed successful");
-			}
-
-			this.NodeID = this.NodeID ?? Extensions.GetNodeID(args);
-
-			try
-			{
-				while (Router.IncomingChannel == null)
-					await Task.Delay(UtilityService.GetRandomNumber(234, 567)).ConfigureAwait(false);
-
-				await registerServiceAsync().ConfigureAwait(false);
-
-				if (this.State == ServiceState.Disconnected)
-					this.Logger?.LogInformation("The service was re-started successful");
-
-				this.State = ServiceState.Connected;
-				onSuccess?.Invoke(this);
-			}
-			catch (Exception ex)
-			{
-				this.Logger?.LogError($"Cannot{(this.State == ServiceState.Disconnected ? " re-" : " ")}register the service => {ex.Message}", ex);
-				onError?.Invoke(ex);
-			}
-		}
-
-		public virtual async Task UnregisterServiceAsync(IEnumerable<string> args, bool available = true, Action<IService> onSuccess = null, Action<Exception> onError = null)
-		{
-			// send information to API Gateway
-			try
-			{
-				await this.SendServiceInfoAsync(args, false, available).ConfigureAwait(false);
-			}
-			catch (Exception ex)
-			{
-				this.Logger?.LogError($"Error occurred while sending info to API Gateway => {ex.Message}", ex);
-				onError?.Invoke(ex);
-			}
-
-			// dispose all communicators
-			try
-			{
-				this.ServiceCommunicator?.Dispose();
-				this.GatewayCommunicator?.Dispose();
-			}
-			catch (Exception ex)
-			{
-				this.Logger?.LogError($"Error occurred while disposing the services' communicators => {ex.Message}", ex);
-				onError?.Invoke(ex);
-			}
-
-			// dispose all instances
-			try
-			{
-				if (this.ServiceInstance != null)
-					await this.ServiceInstance.DisposeAsync().ConfigureAwait(false);
-			}
-			catch (Exception ex)
-			{
-				if (!(ex is WampException) || !ex.Message.IsContains("wamp.error.no_such_registration"))
-				{
-					this.Logger?.LogError($"Error occurred while disposing the service's instance => {ex.Message}", ex);
-					onError?.Invoke(ex);
-				}
-			}
-			finally
-			{
-				this.ServiceInstance = null;
-			}
-
-			try
-			{
-				if (this.ServiceUniqueInstance != null)
-					await this.ServiceUniqueInstance.DisposeAsync().ConfigureAwait(false);
-			}
-			catch (Exception ex)
-			{
-				if (!(ex is WampException) || !ex.Message.IsContains("wamp.error.no_such_registration"))
-				{
-					this.Logger?.LogError($"Error occurred while disposing the unique service's instance => {ex.Message}", ex);
-					onError?.Invoke(ex);
-				}
-			}
-			finally
-			{
-				this.ServiceUniqueInstance = null;
-			}
-
-			try
-			{
-				if (this.ServiceSyncInstance != null)
-					await this.ServiceSyncInstance.DisposeAsync().ConfigureAwait(false);
-			}
-			catch (Exception ex)
-			{
-				if (!(ex is WampException) || !ex.Message.IsContains("wamp.error.no_such_registration"))
-				{
-					this.Logger?.LogError($"Error occurred while disposing the sync service's instance => {ex.Message}", ex);
-					onError?.Invoke(ex);
-				}
-			}
-			finally
-			{
-				this.ServiceSyncInstance = null;
-			}
-
-			onSuccess?.Invoke(this);
-		}
-
-		/// <summary>
-		/// Initializes the helper services from API Gateway
-		/// </summary>
-		/// <param name="onSuccess">The action to run when the service was registered successful</param>
-		/// <param name="onError">The action to run when got any error</param>
-		/// <returns></returns>
-		protected virtual async Task InitializeHelperServicesAsync(Action<IService> onSuccess = null, Action<Exception> onError = null)
-		{
-			try
-			{
-				while (Router.OutgoingChannel == null)
-					await Task.Delay(UtilityService.GetRandomNumber(234, 567)).ConfigureAwait(false);
-
-				this.MessagingService = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IMessagingService>(ProxyInterceptor.Create());
-				this.LoggingService = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<ILoggingService>(ProxyInterceptor.Create());
-				this.Logger?.LogDebug($"The helper services are{(this.State == ServiceState.Disconnected ? " re-" : " ")}initialized");
-
-				onSuccess?.Invoke(this);
-			}
-			catch (Exception ex)
-			{
-				this.Logger?.LogError($"Error occurred while{(this.State == ServiceState.Disconnected ? " re-" : " ")}initializing the helper services", ex);
-				onError?.Invoke(ex);
-			}
-		}
 		#endregion
 
 		#region Send update & communicate messages
@@ -575,7 +396,7 @@ namespace net.vieapps.Services
 
 			// update queue & write to centerlized logs
 			this.Logs.Enqueue(new Tuple<Tuple<DateTime, string, string, string, string, string>, List<string>, string>(new Tuple<DateTime, string, string, string, string, string>(DateTime.Now, correlationID, developerID, appID, serviceName ?? this.ServiceName ?? "APIGateway", objectName), logs, exception?.GetStack()));
-			return this.LoggingService.WriteLogsAsync(this.Logs, () => this.BuildRequestInfo(UtilityService.NewUUID, $"{this.NodeID}@logger", "VIEApps NGX Logger").Session, this.Logger, this.CancellationToken);
+			return this.LoggingService.WriteLogsAsync(this.Logs, () => this.BuildRequestInfo(UtilityService.NewUUID, $"{this.NodeID}@logger", "VIEApps NGX Logger").Session, this.CancellationToken);
 		}
 
 		/// <summary>
@@ -2299,6 +2120,188 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
+		#region Register/Unregister the service
+		public virtual async Task RegisterServiceAsync(IEnumerable<string> args, Action<IService> onSuccess = null, Action<Exception> onError = null)
+		{
+			async Task registerCalleesAsync()
+			{
+				this.ServiceInstance = await Router.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(this.ServiceName)).ConfigureAwait(false);
+				this.ServiceUniqueInstance = await Router.IncomingChannel.RealmProxy.Services.RegisterCallee<IUniqueService>(() => this, RegistrationInterceptor.Create(this.ServiceUniqueName, WampInvokePolicy.Single)).ConfigureAwait(false);
+				this.ServiceSyncInstance = await Router.IncomingChannel.RealmProxy.Services.RegisterCallee<ISyncableService>(() => this, RegistrationInterceptor.Create(this.ServiceName)).ConfigureAwait(false);
+			}
+
+			async Task registerServiceAsync()
+			{
+				try
+				{
+					await registerCalleesAsync().ConfigureAwait(false);
+				}
+				catch
+				{
+					await Task.Delay(UtilityService.GetRandomNumber(456, 789)).ConfigureAwait(false);
+					try
+					{
+						await registerCalleesAsync().ConfigureAwait(false);
+					}
+					catch (Exception)
+					{
+						throw;
+					}
+				}
+				this.Logger?.LogInformation($"The service was{(this.State == ServiceState.Disconnected ? " re-" : " ")}registered successful");
+
+				this.ServiceCommunicator?.Dispose();
+				this.ServiceCommunicator = Router.IncomingChannel.RealmProxy.Services
+					.GetSubject<CommunicateMessage>($"messages.services.{this.ServiceName.Trim().ToLower()}")
+					.Subscribe(
+						async message => await (this.NodeID.IsEquals(message.ExcludedNodeID) ? Task.CompletedTask : this.ProcessInterCommunicateMessageAsync(message, this.CancellationToken)).ConfigureAwait(false),
+						exception => this.Logger?.LogError($"Error occurred while fetching an inter-communicate message => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
+					);
+
+				this.GatewayCommunicator?.Dispose();
+				this.GatewayCommunicator = Router.IncomingChannel.RealmProxy.Services
+					.GetSubject<CommunicateMessage>("messages.services.apigateway")
+					.Subscribe(
+						async message => await (this.NodeID.IsEquals(message.ExcludedNodeID) ? Task.CompletedTask : this.ProcessGatewayCommunicateMessageAsync(message, this.CancellationToken)).ConfigureAwait(false),
+						exception => this.Logger?.LogError($"Error occurred while fetching an inter-communicate message of API Gateway => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
+					);
+
+				this.Logger?.LogInformation($"The inter-communicate message updater was{(this.State == ServiceState.Disconnected ? " re-" : " ")}subscribed successful");
+			}
+
+			this.NodeID = this.NodeID ?? Extensions.GetNodeID(args);
+
+			try
+			{
+				while (Router.IncomingChannel == null)
+					await Task.Delay(UtilityService.GetRandomNumber(234, 567)).ConfigureAwait(false);
+
+				await registerServiceAsync().ConfigureAwait(false);
+
+				if (this.State == ServiceState.Disconnected)
+					this.Logger?.LogInformation("The service was re-started successful");
+
+				this.State = ServiceState.Connected;
+				onSuccess?.Invoke(this);
+			}
+			catch (Exception ex)
+			{
+				this.Logger?.LogError($"Cannot{(this.State == ServiceState.Disconnected ? " re-" : " ")}register the service => {ex.Message}", ex);
+				onError?.Invoke(ex);
+			}
+		}
+
+		public virtual async Task UnregisterServiceAsync(IEnumerable<string> args, bool available = true, Action<IService> onSuccess = null, Action<Exception> onError = null)
+		{
+			// send information to API Gateway
+			if (this.ServiceInstance != null)
+				try
+				{
+					await this.SendServiceInfoAsync(args, false, available).ConfigureAwait(false);
+				}
+				catch (Exception ex)
+				{
+					this.Logger?.LogError($"Error occurred while sending info to API Gateway => {ex.Message}", ex);
+					onError?.Invoke(ex);
+				}
+
+			// dispose all communicators
+			try
+			{
+				this.ServiceCommunicator?.Dispose();
+				this.GatewayCommunicator?.Dispose();
+			}
+			catch (Exception ex)
+			{
+				this.Logger?.LogError($"Error occurred while disposing the services' communicators => {ex.Message}", ex);
+				onError?.Invoke(ex);
+			}
+
+			// dispose all instances
+			try
+			{
+				if (this.ServiceInstance != null)
+					await this.ServiceInstance.DisposeAsync().ConfigureAwait(false);
+			}
+			catch (Exception ex)
+			{
+				if (!(ex is WampException) || !ex.Message.IsContains("wamp.error.no_such_registration"))
+				{
+					this.Logger?.LogError($"Error occurred while disposing the service's instance => {ex.Message}", ex);
+					onError?.Invoke(ex);
+				}
+			}
+			finally
+			{
+				this.ServiceInstance = null;
+			}
+
+			try
+			{
+				if (this.ServiceUniqueInstance != null)
+					await this.ServiceUniqueInstance.DisposeAsync().ConfigureAwait(false);
+			}
+			catch (Exception ex)
+			{
+				if (!(ex is WampException) || !ex.Message.IsContains("wamp.error.no_such_registration"))
+				{
+					this.Logger?.LogError($"Error occurred while disposing the unique service's instance => {ex.Message}", ex);
+					onError?.Invoke(ex);
+				}
+			}
+			finally
+			{
+				this.ServiceUniqueInstance = null;
+			}
+
+			try
+			{
+				if (this.ServiceSyncInstance != null)
+					await this.ServiceSyncInstance.DisposeAsync().ConfigureAwait(false);
+			}
+			catch (Exception ex)
+			{
+				if (!(ex is WampException) || !ex.Message.IsContains("wamp.error.no_such_registration"))
+				{
+					this.Logger?.LogError($"Error occurred while disposing the sync service's instance => {ex.Message}", ex);
+					onError?.Invoke(ex);
+				}
+			}
+			finally
+			{
+				this.ServiceSyncInstance = null;
+			}
+
+			onSuccess?.Invoke(this);
+		}
+
+		/// <summary>
+		/// Initializes the helper services from API Gateway
+		/// </summary>
+		/// <param name="onSuccess">The action to run when the service was registered successful</param>
+		/// <param name="onError">The action to run when got any error</param>
+		/// <returns></returns>
+		protected virtual async Task InitializeHelperServicesAsync(Action<IService> onSuccess = null, Action<Exception> onError = null)
+		{
+			try
+			{
+				while (Router.OutgoingChannel == null)
+					await Task.Delay(UtilityService.GetRandomNumber(234, 567)).ConfigureAwait(false);
+
+				this.MessagingService = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IMessagingService>(ProxyInterceptor.Create());
+				this.LoggingService = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<ILoggingService>(ProxyInterceptor.Create());
+				this.Logger?.LogDebug($"The helper services are{(this.State == ServiceState.Disconnected ? " re-" : " ")}initialized");
+
+				onSuccess?.Invoke(this);
+			}
+			catch (Exception ex)
+			{
+				this.Logger?.LogError($"Error occurred while{(this.State == ServiceState.Disconnected ? " re-" : " ")}initializing the helper services", ex);
+				onError?.Invoke(ex);
+			}
+		}
+		#endregion
+
 		#region Start the service
 		/// <summary>
 		/// Starts the service (the short way - connect to API Gateway and register the service)
@@ -2332,7 +2335,7 @@ namespace net.vieapps.Services
 				{
 					// update session info
 					await Router.IncomingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Incoming ({this.ServiceURI})", this.Logger).ConfigureAwait(false);
-					this.Logger?.LogInformation($"The incoming channel to API Gateway Router is established - Session ID: {arguments.SessionId} [{Router.IncomingChannel.GetTypeName()}]");
+					this.Logger?.LogInformation($"The incoming channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
 					if (this.State == ServiceState.Initializing)
 						this.State = ServiceState.Ready;
 
@@ -2392,7 +2395,7 @@ namespace net.vieapps.Services
 				{
 					// update session info
 					await Router.OutgoingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Outgoing ({this.ServiceURI})", this.Logger).ConfigureAwait(false);
-					this.Logger?.LogInformation($"The outgoing channel to API Gateway Router is established - Session ID: {arguments.SessionId} [{Router.OutgoingChannel.GetTypeName()}]");
+					this.Logger?.LogInformation($"The outgoing channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
 
 					// initialize all helper services
 					await this.InitializeHelperServicesAsync().ConfigureAwait(false);
@@ -2481,47 +2484,7 @@ namespace net.vieapps.Services
 
 			// initialize repository
 			if (initializeRepository)
-				try
-				{
-					if (this.IsDebugLogEnabled)
-						this.Logger?.LogDebug("Initializing the repository");
-
-					RepositoryStarter.Initialize
-					(
-						new[] { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
-							.Where(a => !a.Name.IsStartsWith("System") && !a.Name.IsStartsWith("Microsoft") && !a.Name.IsStartsWith("mscorlib") && !a.Name.IsEquals("NETStandard")
-								&& !a.Name.IsStartsWith("Newtonsoft") && !a.Name.IsStartsWith("WampSharp") && !a.Name.IsStartsWith("Castle.") && !a.Name.IsStartsWith("StackExchange.")
-								&& !a.Name.IsStartsWith("MongoDB") && !a.Name.IsStartsWith("MySql") && !a.Name.IsStartsWith("Oracle") && !a.Name.IsStartsWith("Npgsql")
-								&& !a.Name.IsStartsWith("Serilog") && !a.Name.IsStartsWith("MsgPack") && !a.Name.IsStartsWith("ExcelData") && !a.Name.IsStartsWith("JavaScript")
-								&& !a.Name.IsStartsWith("VIEApps.Components.") && !a.Name.IsStartsWith("VIEApps.Services.Abstractions") && !a.Name.IsStartsWith("VIEApps.Services.Base")
-							)
-							.Select(assemblyName =>
-							{
-								try
-								{
-									return Assembly.Load(assemblyName);
-								}
-								catch (Exception ex)
-								{
-									this.Logger?.LogError($"Error occurred while loading an assembly [{assemblyName.Name}] => {ex.Message}", ex);
-									return null;
-								}
-							})
-							.Where(assembly => assembly != null)
-						),
-						(msg, ex) =>
-						{
-							if (ex != null)
-								this.Logger?.LogError(msg, ex);
-							else if (this.IsDebugLogEnabled)
-								this.Logger?.LogDebug(msg);
-						}
-					);
-				}
-				catch (Exception ex)
-				{
-					this.Logger?.LogError($"Error occurred while initializing the repository => {ex.Message}", ex);
-				}
+				this.InitializeRepository();
 
 			// start the service (means register the service with API Gateway and do other actions)
 			return this.StartAsync(args, next);
@@ -2536,6 +2499,54 @@ namespace net.vieapps.Services
 				.GetAwaiter()
 				.GetResult();
 #endif
+
+		/// <summary>
+		/// Initializes the repository
+		/// </summary>
+		public virtual void InitializeRepository()
+		{
+			try
+			{
+				if (this.IsDebugLogEnabled)
+					this.Logger?.LogDebug("Initializing the repository");
+
+				RepositoryStarter.Initialize
+				(
+					new[] { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
+						.Where(a => !a.Name.IsStartsWith("System") && !a.Name.IsStartsWith("Microsoft") && !a.Name.IsStartsWith("mscorlib") && !a.Name.IsEquals("NETStandard")
+							&& !a.Name.IsStartsWith("Newtonsoft") && !a.Name.IsStartsWith("WampSharp") && !a.Name.IsStartsWith("Castle.") && !a.Name.IsStartsWith("StackExchange.")
+							&& !a.Name.IsStartsWith("MongoDB") && !a.Name.IsStartsWith("MySql") && !a.Name.IsStartsWith("Oracle") && !a.Name.IsStartsWith("Npgsql")
+							&& !a.Name.IsStartsWith("Serilog") && !a.Name.IsStartsWith("MsgPack") && !a.Name.IsStartsWith("ExcelData") && !a.Name.IsStartsWith("JavaScript")
+							&& !a.Name.IsStartsWith("VIEApps.Components.") && !a.Name.IsStartsWith("VIEApps.Services.Abstractions") && !a.Name.IsStartsWith("VIEApps.Services.Base")
+						)
+						.Select(assemblyName =>
+						{
+							try
+							{
+								return Assembly.Load(assemblyName);
+							}
+							catch (Exception ex)
+							{
+								this.Logger?.LogError($"Error occurred while loading an assembly [{assemblyName.Name}] => {ex.Message}", ex);
+								return null;
+							}
+						})
+						.Where(assembly => assembly != null)
+					),
+					(msg, ex) =>
+					{
+						if (ex != null)
+							this.Logger?.LogError(msg, ex);
+						else if (this.IsDebugLogEnabled)
+							this.Logger?.LogDebug(msg);
+					}
+				);
+			}
+			catch (Exception ex)
+			{
+				this.Logger?.LogError($"Error occurred while initializing the repository => {ex.Message}", ex);
+			}
+		}
 		#endregion
 
 		#region Stop the service
