@@ -84,11 +84,6 @@ namespace net.vieapps.Services
 		IDisposable GatewayCommunicator { get; set; }
 
 		/// <summary>
-		/// Gets the logging service
-		/// </summary>
-		protected ILoggingService LoggingService { get; private set; }
-
-		/// <summary>
 		/// Gets the messaging service
 		/// </summary>
 		protected IMessagingService MessagingService { get; private set; }
@@ -396,7 +391,7 @@ namespace net.vieapps.Services
 
 			// update queue & write to centerlized logs
 			this.Logs.Enqueue(new Tuple<Tuple<DateTime, string, string, string, string, string>, List<string>, string>(new Tuple<DateTime, string, string, string, string, string>(DateTime.Now, correlationID, developerID, appID, serviceName ?? this.ServiceName ?? "APIGateway", objectName), logs, exception?.GetStack()));
-			return this.LoggingService.WriteLogsAsync(this.Logs, () => this.BuildRequestInfo(UtilityService.NewUUID, $"{this.NodeID}@logger", "VIEApps NGX Logger").Session, this.CancellationToken);
+			return this.Logs.WriteLogsAsync(this.CancellationToken, this.Logger);
 		}
 
 		/// <summary>
@@ -2289,7 +2284,6 @@ namespace net.vieapps.Services
 					await Task.Delay(UtilityService.GetRandomNumber(234, 567)).ConfigureAwait(false);
 
 				this.MessagingService = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IMessagingService>(ProxyInterceptor.Create());
-				this.LoggingService = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<ILoggingService>(ProxyInterceptor.Create());
 				this.Logger?.LogDebug($"The helper services are{(this.State == ServiceState.Disconnected ? " re-" : " ")}initialized");
 
 				onSuccess?.Invoke(this);
