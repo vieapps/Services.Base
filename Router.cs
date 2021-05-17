@@ -300,24 +300,15 @@ namespace net.vieapps.Services
 					{
 						logger?.LogError($"Cannot connect to statistic websocket => {exception.Message}", exception);
 						Router.StatisticsWebSocketState = "closed";
-						Router.ReconnectStatisticsWebSocket(logger);
+						Task.Run(async () =>
+						{
+							await Task.Delay(UtilityService.GetRandomNumber(456, 789)).ConfigureAwait(false);
+							Router.ConnectStatisticsWebSocket(logger);
+						}).ConfigureAwait(false);
 					}
 				);
 			}
 		}
-
-		static void ReconnectStatisticsWebSocket(ILogger logger = null)
-			=> Task.Run(async () =>
-			{
-				await Task.Delay(UtilityService.GetRandomNumber(456, 789)).ConfigureAwait(false);
-				Router.ConnectStatisticsWebSocket(logger);
-			})
-			.ContinueWith(task =>
-			{
-				if (task.Exception != null)
-					logger?.LogError($"Error occurred while reconnecting to statistic websocket => {task.Exception.Message}", task.Exception);
-			}, CancellationToken.None, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
-			.ConfigureAwait(false);
 
 		/// <summary>
 		/// Updates related information of the channel
@@ -356,13 +347,7 @@ namespace net.vieapps.Services
 		/// <param name="name"></param>
 		/// <param name="description"></param>
 		public static void Update(this IWampChannel wampChannel, long sessionID, string name, string description, ILogger logger = null)
-			=> Task.Run(async () => await wampChannel.UpdateAsync(sessionID, name, description, logger).ConfigureAwait(false))
-			.ContinueWith(task =>
-			{
-				if (task.Exception != null)
-					logger?.LogError($"Error occurred while updating a channel => {task.Exception.Message}", task.Exception);
-			}, CancellationToken.None, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
-			.ConfigureAwait(false);
+			=> wampChannel.UpdateAsync(sessionID, name, description, logger).Run();
 		#endregion
 
 		#region Connect & Disconnect
@@ -429,14 +414,7 @@ namespace net.vieapps.Services
 			CancellationToken cancellationToken = default,
 			Action<Exception> onError = null
 		)
-			=> Router.ConnectAsync(onIncomingConnectionEstablished, onIncomingConnectionBroken, onIncomingConnectionError, onOutgoingConnectionEstablished, onOutgoingConnectionBroken, onOutgoingConnectionError, cancellationToken, onError)
-#if NETSTANDARD2_0
-				.Wait();
-#else
-				.ConfigureAwait(false)
-				.GetAwaiter()
-				.GetResult();
-#endif
+			=> Router.ConnectAsync(onIncomingConnectionEstablished, onIncomingConnectionBroken, onIncomingConnectionError, onOutgoingConnectionEstablished, onOutgoingConnectionBroken, onOutgoingConnectionError, cancellationToken, onError).Run();
 
 		/// <summary>
 		/// Disconnects from API Gateway Router (means close all WAMP channels)

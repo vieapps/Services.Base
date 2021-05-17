@@ -529,13 +529,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected virtual void WriteLogs(string correlationID, string developerID, string appID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> Task.Run(async () => await this.WriteLogsAsync(correlationID, developerID, appID, logger, logs, exception, serviceName, objectName, mode).ConfigureAwait(false), this.CancellationToken)
-			.ContinueWith(task =>
-			{
-				if (task.Exception != null)
-					this.Logger?.LogError($"Error occurred while writting logs => {task.Exception.Message}", task.Exception);
-			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
-			.ConfigureAwait(false);
+			=> this.WriteLogsAsync(correlationID, developerID, appID, logger, logs, exception, serviceName, objectName, mode).Run(ex => this.Logger?.LogError($"Error occurred while writting logs => {ex.Message}", ex));
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -548,13 +542,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected virtual void WriteLogs(string correlationID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> Task.Run(async () => await this.WriteLogsAsync(correlationID, null, null, logger, logs, exception, serviceName, objectName, mode).ConfigureAwait(false), this.CancellationToken)
-			.ContinueWith(task =>
-			{
-				if (task.Exception != null)
-					this.Logger?.LogError($"Error occurred while writting logs => {task.Exception.Message}", task.Exception);
-			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
-			.ConfigureAwait(false);
+			=> this.WriteLogsAsync(correlationID, null, null, logger, logs, exception, serviceName, objectName, mode).Run(ex => this.Logger?.LogError($"Error occurred while writting logs => {ex.Message}", ex));
 
 		/// <summary>
 		/// Writes the logs into centerlized logging system
@@ -569,13 +557,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected virtual void WriteLogs(string correlationID, string developerID, string appID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> Task.Run(async () => await this.WriteLogsAsync(correlationID, developerID, appID, logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode).ConfigureAwait(false), this.CancellationToken)
-			.ContinueWith(task =>
-			{
-				if (task.Exception != null)
-					this.Logger?.LogError($"Error occurred while writting logs => {task.Exception.Message}", task.Exception);
-			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
-			.ConfigureAwait(false);
+			=> this.WriteLogsAsync(correlationID, developerID, appID, logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode).Run(ex => this.Logger?.LogError($"Error occurred while writting logs => {ex.Message}", ex));
 
 		/// <summary>
 		/// Writes the logs into centerlized logging system
@@ -588,13 +570,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected virtual void WriteLogs(string correlationID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> Task.Run(async () => await this.WriteLogsAsync(correlationID, null, null, logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode).ConfigureAwait(false), this.CancellationToken)
-			.ContinueWith(task =>
-			{
-				if (task.Exception != null)
-					this.Logger?.LogError($"Error occurred while writting logs => {task.Exception.Message}", task.Exception);
-			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
-			.ConfigureAwait(false);
+			=> this.WriteLogsAsync(correlationID, null, null, logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode).Run(ex => this.Logger?.LogError($"Error occurred while writting logs => {ex.Message}", ex));
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -608,13 +584,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected virtual void WriteLogs(string correlationID, string developerID, string appID, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> Task.Run(async () => await this.WriteLogsAsync(correlationID, developerID, appID, this.Logger, logs, exception, serviceName, objectName, mode).ConfigureAwait(false), this.CancellationToken)
-			.ContinueWith(task =>
-			{
-				if (task.Exception != null)
-					this.Logger?.LogError($"Error occurred while writting logs => {task.Exception.Message}", task.Exception);
-			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
-			.ConfigureAwait(false);
+			=> this.WriteLogsAsync(correlationID, developerID, appID, this.Logger, logs, exception, serviceName, objectName, mode).Run(ex => this.Logger?.LogError($"Error occurred while writting logs => {ex.Message}", ex));
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -626,13 +596,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected virtual void WriteLogs(string correlationID, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> Task.Run(async () => await this.WriteLogsAsync(correlationID, null, null, this.Logger, logs, exception, serviceName, objectName, mode).ConfigureAwait(false), this.CancellationToken)
-			.ContinueWith(task =>
-			{
-				if (task.Exception != null)
-					this.Logger?.LogError($"Error occurred while writting logs => {task.Exception.Message}", task.Exception);
-			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
-			.ConfigureAwait(false);
+			=> this.WriteLogsAsync(correlationID, null, null, this.Logger, logs, exception, serviceName, objectName, mode).Run(ex => this.Logger?.LogError($"Error occurred while writting logs => {ex.Message}", ex));
 
 		/// <summary>
 		/// Writes the logs into centerlized logging system
@@ -646,13 +610,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected virtual void WriteLogs(string correlationID, string developerID, string appID, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> Task.Run(async () => await this.WriteLogsAsync(correlationID, developerID, appID, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode).ConfigureAwait(false), this.CancellationToken)
-			.ContinueWith(task =>
-			{
-				if (task.Exception != null)
-					this.Logger?.LogError($"Error occurred while writting logs => {task.Exception.Message}", task.Exception);
-			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
-			.ConfigureAwait(false);
+			=> this.WriteLogsAsync(correlationID, developerID, appID, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode).Run(ex => this.Logger?.LogError($"Error occurred while writting logs => {ex.Message}", ex));
 
 		/// <summary>
 		/// Writes the logs into centerlized logging system
@@ -664,13 +622,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected virtual void WriteLogs(string correlationID, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> Task.Run(async () => await this.WriteLogsAsync(correlationID, null, null, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode).ConfigureAwait(false), this.CancellationToken)
-			.ContinueWith(task =>
-			{
-				if (task.Exception != null)
-					this.Logger?.LogError($"Error occurred while writting logs => {task.Exception.Message}", task.Exception);
-			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
-			.ConfigureAwait(false);
+			=> this.WriteLogsAsync(correlationID, null, null, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode).Run(ex => this.Logger?.LogError($"Error occurred while writting logs => {ex.Message}", ex));
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -681,13 +633,7 @@ namespace net.vieapps.Services
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
 		protected virtual void WriteLogs(RequestInfo requestInfo, List<string> logs, Exception exception = null, LogLevel mode = LogLevel.Information)
-			=> Task.Run(async () => await this.WriteLogsAsync(requestInfo.CorrelationID, requestInfo.Session?.DeveloperID, requestInfo.Session?.AppID, this.Logger, logs, exception, requestInfo.ServiceName, requestInfo.ObjectName, mode).ConfigureAwait(false), this.CancellationToken)
-			.ContinueWith(task =>
-			{
-				if (task.Exception != null)
-					this.Logger?.LogError($"Error occurred while writting logs => {task.Exception.Message}", task.Exception);
-			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
-			.ConfigureAwait(false);
+			=> this.WriteLogsAsync(requestInfo.CorrelationID, requestInfo.Session?.DeveloperID, requestInfo.Session?.AppID, this.Logger, logs, exception, requestInfo.ServiceName, requestInfo.ObjectName, mode).Run(ex => this.Logger?.LogError($"Error occurred while writting logs => {ex.Message}", ex));
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -698,13 +644,7 @@ namespace net.vieapps.Services
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
 		protected virtual void WriteLogs(RequestInfo requestInfo, string log, Exception exception = null, LogLevel mode = LogLevel.Information)
-			=> Task.Run(async () => await this.WriteLogsAsync(requestInfo.CorrelationID, requestInfo.Session?.DeveloperID, requestInfo.Session?.AppID, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, requestInfo.ServiceName, requestInfo.ObjectName, mode).ConfigureAwait(false), this.CancellationToken)
-			.ContinueWith(task =>
-			{
-				if (task.Exception != null)
-					this.Logger?.LogError($"Error occurred while writting logs => {task.Exception.Message}", task.Exception);
-			}, this.CancellationToken, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default)
-			.ConfigureAwait(false);
+			=> this.WriteLogsAsync(requestInfo.CorrelationID, requestInfo.Session?.DeveloperID, requestInfo.Session?.AppID, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, requestInfo.ServiceName, requestInfo.ObjectName, mode).Run(ex => this.Logger?.LogError($"Error occurred while writting logs => {ex.Message}", ex));
 		#endregion
 
 		#region Call services
@@ -2622,24 +2562,10 @@ namespace net.vieapps.Services
 		/// <param name="disconnect">true to disconnect from API Gateway Router and close all WAMP channels</param>
 		/// <param name="next">The next action to run when the service was stopped</param>
 		protected virtual void Stop(string[] args, bool available, bool disconnect, Action<IService> next = null)
-			=> this.StopAsync(args, available, disconnect, next)
-#if NETSTANDARD2_0
-				.Wait();
-#else
-				.ConfigureAwait(false)
-				.GetAwaiter()
-				.GetResult();
-#endif
+			=> this.StopAsync(args, available, disconnect, next).Run(true);
 
 		public virtual void Stop(string[] args = null, Action<IService> next = null)
-			=> this.StopAsync(args, next)
-#if NETSTANDARD2_0
-				.Wait();
-#else
-				.ConfigureAwait(false)
-				.GetAwaiter()
-				.GetResult();
-#endif
+			=> this.StopAsync(args, next).Run(true);
 		#endregion
 
 		#region Dispose the service
@@ -2684,14 +2610,7 @@ namespace net.vieapps.Services
 			=> this.DisposeAsync(null);
 
 		public virtual void Dispose(string[] args, bool available = true, bool disconnect = true, Action<IService> next = null)
-			=> this.DisposeAsync(args, available, disconnect, next)
-#if NETSTANDARD2_0
-				.AsTask().Wait();
-#else
-				.ConfigureAwait(false)
-				.GetAwaiter()
-				.GetResult();
-#endif
+			=> this.DisposeAsync(args, available, disconnect, next).Run(true);
 
 		/// <summary>
 		/// Disposes the service (unregister the service, disconnect from API Gateway and do the clean-up tasks)
