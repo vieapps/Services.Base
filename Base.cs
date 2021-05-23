@@ -2425,14 +2425,7 @@ namespace net.vieapps.Services
 		}
 
 		public virtual void Start(string[] args = null, bool initializeRepository = true, Action<IService> next = null)
-			=> this.StartAsync(args, initializeRepository, next)
-#if NETSTANDARD2_0
-				.Wait();
-#else
-				.ConfigureAwait(false)
-				.GetAwaiter()
-				.GetResult();
-#endif
+			=> this.StartAsync(args, initializeRepository, next).Run(true);
 
 		/// <summary>
 		/// Initializes the repository

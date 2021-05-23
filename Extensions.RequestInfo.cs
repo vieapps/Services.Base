@@ -1,7 +1,10 @@
-﻿using System.Dynamic;
+﻿#region Related components
+using System;
+using System.Dynamic;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 using net.vieapps.Components.Utility;
+#endregion
 
 namespace net.vieapps.Services
 {
@@ -133,7 +136,10 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the full URI
 		/// </summary>
-		public static string GetURI(this RequestInfo requestInfo)
+		/// <param name="requestInfo"></param>
+		/// <param name="transformer"></param>
+		/// <returns></returns>
+		public static string GetURI(this RequestInfo requestInfo, Func<string, string> transformer = null)
 		{
 			var uri = $"/{requestInfo?.ServiceName ?? ""}";
 			if (!string.IsNullOrWhiteSpace(requestInfo?.ObjectName))
@@ -156,7 +162,7 @@ namespace net.vieapps.Services
 					}
 				}
 			}
-			return uri.ToLower();
+			return transformer != null ? transformer(uri.ToLower()) : uri.ToLower();
 		}
 
 		/// <summary>

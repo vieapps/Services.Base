@@ -1,6 +1,4 @@
 ﻿#region Related components
-using System;
-using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
@@ -8,11 +6,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Reactive.Subjects;
 using System.Reactive.Linq;
-using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using WampSharp.V2.Core.Contracts;
-using net.vieapps.Components.Security;
 using net.vieapps.Components.Utility;
 #endregion
 

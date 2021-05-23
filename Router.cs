@@ -444,6 +444,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		public static void RunReconnectTimer()
 		{
+			Router.ReconnectTimer?.Dispose();
 			Router.ReconnectTimer = System.Reactive.Linq.Observable.Timer(TimeSpan.FromMinutes(3), TimeSpan.FromSeconds(13)).Subscribe(_ =>
 			{
 				if (Router.IncomingChannel != null && (!Router.ChannelsAreClosedBySystem || Router.IncomingChannelSessionID < 1))
