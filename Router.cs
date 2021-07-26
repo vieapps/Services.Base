@@ -330,13 +330,20 @@ namespace net.vieapps.Services
 				await Task.Delay(UtilityService.GetRandomNumber(234, 567)).ConfigureAwait(false);
 
 			if (Router.StatisticsWebSocketState == "connected" && Router.StatisticsWebSocket.GetWebSockets().Any())
-				await Router.StatisticsWebSocket.GetWebSockets().First().SendAsync(new JObject
+				try
 				{
-					{ "Command", "Update" },
-					{ "SessionID", sessionID },
-					{ "Name", name },
-					{ "Description", description }
-				}.ToString(Formatting.None), true).ConfigureAwait(false);
+					await Router.StatisticsWebSocket.GetWebSockets().First().SendAsync(new JObject
+					{
+						{ "Command", "Update" },
+						{ "SessionID", sessionID },
+						{ "Name", name },
+						{ "Description", description }
+					}.ToString(Formatting.None), true).ConfigureAwait(false);
+				}
+				catch (Exception ex)
+				{
+					logger?.LogError($"Cannot update statistic websocket info => {ex.Message}", ex);
+				}
 		}
 
 		/// <summary>

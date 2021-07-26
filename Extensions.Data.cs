@@ -8,7 +8,6 @@ using Newtonsoft.Json.Linq;
 using net.vieapps.Components.Utility;
 using net.vieapps.Components.Repository;
 using JSPool;
-using System.Diagnostics;
 #endregion
 
 namespace net.vieapps.Services
@@ -858,7 +857,7 @@ namespace net.vieapps.Services
 			var paginationKey = Extensions.GetCacheKey(key, pageSize > 0 ? pageSize : 20, 1, true);
 			for (var pageNumber = 1; pageNumber <= 10; pageNumber++)
 			{
-				var pageKey = paginationKey.Replace("{{pageNumber}}", $"{pageNumber}");
+				var pageKey = paginationKey.Replace(StringComparison.OrdinalIgnoreCase, "{{pageNumber}}", $"{pageNumber}");
 				relatedKeys.Add(pageKey);
 				Extensions.KeyPatterns.ForEach(pattern => relatedKeys.Add($"{pageKey}:{pattern}"));
 			}

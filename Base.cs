@@ -2045,7 +2045,7 @@ namespace net.vieapps.Services
 			// send the request as HTTP request
 			try
 			{
-				await UtilityService.GetWebResponseAsync("PATCH", url, requestInfo.Header, null, requestInfo.Body, "application/json", 45, requestInfo.Session.AppAgent, null, null, null, cancellationToken).ConfigureAwait(false);
+				await UtilityService.GetWebPageAsync("PATCH", url, requestInfo.Header, requestInfo.Body, "application/json", 45, requestInfo.Session.AppAgent, null, null, null, cancellationToken).ConfigureAwait(false);
 			}
 			catch (Exception ex)
 			{
@@ -2244,10 +2244,10 @@ namespace net.vieapps.Services
 		/// <param name="onRegisterSuccess">The action to run when the service was registered successful</param>
 		/// <param name="onRegisterError">The action to run when got any error while registering the service</param>
 		/// <param name="onIncomingConnectionEstablished">The action to run when the incomming connection is established</param>
-		/// <param name="onOutgoingConnectionEstablished">The action to run when the outgoing connection is established</param>
 		/// <param name="onIncomingConnectionBroken">The action to run when the incomming connection is broken</param>
-		/// <param name="onOutgoingConnectionBroken">The action to run when the outgoing connection is broken</param>
 		/// <param name="onIncomingConnectionError">The action to run when the incomming connection got any error</param>
+		/// <param name="onOutgoingConnectionEstablished">The action to run when the outgoing connection is established</param>
+		/// <param name="onOutgoingConnectionBroken">The action to run when the outgoing connection is broken</param>
 		/// <param name="onOutgoingConnectionError">The action to run when the outgoing connection got any error</param>
 		/// <returns></returns>
 		protected virtual Task StartAsync(
@@ -2255,10 +2255,10 @@ namespace net.vieapps.Services
 			Action<IService> onRegisterSuccess = null,
 			Action<Exception> onRegisterError = null,
 			Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null,
-			Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null,
 			Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null,
-			Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null,
 			Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null,
+			Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null,
+			Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null,
 			Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null
 		)
 		{
