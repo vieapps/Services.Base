@@ -141,14 +141,14 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static string GetURI(this RequestInfo requestInfo, Func<string, string> transformer = null)
 		{
-			var uri = $"/{requestInfo?.ServiceName ?? ""}";
+			var uri = $"/{requestInfo?.ServiceName ?? ""}".ToLower();
 			if (!string.IsNullOrWhiteSpace(requestInfo?.ObjectName))
 			{
-				uri += $"/{requestInfo.ObjectName}";
+				uri += $"/{requestInfo.ObjectName.ToLower()}";
 				var objectIdentity = requestInfo.GetObjectIdentity();
 				if (!string.IsNullOrWhiteSpace(objectIdentity))
 				{
-					uri += $"/{objectIdentity}";
+					uri += $"/{objectIdentity.ToLower()}";
 					if (!objectIdentity.IsValidUUID())
 					{
 						if (requestInfo.Query != null && requestInfo.Query.TryGetValue("x-request", out var request))
@@ -162,7 +162,7 @@ namespace net.vieapps.Services
 					}
 				}
 			}
-			return transformer != null ? transformer(uri.ToLower()) : uri.ToLower();
+			return transformer != null ? transformer(uri) : uri;
 		}
 
 		/// <summary>
