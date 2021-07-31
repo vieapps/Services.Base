@@ -44,15 +44,12 @@ namespace net.vieapps.Services
 			else if (exception != null)
 			{
 				stack = exception.StackTrace;
-				var inner = exception.InnerException;
+				var inner = onlyStack ? null : exception.InnerException;
 				var counter = 0;
 				while (inner != null)
 				{
 					counter++;
-					stack += "\r\n" + $"--- Inner ({counter}): ---------------------- " + "\r\n"
-						+ "> Message: " + inner.Message + "\r\n"
-						+ "> Type: " + inner.GetType().ToString() + "\r\n"
-						+ inner.StackTrace;
+					stack += "\r\n" + $"--- Inner ({counter}): ---------------------- " + "\r\n" + $"> Message: {inner.Message}\r\n" + $"> Type: {inner.GetType()}\r\n" + inner.StackTrace;
 					inner = inner.InnerException;
 				}
 			}
@@ -189,9 +186,9 @@ namespace net.vieapps.Services
 			{
 				{ "Message", exception["Message"] },
 				{ "Type", exception["ClassName"] },
+				{ "StackTrace", exception["StackTraceString"] },
 				{ "Method", exception["ExceptionMethod"] },
-				{ "Source", exception["Source"] },
-				{ "Stack", exception["StackTraceString"] },
+				{ "Source", exception["Source"] }
 			};
 
 			var inner = exception["InnerException"];
