@@ -53,7 +53,7 @@ namespace net.vieapps.Services
 			=> requestInfo?.GetHeaderParameter(name) ?? requestInfo?.GetQueryParameter(name);
 
 		/// <summary>
-		/// Gets the identity of the device that send this request
+		/// Gets the identity of the device that sent by this request
 		/// </summary>
 		/// <returns></returns>
 		public static string GetDeviceID(this RequestInfo requestInfo)
@@ -62,7 +62,7 @@ namespace net.vieapps.Services
 				: requestInfo?.GetParameter("x-device-id");
 
 		/// <summary>
-		/// Gets the identity of the developer that send this request
+		/// Gets the identity of the developer that sent by this request
 		/// </summary>
 		/// <returns></returns>
 		public static string GetDeveloperID(this RequestInfo requestInfo)
@@ -71,7 +71,7 @@ namespace net.vieapps.Services
 				: requestInfo?.GetParameter("x-developer-id");
 
 		/// <summary>
-		/// Gets the identity of the app that send this request
+		/// Gets the identity of the app that sent by this request
 		/// </summary>
 		/// <returns></returns>
 		public static string GetAppID(this RequestInfo requestInfo)
@@ -80,7 +80,7 @@ namespace net.vieapps.Services
 				: requestInfo?.GetParameter("x-app-id");
 
 		/// <summary>
-		/// Gets the name of the app that send this request
+		/// Gets the name of the app that sent by this request
 		/// </summary>
 		/// <returns></returns>
 		public static string GetAppName(this RequestInfo requestInfo)
@@ -89,13 +89,22 @@ namespace net.vieapps.Services
 				: requestInfo?.GetParameter("x-app-name");
 
 		/// <summary>
-		/// Gets the platform of the app that send this request
+		/// Gets the platform of the app that sent by this request
 		/// </summary>
 		/// <returns></returns>
 		public static string GetAppPlatform(this RequestInfo requestInfo)
 			=> requestInfo != null && requestInfo.Session != null && !string.IsNullOrWhiteSpace(requestInfo.Session.AppPlatform)
 				? requestInfo.Session.AppPlatform
 				: requestInfo?.GetParameter("x-app-platform");
+
+		/// <summary>
+		/// Gets the agent string of the app that sent by this request
+		/// </summary>
+		/// <returns></returns>
+		public static string GetAppAgent(this RequestInfo requestInfo)
+			=> requestInfo != null && requestInfo.Session != null && !string.IsNullOrWhiteSpace(requestInfo.Session.AppAgent)
+				? requestInfo.Session.AppAgent
+				: requestInfo?.GetParameter("user-agent");
 
 		/// <summary>
 		/// Gets the object identity (from the parameter named 'object-identity' of the query)

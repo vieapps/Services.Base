@@ -2039,13 +2039,15 @@ namespace net.vieapps.Services
 			while (url.EndsWith("/"))
 				url = url.Left(url.Length - 1);
 
-			url += $"/{requestInfo.ServiceName}/{requestInfo.ObjectName}?{requestInfo.Query.Select(kvp => $"{kvp.Key}={kvp.Value?.UrlEncode()}").Join("&")}";
-			url += (url.IsContains("&") ? "&" : "") + $"x-request-extra={requestInfo.Extra?.ToJson().ToString(Formatting.None).Url64Encode()}";
+			url += $"/{requestInfo.ServiceName}/{requestInfo.ObjectName}?{requestInfo.Query.ToString("&", kvp => $"{kvp.Key}={kvp.Value?.UrlEncode()}")}";
+			url += $"{(url.IsContains("&") ? "" : "&")}x-request-extra={requestInfo.Extra?.ToJson().ToString(Formatting.None).Url64Encode()}";
 
-			// send the request as HTTP request
+			// send the HTTP request to sync
 			try
 			{
-				await UtilityService.GetWebPageAsync("PATCH", url, requestInfo.Header, requestInfo.Body, "application/json", 45, requestInfo.Session.AppAgent, null, null, null, cancellationToken).ConfigureAwait(false);
+				using (var response = await UtilityService.SendHttpRequestAsync(url, "PATCH", requestInfo.Header, requestInfo.Body, "application/json", requestInfo.Session.AppAgent, null, 45, null, null, cancellationToken).ConfigureAwait(false))
+				{
+				}
 			}
 			catch (Exception ex)
 			{
