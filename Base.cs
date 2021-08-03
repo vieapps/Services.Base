@@ -114,9 +114,14 @@ namespace net.vieapps.Services
 		protected ServiceState State { get; private set; } = ServiceState.Initializing;
 
 		/// <summary>
-		/// The identity of the synchronizing session
+		/// Gets the identity of the synchronizing session
 		/// </summary>
 		protected string SyncSessionID { get; private set; }
+
+		/// <summary>
+		/// Gets or sets the state to sync
+		/// </summary>
+		protected bool Syncable { get; set; } = true;
 
 		public string NodeID { get; private set; }
 
@@ -2337,7 +2342,7 @@ namespace net.vieapps.Services
 					await this.InitializeHelperServicesAsync().ConfigureAwait(false);
 
 					// start the timer to send the sync request
-					if (string.IsNullOrWhiteSpace(this.SyncSessionID))
+					if (this.Syncable && string.IsNullOrWhiteSpace(this.SyncSessionID))
 						this.StartTimer(async () =>
 						{
 							try
