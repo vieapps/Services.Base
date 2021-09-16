@@ -8,9 +8,9 @@
 		<RootNamespace>net.vieapps.Services</RootNamespace>
 		<AssemblyName>VIEApps.Services.Base</AssemblyName>
 		<AssemblyTitle>VIEApps NGX Service Base</AssemblyTitle>
-		<AssemblyVersion>10.4.2108.3</AssemblyVersion>
-		<FileVersion>10.4.2108.3</FileVersion>
-		<Version>10.4.2108.3</Version>
+		<AssemblyVersion>10.4.2109.4</AssemblyVersion>
+		<FileVersion>10.4.2109.4</FileVersion>
+		<Version>10.4.2109.4</Version>
 		<InformationalVersion>10.4.$([System.DateTime]::Now.Year).$([System.DateTime]::Now.Month).$([System.DateTime]::Now.Day)@$(TargetFramework)#let.it.be</InformationalVersion>
 		<Title>VIEApps NGX Service Base</Title>
 		<Description>The base of all microservices in the VIEApps NGX</Description>
@@ -29,7 +29,7 @@
 		<PackageIcon>Icon.png</PackageIcon>
 		<PackageOutputPath>../../Components</PackageOutputPath>
 		<PackageTags>services;microservices;vieapps;vieapps.components;vieapps.services;vieapps.microservices</PackageTags>
-		<PackageReleaseNotes>Improv: syncable</PackageReleaseNotes>
+		<PackageReleaseNotes>Fix bugs: evaluate formula and script (javascript)</PackageReleaseNotes>
 		<PackageProjectUrl>https://vieapps.net</PackageProjectUrl>
 		<RepositoryUrl>https://github.com/vieapps/Services.Base</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
@@ -45,17 +45,17 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="JavaScriptEngineSwitcher.ChakraCore" Version="3.9.1" />
+		<PackageReference Include="JavaScriptEngineSwitcher.ChakraCore" Version="3.12.6" />
 		<PackageReference Include="JSPool" Version="4.0.0" />
 		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="5.0.2" />
-		<PackageReference Include="MySqlConnector" Version="1.3.11" />
-		<PackageReference Include="Npgsql" Version="5.0.7" />
+		<PackageReference Include="MySqlConnector" Version="1.3.12" />
+		<PackageReference Include="Npgsql" Version="5.0.10" />
 		<PackageReference Include="Serilog.Extensions.Logging.File" Version="2.0.0" />
-		<PackageReference Include="System.Data.SqlClient" Version="4.8.2" />
+		<PackageReference Include="System.Data.SqlClient" Version="4.8.3" />
 		<PackageReference Include="System.Text.Encoding.Extensions" Version="4.3.0" />
-		<PackageReference Include="VIEApps.Components.Repository" Version="10.4.2108.3" />
-		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.4.2108.3" />
-		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.4.2108.3" />
+		<PackageReference Include="VIEApps.Components.Repository" Version="10.4.2109.3" />
+		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.4.2109.3" />
+		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.4.2109.4" />
 	</ItemGroup>
 
 </Project>

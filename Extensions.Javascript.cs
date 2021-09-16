@@ -31,7 +31,7 @@ namespace net.vieapps.Services
 			});
 
 			Extensions.JsFunctions = @"
-			var __toDateTime = function(value) {
+			var __toDateTime = function (value) {
 				if (value !== undefined) {
 					if (value instanceof Date || (typeof value === 'string' && value.trim() !== '')) {
 						var date = new Date(value);
@@ -45,15 +45,15 @@ namespace net.vieapps.Services
 					return new DateTime();
 				}
 			};
-			var __now = function() {
+			var __now = function () {
 				return new Date().toJSON();
 			};
-			var __today = function() {
+			var __today = function () {
 				var date = new Date().toJSON();
 				return date.substr(0, date.indexOf('T')).replace(/\-/g, '/');
 			};
-			var __getAnsiUri = function(value, lowerCase) {
-				return value === undefined || typeof value !== 'string' || value.trim() === '' ? '' : __sf_getAnsiUri(value, lowerCase !== undefined ? lowerCase : true);
+			var __getAnsiUri = function (value, lowerCase) {
+				return value === undefined || typeof value !== 'string' || value.trim() === '' ? '' : __sf_GetAnsiUri(value, lowerCase !== undefined ? !!lowerCase : true);
 			};
 			".Replace("\t", "").Replace("\r", "").Replace("\n", " ");
 		}
@@ -88,11 +88,11 @@ namespace net.vieapps.Services
 		/// Gets the Javascript expression for evaluating
 		/// </summary>
 		/// <param name="expression">The string that presents an Javascript expression for evaluating, the expression must end by statement 'return ..;' to return a value</param>
-		/// <param name="requestInfo">The object that presents the requesting information (the '__request' parameter variable)</param>
-		/// <param name="object">The object that presents information of current processing object (the '__object' parameter variable and bound to 'this' instance)</param>
-		/// <param name="params">The object that presents the additional parameters (the '__params' parameter variable)</param>
+		/// <param name="object">The object that presents information of current processing object (the variable named as '__object' and bound to 'this' instance)</param>
+		/// <param name="requestInfo">The object that presents the requesting information (the variable named as '__request')</param>
+		/// <param name="params">The object that presents the additional parameters (the variable named as '__params')</param>
 		/// <returns></returns>
-		public static string GetJsExpression(this string expression, ExpandoObject requestInfo = null, ExpandoObject @object = null, ExpandoObject @params = null)
+		public static string GetJsExpression(this string expression, ExpandoObject @object = null, ExpandoObject requestInfo = null, ExpandoObject @params = null)
 		{
 			if (!string.IsNullOrWhiteSpace(expression))
 			{
@@ -101,35 +101,23 @@ namespace net.vieapps.Services
 					: expression.Trim();
 			}
 			return Extensions.JsFunctions
-				+ Environment.NewLine
-				+ "(function(__request,__object,__params){__object['__evaluate']=function(){"
-				+ Environment.NewLine
-				+ (string.IsNullOrWhiteSpace(expression) || expression.Trim().Equals(";") ? "return undefined;" : expression)
-				+ Environment.NewLine
+				+ $"var __object = {@object?.ToJson().ToString(Formatting.None) ?? "{}"};"
+				+ "__object.__evaluate = function (__request, __params) {"
+				+ (string.IsNullOrWhiteSpace(expression) || expression.Trim().Equals(";") ? "return undefined;" : $"{(expression.Trim().IndexOf("return") < 0 ? "return " : "")}{expression.Trim()}{(expression.Trim().EndsWith(";") ? "" : ";")}")
 				+ "};"
-				+ Environment.NewLine
-				+ "return __object.__evaluate();})"
-				+ Environment.NewLine
-				+ "("
-				+ Environment.NewLine
-				+ (requestInfo?.ToJson().ToString(Formatting.None) ?? "{}") + ","
-				+ Environment.NewLine
-				+ (@object?.ToJson().ToString(Formatting.None) ?? "{}") + ","
-				+ Environment.NewLine
-				+ (@params?.ToJson().ToString(Formatting.None) ?? "{}")
-				+ ");";
+				+ $"__object.__evaluate({requestInfo?.ToJson().ToString(Formatting.None) ?? "{}"}, {@params?.ToJson().ToString(Formatting.None) ?? "{}"});";
 		}
 
 		/// <summary>
 		/// Gets the Javascript expression for evaluating
 		/// </summary>
 		/// <param name="expression">The string that presents an Javascript expression for evaluating, the expression must end by statement 'return ..;' to return a value</param>
-		/// <param name="requestInfo">The object that presents the requesting information (the '__request' parameter variable)</param>
 		/// <param name="object">The object that presents information of current processing object (the '__object' parameter variable and bound to 'this' instance)</param>
+		/// <param name="requestInfo">The object that presents the requesting information (the '__request' parameter variable)</param>
 		/// <param name="params">The object that presents the additional parameters (the '__params' parameter variable)</param>
 		/// <returns></returns>
-		public static string GetJsExpression(this string expression, RequestInfo requestInfo, object @object, ExpandoObject @params)
-			=> expression?.GetJsExpression(requestInfo?.ToExpandoObject(), @object?.ToExpandoObject(), @params);
+		public static string GetJsExpression(this string expression, object @object, RequestInfo requestInfo, ExpandoObject @params)
+			=> expression?.GetJsExpression(@object?.ToExpandoObject(), requestInfo?.ToExpandoObject(), @params);
 
 		/// <summary>
 		/// Prepare the Javascript engine
@@ -139,20 +127,19 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static IJsEngine PrepareJsEngine(this IJsEngine jsEngine, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 		{
-			var objects = new Dictionary<string, object>(embedObjects ?? new Dictionary<string, object>(), StringComparer.OrdinalIgnoreCase);
-			if (!objects.ContainsKey("__sf_now"))
-				objects["__sf_now"] = Extensions.Func_Now;
-			if (!objects.ContainsKey("__sf_getTimeQuarter"))
-				objects["__sf_getTimeQuarter"] = Extensions.Func_GetTimeQuarter;
-			if (!objects.ContainsKey("__sf_getAnsiUri"))
-				objects["__sf_getAnsiUri"] = Extensions.Func_GetAnsiUri;
+			var objects = new Dictionary<string, object>(embedObjects ?? new Dictionary<string, object>(), StringComparer.OrdinalIgnoreCase)
+			{
+				["__sf_Now"] = Extensions.Func_Now,
+				["__sf_GetTimeQuarter"] = Extensions.Func_GetTimeQuarter,
+				["__sf_GetAnsiUri"] = Extensions.Func_GetAnsiUri
+			};
 			objects.Where(kvp => !string.IsNullOrWhiteSpace(kvp.Key) && kvp.Value != null).ForEach(kvp => jsEngine.EmbedHostObject(kvp.Key, kvp.Value));
 
-			var types = new Dictionary<string, Type>(embedTypes ?? new Dictionary<string, Type>(), StringComparer.OrdinalIgnoreCase);
-			if (!types.ContainsKey("Uri"))
-				types["Uri"] = typeof(Uri);
-			if (!types.ContainsKey("DateTime"))
-				types["DateTime"] = typeof(DateTime);
+			var types = new Dictionary<string, Type>(embedTypes ?? new Dictionary<string, Type>(), StringComparer.OrdinalIgnoreCase)
+			{
+				["Uri"] = typeof(Uri),
+				["DateTime"] = typeof(DateTime),
+			};
 			types.Where(kvp => !string.IsNullOrWhiteSpace(kvp.Key) && kvp.Value != null).ForEach(kvp => jsEngine.EmbedHostType(kvp.Key, kvp.Value));
 
 			return jsEngine;
@@ -242,7 +229,7 @@ namespace net.vieapps.Services
 		{
 			using (var jsEngine = Extensions.GetJsEngine(embedObjects, embedTypes))
 			{
-				return jsEngine.JsEvaluate(expression);
+				return jsEngine.JsEvaluate($"{Extensions.JsFunctions}{expression}");
 			}
 		}
 
@@ -258,7 +245,7 @@ namespace net.vieapps.Services
 		{
 			using (var jsEngine = Extensions.GetJsEngine(embedObjects, embedTypes))
 			{
-				return jsEngine.JsEvaluate<T>(expression);
+				return jsEngine.JsEvaluate<T>($"{Extensions.JsFunctions}{expression}");
 			}
 		}
 
@@ -273,7 +260,7 @@ namespace net.vieapps.Services
 		{
 			using (var jsEngine = Extensions.GetJsEngine(embedObjects, embedTypes))
 			{
-				return expressions.Select(expression => jsEngine.JsEvaluate(expression)).ToList();
+				return expressions.Select(expression => jsEngine.JsEvaluate($"{Extensions.JsFunctions}{expression}")).ToList();
 			}
 		}
 	}
