@@ -17,14 +17,16 @@ namespace net.vieapps.Services
 
 		#region Evaluate a formula
 		/// <summary>
-		/// Evaluates a Formula expression
+		/// Evaluates an Formula expression
 		/// </summary>
 		/// <param name="formula">The string that presents the formula</param>
-		/// <param name="params">The parameters object for fetching data from (1st parameter is current object and that bound to 'this' parameter, 2nd parameter is request information, 3rd parameter is additional data)</param>
+		/// <param name="object">The current object (that bound to 'this' parameter when formula is an Javascript expression)</param>
+		/// <param name="requestInfo">The requesting information</param>
+		/// <param name="params">The additional parameters</param>
 		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates (for evaluating an Javascript expression)</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types (for evaluating an Javascript expression)</param>
 		/// <returns></returns>
-		public static object Evaluate(this string formula, Tuple<ExpandoObject, ExpandoObject, ExpandoObject> @params, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
+		public static object Evaluate(this string formula, ExpandoObject @object, ExpandoObject requestInfo, ExpandoObject @params, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 		{
 			// check
 			if (string.IsNullOrWhiteSpace(formula) || !formula.StartsWith("@"))
@@ -35,6 +37,7 @@ namespace net.vieapps.Services
 				throw new InformationInvalidException($"The formula expression [{formula}] is invalid (the open and close tokens are required when the formula got a parameter, ex: @request.Body(ContentType.ID) - just like an Javascript function)");
 
 			// prepare
+			object value = null;
 			var name = formula;
 			if (position > 0)
 			{
@@ -43,46 +46,45 @@ namespace net.vieapps.Services
 				formula = string.IsNullOrWhiteSpace(formula) || formula.Equals("@") ? "@now" : formula;
 			}
 
-			var @object = @params?.Item1;
-			var requestInfo = @params.Item2;
-			var parameters = @params.Item3;
-			object value = null;
+			// value of an Javascript expression
+			if (name.IsEquals("@script") || name.IsEquals("@javascript") || name.IsEquals("@js"))
+				value = Extensions.JsEvaluate(formula.GetJsExpression(@object, requestInfo, @params), embedObjects, embedTypes);
 
 			// value of current object
-			if (name.IsEquals("@current") || name.IsEquals("@object"))
+			else if (name.IsEquals("@current") || name.IsEquals("@object"))
 				value = formula.StartsWith("@")
-					? formula.Evaluate(@params, embedObjects, embedTypes)
+					? formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)
 					: @object?.Get(formula);
 
 			// value of request
 			else if (name.IsEquals("@request"))
 				value = formula.StartsWith("@")
-					? formula.Evaluate(@params, embedObjects, embedTypes)
+					? formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)
 					: requestInfo?.Get(formula);
 
 			// value of request's session
 			else if (name.IsEquals("@session") || name.IsEquals("@request.Session"))
 				value = formula.StartsWith("@")
-					? formula.Evaluate(@params, embedObjects, embedTypes)
+					? formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)
 					: requestInfo?.Get<ExpandoObject>("Session")?.Get(formula);
 
 			// value of request's query
 			else if (name.IsEquals("@query") || name.IsEquals("@request.Query"))
 				value = formula.StartsWith("@")
-					? formula.Evaluate(@params, embedObjects, embedTypes)
+					? formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)
 					: requestInfo?.Get<ExpandoObject>("Query")?.Get(formula);
 
 			// value of request's header
 			else if (name.IsEquals("@header") || name.IsEquals("@request.Header"))
 				value = formula.StartsWith("@")
-					? formula.Evaluate(@params, embedObjects, embedTypes)
+					? formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)
 					: requestInfo?.Get<ExpandoObject>("Header")?.Get(formula);
 
 			// value of request's body
 			else if (name.IsEquals("@body") || name.IsEquals("@request.Body"))
 			{
 				if (formula.StartsWith("@"))
-					value = formula.Evaluate(@params, embedObjects, embedTypes);
+					value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes);
 				else
 				{
 					var body = requestInfo?.Get("Body");
@@ -93,18 +95,14 @@ namespace net.vieapps.Services
 			// value of request's extra
 			else if (name.IsEquals("@extra") || name.IsEquals("@request.Extra"))
 				value = formula.StartsWith("@")
-					? formula.Evaluate(@params, embedObjects, embedTypes)
+					? formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)
 					: requestInfo?.Get<ExpandoObject>("Extra")?.Get(formula);
 
 			// value of additional parameters
 			else if (name.IsEquals("@params") || name.IsEquals("@global"))
 				value = formula.StartsWith("@")
-					? formula.Evaluate(@params, embedObjects, embedTypes)
-					: parameters?.Get(formula);
-
-			// value of an Javascript expression
-			else if (name.IsEquals("@script") || name.IsEquals("@javascript") || name.IsEquals("@js"))
-				value = Extensions.JsEvaluate(formula.GetJsExpression(@object, requestInfo, parameters), embedObjects, embedTypes);
+					? formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)
+					: @params?.Get(formula);
 
 			// pre-defined formula: current date-time
 			else if (name.IsEquals("@now") || name.IsEquals("@datetime.Now") || name.IsEquals("@date.Now") || name.IsEquals("@time.Now"))
@@ -115,7 +113,7 @@ namespace net.vieapps.Services
 			// pre-defined formula: get time quater
 			else if ((name.IsEquals("@datetime.Quarter") || name.IsEquals("@time.Quarter")) && formula.StartsWith("@"))
 			{
-				var datetime = formula.Evaluate(@params, embedObjects, embedTypes) as DateTime?;
+				var datetime = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes) as DateTime?;
 				value = datetime != null && datetime.HasValue ? datetime.Value.GetTimeQuarter() as DateTime? : null;
 			}
 
@@ -137,7 +135,7 @@ namespace net.vieapps.Services
 					format = formula.Substring(position + 1, formula.Length - position - 2).Trim();
 					formula = string.IsNullOrWhiteSpace(temp)  || temp.Equals("@") ? "@now" : temp;
 				}
-				var datetime = formula.Evaluate(@params, embedObjects, embedTypes) as DateTime?;
+				var datetime = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes) as DateTime?;
 				value = datetime != null && datetime.HasValue ? datetime.Value.ToString(format) : null;
 			}
 
@@ -154,7 +152,7 @@ namespace net.vieapps.Services
 					format = formula.Substring(position + 1, formula.Length - position - 2).Trim();
 					formula = string.IsNullOrWhiteSpace(temp) || temp.Equals("@") ? "@now" : temp;
 				}
-				value = formula.Evaluate(@params, embedObjects, embedTypes);
+				value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes);
 				value = value == null || string.IsNullOrWhiteSpace(format)
 					? value?.ToString()
 					: value.GetType().IsDateTimeType()
@@ -168,11 +166,11 @@ namespace net.vieapps.Services
 
 			// convert the formula's value to lower-case string
 			else if (name.IsStartsWith("@toLower") && formula.StartsWith("@"))
-				value = formula.Evaluate(@params, embedObjects, embedTypes)?.ToString().ToLower();
+				value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)?.ToString().ToLower();
 
 			// convert the formula's value to upper-case string
 			else if (name.IsStartsWith("@toUpper") && formula.StartsWith("@"))
-				value = formula.Evaluate(@params, embedObjects, embedTypes)?.ToString().ToUpper();
+				value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)?.ToString().ToUpper();
 
 			// unknown => return the original formula
 			else
@@ -182,7 +180,7 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Evaluates a Formula expression
+		/// Evaluates an Formula expression
 		/// </summary>
 		/// <param name="formula">The string that presents the formula</param>
 		/// <param name="object">The object for fetching data from</param>
@@ -192,11 +190,14 @@ namespace net.vieapps.Services
 		/// <param name="embedTypes">The collection that presents objects are embed as global types (for evaluating an Javascript expression)</param>
 		/// <returns></returns>
 		public static object Evaluate(this string formula, object @object = null, RequestInfo requestInfo = null, ExpandoObject @params = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
-			=> formula?.Evaluate(new Tuple<ExpandoObject, ExpandoObject, ExpandoObject>(@object?.ToExpandoObject(), requestInfo?.ToExpandoObject(requestInfoAsExpandoObject =>
+			=> formula?.Evaluate(@object?.ToExpandoObject(expando =>
 			{
-				requestInfoAsExpandoObject.Set("Body", requestInfo?.BodyAsExpandoObject);
-				requestInfoAsExpandoObject.Get<ExpandoObject>("Header")?.Remove("x-app-token");
-			}), @params), embedObjects, embedTypes);
+				if (@object is IBusinessEntity bizObject && bizObject.ExtendedProperties != null && bizObject.ExtendedProperties.Any())
+				{
+					expando.Set("ExtendedProperties", bizObject.ExtendedProperties.ToExpandoObject());
+					bizObject.ExtendedProperties.ForEach(kvp => expando.Set(kvp.Key, kvp.Value));
+				}
+			}), requestInfo?.AsExpandoObject, @params, embedObjects, embedTypes);
 
 		/// <summary>
 		/// Gets the time quater
@@ -247,10 +248,10 @@ namespace net.vieapps.Services
 					if (value.IsStartsWith("@request(") || value.IsStartsWith("@request.") || value.IsStartsWith("@session(")
 					|| value.IsStartsWith("@query(") || value.IsStartsWith("@header(") || value.IsStartsWith("@body(") || value.IsStartsWith("@extra(")
 					|| value.IsStartsWith("@current(") || value.IsStartsWith("@object(") || value.IsStartsWith("@params(") || value.IsStartsWith("@global(")
-					|| value.IsStartsWith("@js(") || value.IsStartsWith("@javascript(") || value.IsStartsWith("@script(")
+					|| value.IsStartsWith("@script(") || value.IsStartsWith("@javascript(") || value.IsStartsWith("@js(")
 					|| value.IsStartsWith("@today") || value.IsStartsWith("@now") || value.IsStartsWith("@date") || value.IsStartsWith("@time")
 					|| value.IsStartsWith("@toStr") || value.IsStartsWith("@toLower") || value.IsStartsWith("@toUpper"))
-						filter.Value = value.Evaluate(new Tuple<ExpandoObject, ExpandoObject, ExpandoObject>(@object, requestInfo, @params));
+						filter.Value = value.Evaluate(@object, requestInfo, @params);
 
 					// value of JavaScript expression
 					else if (value.StartsWith("@[") && value.EndsWith("]"))
