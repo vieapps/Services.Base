@@ -193,10 +193,7 @@ namespace net.vieapps.Services
 			=> formula?.Evaluate(@object?.ToExpandoObject(expando =>
 			{
 				if (@object is IBusinessEntity bizObject && bizObject.ExtendedProperties != null && bizObject.ExtendedProperties.Any())
-				{
-					expando.Set("ExtendedProperties", bizObject.ExtendedProperties.ToExpandoObject());
-					bizObject.ExtendedProperties.ForEach(kvp => expando.Set(kvp.Key, kvp.Value));
-				}
+					bizObject.ExtendedProperties.ForEach(kvp => expando.Set(kvp.Key, kvp.Value == null || kvp.Value.GetType().IsPrimitiveType() ? kvp.Value : kvp.Value.ToExpandoObject()));
 			}), requestInfo?.AsExpandoObject, @params, embedObjects, embedTypes);
 
 		/// <summary>
@@ -281,7 +278,11 @@ namespace net.vieapps.Services
 		/// <param name="onCompleted">The action to run when the preparing process is completed</param>
 		/// <returns>The filtering expression with all formula/expression values had been evaluated</returns>
 		public static IFilterBy Prepare(this IFilterBy filterBy, PooledJsEngine jsEngine = null, object @object = null, RequestInfo requestInfo = null, ExpandoObject @params = null, Action<IFilterBy> onCompleted = null)
-			=> filterBy?.Prepare(jsEngine, @object?.ToExpandoObject(), requestInfo?.AsExpandoObject, @params, onCompleted);
+			=> filterBy?.Prepare(jsEngine, @object?.ToExpandoObject(expando =>
+			{
+				if (@object is IBusinessEntity bizObject && bizObject.ExtendedProperties != null && bizObject.ExtendedProperties.Any())
+					bizObject.ExtendedProperties.ForEach(kvp => expando.Set(kvp.Key, kvp.Value == null || kvp.Value.GetType().IsPrimitiveType() ? kvp.Value : kvp.Value.ToExpandoObject()));
+			}), requestInfo?.AsExpandoObject, @params, onCompleted);
 
 		/// <summary>
 		/// Prepares the comparing values of the filtering expression (means evaluating all Formula/Javascript expressions)
