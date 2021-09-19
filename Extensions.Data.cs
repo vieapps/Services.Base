@@ -155,11 +155,11 @@ namespace net.vieapps.Services
 				value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes);
 				value = value == null || string.IsNullOrWhiteSpace(format)
 					? value?.ToString()
-					: value.GetType().IsDateTimeType()
+					: value.IsDateTimeType()
 						? value.CastAs<DateTime>().ToString(format)
-						: value.GetType().IsFloatingPointType()
+						: value.IsFloatingPointType()
 							? value.CastAs<decimal>().ToString(format)
-							: value.GetType().IsIntegralType()
+							: value.IsIntegralType()
 								? value.CastAs<long>().ToString(format)
 								: value.ToString();
 			}
@@ -190,11 +190,7 @@ namespace net.vieapps.Services
 		/// <param name="embedTypes">The collection that presents objects are embed as global types (for evaluating an Javascript expression)</param>
 		/// <returns></returns>
 		public static object Evaluate(this string formula, object @object = null, RequestInfo requestInfo = null, ExpandoObject @params = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
-			=> formula?.Evaluate(@object?.ToExpandoObject(expando =>
-			{
-				if (@object is IBusinessEntity bizObject && bizObject.ExtendedProperties != null && bizObject.ExtendedProperties.Any())
-					bizObject.ExtendedProperties.ForEach(kvp => expando.Set(kvp.Key, kvp.Value == null || kvp.Value.GetType().IsPrimitiveType() ? kvp.Value : kvp.Value.ToExpandoObject()));
-			}), requestInfo?.AsExpandoObject, @params, embedObjects, embedTypes);
+			=> formula?.Evaluate(@object is IBusinessEntity bizObject ? bizObject.ToExpandoObject() : @object?.ToExpandoObject(), requestInfo?.AsExpandoObject, @params, embedObjects, embedTypes);
 
 		/// <summary>
 		/// Gets the time quater
@@ -278,11 +274,7 @@ namespace net.vieapps.Services
 		/// <param name="onCompleted">The action to run when the preparing process is completed</param>
 		/// <returns>The filtering expression with all formula/expression values had been evaluated</returns>
 		public static IFilterBy Prepare(this IFilterBy filterBy, PooledJsEngine jsEngine = null, object @object = null, RequestInfo requestInfo = null, ExpandoObject @params = null, Action<IFilterBy> onCompleted = null)
-			=> filterBy?.Prepare(jsEngine, @object?.ToExpandoObject(expando =>
-			{
-				if (@object is IBusinessEntity bizObject && bizObject.ExtendedProperties != null && bizObject.ExtendedProperties.Any())
-					bizObject.ExtendedProperties.ForEach(kvp => expando.Set(kvp.Key, kvp.Value == null || kvp.Value.GetType().IsPrimitiveType() ? kvp.Value : kvp.Value.ToExpandoObject()));
-			}), requestInfo?.AsExpandoObject, @params, onCompleted);
+			=> filterBy?.Prepare(jsEngine, @object is IBusinessEntity bizObject ? bizObject.ToExpandoObject() : @object?.ToExpandoObject(), requestInfo?.AsExpandoObject, @params, onCompleted);
 
 		/// <summary>
 		/// Prepares the comparing values of the filtering expression (means evaluating all Formula/Javascript expressions)
@@ -633,9 +625,7 @@ namespace net.vieapps.Services
 		/// <param name="expression"></param>
 		/// <returns></returns>
 		public static SortBy<T> ToSort<T>(this JObject expression) where T : class
-			=> !string.IsNullOrWhiteSpace(expression?.Get<string>("Attribute"))
-				? new SortBy<T>(expression)
-				: null;
+			=> !string.IsNullOrWhiteSpace(expression?.Get<string>("Attribute")) ? new SortBy<T>(expression) : null;
 
 		/// <summary>
 		/// Converts the (server) ExpandoObject object to a sorting expression
@@ -752,17 +742,13 @@ namespace net.vieapps.Services
 
 			var totalPages = pagination.Get("TotalPages", -1);
 			totalPages = totalPages < 0
-				? totalRecords > 0
-					? Extensions.GetTotalPages(totalRecords, pageSize)
-					: 0
+				? totalRecords > 0 ? Extensions.GetTotalPages(totalRecords, pageSize) : 0
 				: totalPages;
 
 			var pageNumber = pagination.Get("PageNumber", 1);
 			pageNumber = pageNumber < 1
 				? 1
-				: totalPages > 0 && pageNumber > totalPages
-					? totalPages
-					: pageNumber;
+				: totalPages > 0 && pageNumber > totalPages ? totalPages : pageNumber;
 
 			return new Tuple<long, int, int, int>(totalRecords, totalPages, pageSize, pageNumber);
 		}
