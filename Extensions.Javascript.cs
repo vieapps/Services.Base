@@ -101,10 +101,15 @@ namespace net.vieapps.Services
 					: expression.Trim();
 			}
 			return Extensions.JsFunctions
+				+ Environment.NewLine
 				+ $"var __object = {@object?.ToJson().ToString(Formatting.None) ?? "{}"};"
+				+ Environment.NewLine
 				+ "__object.__evaluate = function (__request, __params) {"
+				+ Environment.NewLine
 				+ (string.IsNullOrWhiteSpace(expression) || expression.Trim().Equals(";") ? "return undefined;" : $"{(expression.Trim().IndexOf("return") < 0 ? "return " : "")}{expression.Trim()}{(expression.Trim().EndsWith(";") ? "" : ";")}")
+				+ Environment.NewLine
 				+ "};"
+				+ Environment.NewLine
 				+ $"__object.__evaluate({requestInfo?.ToJson().ToString(Formatting.None) ?? "{}"}, {@params?.ToJson().ToString(Formatting.None) ?? "{}"});";
 		}
 
