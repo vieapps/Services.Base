@@ -329,7 +329,7 @@ namespace net.vieapps.Services
 
 		public ILogger Logger { get; private set; }
 
-		ConcurrentQueue<Tuple<Tuple<DateTime, string, string, string, string, string>, List<string>, string>> Logs { get; } = new ConcurrentQueue<Tuple<Tuple<DateTime, string, string, string, string, string>, List<string>, string>>();
+		ConcurrentQueue<Tuple<Tuple<DateTime, string, string, string, string, string, string>, List<string>, string>> Logs { get; } = new ConcurrentQueue<Tuple<Tuple<DateTime, string, string, string, string, string, string>, List<string>, string>>();
 
 		string _isDebugResultsEnabled = null, _isDebugStacksEnabled = null, _isDebugAuthorizationsEnabled = null;
 
@@ -395,23 +395,9 @@ namespace net.vieapps.Services
 			}
 
 			// update queue & write to centerlized logs
-			this.Logs.Enqueue(new Tuple<Tuple<DateTime, string, string, string, string, string>, List<string>, string>(new Tuple<DateTime, string, string, string, string, string>(DateTime.Now, correlationID, developerID, appID, serviceName ?? this.ServiceName ?? "APIGateway", objectName), logs, exception?.GetStack()));
+			this.Logs.Enqueue(new Tuple<Tuple<DateTime, string, string, string, string, string, string>, List<string>, string>(new Tuple<DateTime, string, string, string, string, string, string>(DateTime.Now, correlationID, developerID, appID, this.NodeID ?? Extensions.GetNodeID(), serviceName ?? this.ServiceName ?? "APIGateway", objectName), logs, exception?.GetStack()));
 			return this.Logs.WriteLogsAsync(this.CancellationToken, this.Logger);
 		}
-
-		/// <summary>
-		/// Writes the logs (to centerlized logging system and local logs)
-		/// </summary>
-		/// <param name="correlationID">The identity for tracking the correlation</param>
-		/// <param name="logger">The local logger</param>
-		/// <param name="logs">The logs</param>
-		/// <param name="exception">The exception</param>
-		/// <param name="serviceName">The name of service</param>
-		/// <param name="objectName">The name of object</param>
-		/// <param name="mode">The logging mode</param>
-		/// <returns></returns>
-		protected virtual Task WriteLogsAsync(string correlationID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> this.WriteLogsAsync(correlationID, null, null, logger, logs, exception, serviceName, objectName, mode);
 
 		/// <summary>
 		/// Writes the logs into centerlized logging system
@@ -2095,7 +2081,8 @@ namespace net.vieapps.Services
 				this.ServiceCommunicator?.Dispose();
 				this.ServiceCommunicator = Router.IncomingChannel.RealmProxy.Services
 					.GetSubject<CommunicateMessage>($"messages.services.{this.ServiceName.Trim().ToLower()}")
-					.Subscribe(
+					.Subscribe
+					(
 						async message => await (this.NodeID.IsEquals(message.ExcludedNodeID) ? Task.CompletedTask : this.ProcessInterCommunicateMessageAsync(message, this.CancellationToken)).ConfigureAwait(false),
 						exception => this.Logger?.LogError($"Error occurred while fetching an inter-communicate message => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
 					);
@@ -2103,7 +2090,8 @@ namespace net.vieapps.Services
 				this.GatewayCommunicator?.Dispose();
 				this.GatewayCommunicator = Router.IncomingChannel.RealmProxy.Services
 					.GetSubject<CommunicateMessage>("messages.services.apigateway")
-					.Subscribe(
+					.Subscribe
+					(
 						async message => await (this.NodeID.IsEquals(message.ExcludedNodeID) ? Task.CompletedTask : this.ProcessGatewayCommunicateMessageAsync(message, this.CancellationToken)).ConfigureAwait(false),
 						exception => this.Logger?.LogError($"Error occurred while fetching an inter-communicate message of API Gateway => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
 					);

@@ -2,6 +2,7 @@
 using System;
 using System.Linq;
 using System.Dynamic;
+using System.Globalization;
 using System.Collections.Generic;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -46,131 +47,129 @@ namespace net.vieapps.Services
 				formula = string.IsNullOrWhiteSpace(formula) || formula.Equals("@") ? "@now" : formula;
 			}
 
-			// value of an Javascript expression
-			if (name.IsEquals("@script") || name.IsEquals("@javascript") || name.IsEquals("@js"))
-				value = Extensions.JsEvaluate(formula.GetJsExpression(@object, requestInfo, @params), embedObjects, embedTypes);
-
 			// value of current object
-			else if (name.IsEquals("@current") || name.IsEquals("@object"))
+			if (name.IsEquals("@current") || name.IsEquals("@object"))
 				value = formula.StartsWith("@")
 					? formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)
 					: @object?.Get(formula);
 
-			// value of request
-			else if (name.IsEquals("@request"))
+			// value of request information
+			else if (name.IsStartsWith("@request"))
 				value = formula.StartsWith("@")
 					? formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)
-					: requestInfo?.Get(formula);
+					: name.IsEquals("@request.Session")
+						? requestInfo?.Get<ExpandoObject>("Session")?.Get(formula)
+						: name.IsEquals("@request.Query")
+							? requestInfo?.Get<ExpandoObject>("Query")?.Get(formula)
+							: name.IsEquals("@request.Header")
+								? requestInfo?.Get<ExpandoObject>("Header")?.Get(formula)
+								: name.IsEquals("@request.Extra")
+									? requestInfo?.Get<ExpandoObject>("Extra")?.Get(formula)
+									: name.IsEquals("@request.Body")
+										? (requestInfo?.Get("Body") is ExpandoObject bodyAsExpando ? bodyAsExpando : requestInfo?.Get("Body") is string bodyAsString ? bodyAsString?.ToExpandoObject() : null)?.Get(formula)
+										: requestInfo?.Get(formula);
 
-			// value of request's session
-			else if (name.IsEquals("@session") || name.IsEquals("@request.Session"))
-				value = formula.StartsWith("@")
-					? formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)
-					: requestInfo?.Get<ExpandoObject>("Session")?.Get(formula);
-
-			// value of request's query
-			else if (name.IsEquals("@query") || name.IsEquals("@request.Query"))
-				value = formula.StartsWith("@")
-					? formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)
-					: requestInfo?.Get<ExpandoObject>("Query")?.Get(formula);
-
-			// value of request's header
-			else if (name.IsEquals("@header") || name.IsEquals("@request.Header"))
-				value = formula.StartsWith("@")
-					? formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)
-					: requestInfo?.Get<ExpandoObject>("Header")?.Get(formula);
-
-			// value of request's body
-			else if (name.IsEquals("@body") || name.IsEquals("@request.Body"))
-			{
-				if (formula.StartsWith("@"))
-					value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes);
-				else
-				{
-					var body = requestInfo?.Get("Body");
-					value = (body is ExpandoObject bodyAsExpando ? bodyAsExpando : body is string bodyAsString ? bodyAsString?.ToExpandoObject() : null)?.Get(formula);
-				}
-			}
-
-			// value of request's extra
-			else if (name.IsEquals("@extra") || name.IsEquals("@request.Extra"))
-				value = formula.StartsWith("@")
-					? formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)
-					: requestInfo?.Get<ExpandoObject>("Extra")?.Get(formula);
-
-			// value of additional parameters
+			// value of parameters
 			else if (name.IsEquals("@params") || name.IsEquals("@global"))
 				value = formula.StartsWith("@")
 					? formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)
 					: @params?.Get(formula);
 
-			// pre-defined formula: current date-time
+			// value of an JavaScript expression
+			else if (name.IsEquals("@script") || name.IsEquals("@javascript") || name.IsEquals("@js"))
+				value = Extensions.JsEvaluate(formula.GetJsExpression(@object, requestInfo, @params), embedObjects, embedTypes);
+
+			// current date-time
 			else if (name.IsEquals("@now") || name.IsEquals("@datetime.Now") || name.IsEquals("@date.Now") || name.IsEquals("@time.Now"))
 				value = name.IsEquals("@date.Now")
 					? DateTime.Parse($"{DateTime.Now:yyyy/MM/dd} 00:00:00")
 					: DateTime.Now;
 
-			// pre-defined formula: get time quater
-			else if ((name.IsEquals("@datetime.Quarter") || name.IsEquals("@time.Quarter")) && formula.StartsWith("@"))
-			{
-				var datetime = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes) as DateTime?;
-				value = datetime != null && datetime.HasValue ? datetime.Value.GetTimeQuarter() as DateTime? : null;
-			}
-
-			// pre-defined formula: convert current date-time to string
-			else if (name.IsEquals("@today") || name.IsStartsWith("@todayStr") || name.IsEquals("@datetime.Today") || name.IsEquals("@date.Today") || name.IsEquals("@time.Today")
-			|| name.IsStartsWith("@nowStr") || name.IsStartsWith("@datetime.NowStr") || name.IsStartsWith("@date.NowStr") || name.IsStartsWith("@time.NowStr"))
+			// current date-time (as string)
+			else if (name.IsEquals("@today") || name.IsStartsWith("@todayStr") || name.IsEquals("@datetime.Today") || name.IsEquals("@date.Today") || name.IsEquals("@time.Today") || name.IsStartsWith("@nowStr") || name.IsStartsWith("@datetime.NowStr") || name.IsStartsWith("@date.NowStr") || name.IsStartsWith("@time.NowStr"))
 				value = DateTime.Now.ToDTString(false, name.IsStartsWith("@nowStr") || name.IsStartsWith("@datetime.NowStr") || name.IsStartsWith("@date.NowStr") || name.IsStartsWith("@time.NowStr"));
 
-			// pre-defined formula: convert date-time to string
-			else if ((name.IsStartsWith("@date") || name.IsStartsWith("@time")) && formula.StartsWith("@"))
+			// pre-defined formulas
+			else if (formula.StartsWith("@"))
 			{
-				var format = name.IsStartsWith("@time") ? "hh:mm tt @ dd/MM/yyyy" : "dd/MM/yyyy HH:mm:ss";
-				position = formula.IndexOf("[");
-				if (position > 0)
+				// get time quater
+				if (name.IsEquals("@datetime.Quarter") || name.IsEquals("@time.Quarter"))
 				{
-					if (!formula.EndsWith("]"))
-						throw new InformationInvalidException($"The formula expression [{formula}] is invalid (the open and close tokens are required when the formula got a formatting parameter), ex: @datetime.ToString(@current(Created)[dd/MM/yyyy hh:mm tt])");
-					var temp = formula.Left(position).Trim();
-					format = formula.Substring(position + 1, formula.Length - position - 2).Trim();
-					formula = string.IsNullOrWhiteSpace(temp)  || temp.Equals("@") ? "@now" : temp;
+					var getHighValue = "true";
+					position = formula.IndexOf(":");
+					if (position > 0)
+					{
+						getHighValue = formula.Right(formula.Length - position - 1).Trim();
+						formula = formula.Left(position).Trim();
+					}
+					value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes);
+					value = value is DateTime datetime ? datetime.GetTimeQuarter("true".IsEquals(getHighValue)) as object : null;
 				}
-				var datetime = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes) as DateTime?;
-				value = datetime != null && datetime.HasValue ? datetime.Value.ToString(format) : null;
-			}
 
-			// convert the formula's value to string
-			else if (name.IsStartsWith("@toStr") && formula.StartsWith("@"))
-			{
-				var format = "";
-				position = formula.IndexOf("[");
-				if (position > 0)
+				// convert the value to floating point number
+				else if (name.IsStartsWith("@toDec") || name.IsStartsWith("@toNum") || name.IsStartsWith("@toFloat") || name.IsStartsWith("@toDouble"))
 				{
-					if (!formula.EndsWith("]"))
-						throw new InformationInvalidException($"The formula expression [{formula}] is invalid (the open and close tokens are required when the formula got a formatting parameter), ex: @toString(@current(Created)[dd/MM/yyyy hh:mm tt])");
-					var temp = formula.Left(position).Trim();
-					format = formula.Substring(position + 1, formula.Length - position - 2).Trim();
-					formula = string.IsNullOrWhiteSpace(temp) || temp.Equals("@") ? "@now" : temp;
+					value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes);
+					value = value is DateTime datetime
+						? datetime.ToUnixTimestamp().As<decimal>()
+						: value != null && value.IsNumericType()
+							? value.As<decimal>()
+							: value;
 				}
-				value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes);
-				value = value == null || string.IsNullOrWhiteSpace(format)
-					? value?.ToString()
-					: value.IsDateTimeType()
-						? value.CastAs<DateTime>().ToString(format)
-						: value.IsFloatingPointType()
-							? value.CastAs<decimal>().ToString(format)
-							: value.IsIntegralType()
-								? value.CastAs<long>().ToString(format)
-								: value.ToString();
+
+				// convert the value to integral number
+				else if (name.IsStartsWith("@toInt") || name.IsStartsWith("@toLong") || name.IsStartsWith("@toByte"))
+				{
+					value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes);
+					value = value is DateTime datetime
+						? datetime.ToUnixTimestamp()
+						: value != null && value.IsNumericType()
+							? value.As<long>()
+							: value;
+				}
+
+				// convert the value to string
+				else if (name.IsStartsWith("@toStr") || name.IsStartsWith("@date.toStr") || name.IsStartsWith("@time.toStr"))
+				{
+					var cultureInfoName = "";
+					var format = formula.IsStartsWith("@date") ? "dd/MM/yyyy HH:mm:ss" : formula.IsStartsWith("@time") ? "hh:mm tt @ dd/MM/yyyy" : "";
+					position = formula.IndexOf(":");
+					if (position > 0)
+					{
+						format = formula.Right(formula.Length - position - 1).Trim();
+						formula = formula.Left(position).Trim();
+						formula = string.IsNullOrWhiteSpace(formula) || formula.Equals("@") ? "@now" : formula;
+						position = format.IndexOf(":");
+						if (position > 0)
+						{
+							cultureInfoName = format.Right(format.Length - position - 1).Trim();
+							format = format.Left(position).Trim();
+						}
+					}
+					value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes);
+					value = value == null || string.IsNullOrWhiteSpace(format)
+						? value?.ToString()
+						: value.IsDateTimeType()
+							? string.IsNullOrWhiteSpace(cultureInfoName) ? value.As<DateTime>().ToString(format) : value.As<DateTime>().ToString(format, CultureInfo.GetCultureInfo(cultureInfoName))
+							: value.IsFloatingPointType()
+								? string.IsNullOrWhiteSpace(cultureInfoName) ? value.As<decimal>().ToString(format) : value.As<decimal>().ToString(format, CultureInfo.GetCultureInfo(cultureInfoName))
+								: value.IsIntegralType()
+									? string.IsNullOrWhiteSpace(cultureInfoName) ? value.As<long>().ToString(format) : value.As<long>().ToString(format, CultureInfo.GetCultureInfo(cultureInfoName))
+									: value.ToString();
+				}
+
+				// convert the value to lower-case string
+				else if (name.IsStartsWith("@toLower"))
+					value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)?.ToString().ToLower();
+
+				// convert the value to upper-case string
+				else if (name.IsStartsWith("@toUpper"))
+					value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)?.ToString().ToUpper();
+
+				// unknown => return the original formula
+				else
+					value = $"{name}{(string.IsNullOrWhiteSpace(formula) ? "" : $"({formula})")}";
 			}
-
-			// convert the formula's value to lower-case string
-			else if (name.IsStartsWith("@toLower") && formula.StartsWith("@"))
-				value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)?.ToString().ToLower();
-
-			// convert the formula's value to upper-case string
-			else if (name.IsStartsWith("@toUpper") && formula.StartsWith("@"))
-				value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)?.ToString().ToUpper();
 
 			// unknown => return the original formula
 			else
@@ -199,24 +198,13 @@ namespace net.vieapps.Services
 		/// <param name="getHighValue"></param>
 		/// <returns></returns>
 		public static DateTime GetTimeQuarter(this DateTime time, bool getHighValue = true)
-		{
-			if (time.Minute <= 15)
-				return getHighValue
-					? DateTime.Parse($"{time:yyyy/MM/dd HH}:15:00")
-					: DateTime.Parse($"{time:yyyy/MM/dd HH}:00:00");
-			else if (time.Minute <= 30)
-				return getHighValue
-					? DateTime.Parse($"{time:yyyy/MM/dd HH}:30:00")
-					: DateTime.Parse($"{time:yyyy/MM/dd HH}:16:00");
-			else if (time.Minute <= 45)
-				return getHighValue
-					? DateTime.Parse($"{time:yyyy/MM/dd HH}:45:00")
-					: DateTime.Parse($"{time:yyyy/MM/dd HH}:31:00");
-			else
-				return getHighValue
-					? DateTime.Parse($"{time:yyyy/MM/dd HH}:59:59")
-					: DateTime.Parse($"{time:yyyy/MM/dd HH}:46:00");
-		}
+			=> time.Minute <= 15
+				? getHighValue ? DateTime.Parse($"{time:yyyy/MM/dd HH}:15:00") : DateTime.Parse($"{time:yyyy/MM/dd HH}:00:00")
+				: time.Minute <= 30
+					? getHighValue ? DateTime.Parse($"{time:yyyy/MM/dd HH}:30:00") : DateTime.Parse($"{time:yyyy/MM/dd HH}:16:00")
+					: time.Minute <= 45
+						? getHighValue ? DateTime.Parse($"{time:yyyy/MM/dd HH}:45:00") : DateTime.Parse($"{time:yyyy/MM/dd HH}:31:00")
+						: getHighValue ? DateTime.Parse($"{time:yyyy/MM/dd HH}:59:59") : DateTime.Parse($"{time:yyyy/MM/dd HH}:46:00");
 		#endregion
 
 		#region Filter
@@ -235,26 +223,14 @@ namespace net.vieapps.Services
 			// prepare value of a single filter
 			if (filterBy is FilterBy filter)
 			{
+				// value of an JavaScript expression or of a pre-defined formula expression
 				if (filter?.Value != null && filter.Value is string value && value.StartsWith("@"))
-				{
-					// value of pre-defined objects/formulas
-					if (value.IsStartsWith("@request(") || value.IsStartsWith("@request.") || value.IsStartsWith("@session(")
-					|| value.IsStartsWith("@query(") || value.IsStartsWith("@header(") || value.IsStartsWith("@body(") || value.IsStartsWith("@extra(")
-					|| value.IsStartsWith("@current(") || value.IsStartsWith("@object(") || value.IsStartsWith("@params(") || value.IsStartsWith("@global(")
-					|| value.IsStartsWith("@script(") || value.IsStartsWith("@javascript(") || value.IsStartsWith("@js(")
-					|| value.IsStartsWith("@today") || value.IsStartsWith("@now") || value.IsStartsWith("@date") || value.IsStartsWith("@time")
-					|| value.IsStartsWith("@toStr") || value.IsStartsWith("@toLower") || value.IsStartsWith("@toUpper"))
-						filter.Value = value.Evaluate(@object, requestInfo, @params);
-
-					// value of JavaScript expression
-					else if (value.StartsWith("@[") && value.EndsWith("]"))
-						filter.Value = jsEngine != null
-							? jsEngine.JsEvaluate(value.GetJsExpression(@object, requestInfo, @params))
-							: Extensions.JsEvaluate(value.GetJsExpression(@object, requestInfo, @params));
-				}
+					filter.Value = value.StartsWith("@[") && value.EndsWith("]")
+						? jsEngine != null ? jsEngine.JsEvaluate(value.GetJsExpression(@object, requestInfo, @params)) : Extensions.JsEvaluate(value.GetJsExpression(@object, requestInfo, @params))
+						: value.Evaluate(@object, requestInfo, @params);
 			}
 
-			// prepare children of a group filter
+			// prepare a group of filters
 			else
 				(filterBy as FilterBys)?.Children?.ForEach(filterby => filterby?.Prepare(jsEngine, @object, requestInfo, @params, onCompleted));
 
@@ -937,6 +913,35 @@ namespace net.vieapps.Services
 		/// <returns>The string that presents a caching key</returns>
 		public static string GetCacheKeyOfObjectsXml<T>(IFilterBy<T> filter, SortBy<T> sort, int pageSize = 0, int pageNumber = 0, string suffix = null) where T : class
 			=> Extensions.GetCacheKeyOfObjectsXml<T>((filter != null ? $"#f:{filter.GenerateUUID()}" : "") + (sort != null ? $"#s:{sort.GenerateUUID()}" : ""), pageSize, pageNumber, suffix);
+		#endregion
+
+		#region Parameters of double braces
+		/// <summary>
+		/// Prepares the parameters of double braces (mustache-style - {{ }}) parameters
+		/// </summary>
+		/// <param name="string"></param>
+		/// <param name="object"></param>
+		/// <param name="requestInfo"></param>
+		/// <param name="params"></param>
+		/// <returns></returns>
+		public static IDictionary<string, object> PrepareDoubleBracesParameters(this string @string, ExpandoObject @object, ExpandoObject requestInfo, ExpandoObject @params)
+			=> string.IsNullOrWhiteSpace(@string)
+				? new Dictionary<string, object>()
+				: @string.GetDoubleBracesTokens()
+					.Select(token => token.Item2)
+					.Distinct(StringComparer.OrdinalIgnoreCase)
+					.ToDictionary(token => token, token => token.StartsWith("@[") && token.EndsWith("]") ? Extensions.JsEvaluate(token.GetJsExpression(@object, requestInfo, @params)) : token.StartsWith("@") ? token.Evaluate(@object, requestInfo, @params) : token);
+
+		/// <summary>
+		/// Prepares the parameters of double braces (mustache-style - {{ }}) parameters
+		/// </summary>
+		/// <param name="string"></param>
+		/// <param name="object"></param>
+		/// <param name="requestInfo"></param>
+		/// <param name="params"></param>
+		/// <returns></returns>
+		public static IDictionary<string, object> PrepareDoubleBracesParameters(this string @string, object @object = null, RequestInfo requestInfo = null, ExpandoObject @params = null)
+			=> @string?.PrepareDoubleBracesParameters(@object is IBusinessEntity bizObject ? bizObject.ToExpandoObject() : @object?.ToExpandoObject(), requestInfo?.AsExpandoObject, @params);
 		#endregion
 
 	}

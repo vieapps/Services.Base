@@ -94,19 +94,16 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static string GetJsExpression(this string expression, ExpandoObject @object = null, ExpandoObject requestInfo = null, ExpandoObject @params = null)
 		{
-			if (!string.IsNullOrWhiteSpace(expression))
-			{
-				expression = expression.StartsWith("@[") && expression.EndsWith("]")
-					? expression.Left(expression.Length - 1).Substring(2).Trim()
-					: expression.Trim();
-			}
+			expression = !string.IsNullOrWhiteSpace(expression) && expression.StartsWith("@[") && expression.EndsWith("]")
+				? expression.Left(expression.Length - 1).Substring(2).Trim()
+				: (expression ?? "").Trim();
 			return Extensions.JsFunctions
 				+ Environment.NewLine
 				+ $"var __object = {@object?.ToJson().ToString(Formatting.None) ?? "{}"};"
 				+ Environment.NewLine
 				+ "__object.__evaluate = function (__request, __params) {"
 				+ Environment.NewLine
-				+ (string.IsNullOrWhiteSpace(expression) || expression.Trim().Equals(";") ? "return undefined;" : $"{(expression.Trim().IndexOf("return") < 0 ? "return " : "")}{expression.Trim()}{(expression.Trim().EndsWith(";") ? "" : ";")}")
+				+ (string.IsNullOrWhiteSpace(expression) || expression.Equals(";") ? "return undefined;" : $"{(expression.IndexOf("return") < 0 ? "return " : "")}{expression}{(expression.EndsWith(";") ? "" : ";")}")
 				+ Environment.NewLine
 				+ "};"
 				+ Environment.NewLine
