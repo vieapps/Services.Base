@@ -16,7 +16,21 @@ namespace net.vieapps.Services
 	public static partial class Extensions
 	{
 
-		#region Evaluate a formula
+		#region Evaluate an formula
+		static string Import(this Uri uri)
+		{
+			try
+			{
+				var fetch = uri.FetchHttpAsync(null, 3);
+				fetch.Wait();
+				return fetch.Result;
+			}
+			catch (Exception ex)
+			{
+				return $"{uri} => {ex.Message}";
+			}
+		}
+
 		/// <summary>
 		/// Evaluates an Formula expression
 		/// </summary>
@@ -88,6 +102,10 @@ namespace net.vieapps.Services
 			// current date-time (as string)
 			else if (name.IsEquals("@today") || name.IsStartsWith("@todayStr") || name.IsEquals("@datetime.Today") || name.IsEquals("@date.Today") || name.IsEquals("@time.Today") || name.IsStartsWith("@nowStr") || name.IsStartsWith("@datetime.NowStr") || name.IsStartsWith("@date.NowStr") || name.IsStartsWith("@time.NowStr"))
 				value = DateTime.Now.ToDTString(false, name.IsStartsWith("@nowStr") || name.IsStartsWith("@datetime.NowStr") || name.IsStartsWith("@date.NowStr") || name.IsStartsWith("@time.NowStr"));
+
+			// import static text/html from a remote end-point
+			else if (name.IsEquals("@import") && (formula.IsStartsWith("https://") || formula.IsStartsWith("http://")))
+				value = new Uri(formula).Import();
 
 			// pre-defined formulas
 			else if (formula.StartsWith("@"))
