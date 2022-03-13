@@ -17,20 +17,6 @@ namespace net.vieapps.Services
 	{
 
 		#region Evaluate an formula
-		static string Import(this Uri uri)
-		{
-			try
-			{
-				var fetch = uri.FetchHttpAsync(null, 3);
-				fetch.Wait();
-				return fetch.Result;
-			}
-			catch (Exception ex)
-			{
-				return $"{uri} => {ex.Message}";
-			}
-		}
-
 		/// <summary>
 		/// Evaluates an Formula expression
 		/// </summary>
@@ -105,7 +91,26 @@ namespace net.vieapps.Services
 
 			// import static text/html from a remote end-point
 			else if (name.IsEquals("@import") && (formula.IsStartsWith("https://") || formula.IsStartsWith("http://")))
-				value = new Uri(formula).Import();
+				try
+				{
+					string url = formula, element = null;
+					position = url.IndexOf(":", url.IndexOf("://") + 1);
+					position = position > 0 ? position : url.IndexOf(",");
+					if (position > 0)
+					{
+						element = url.Right(url.Length - position - 1).Trim();
+						url = url.Left(position).Trim();
+					}
+					var fetch = new Uri(url).FetchHttpAsync(null, 3);
+					fetch.Wait();
+					value = string.IsNullOrWhiteSpace(element)
+						? fetch.Result
+						: fetch.Result.ToExpandoObject()?.Get(element)?.ToString();
+				}
+				catch (Exception ex)
+				{
+					value = $"Error [{name}({formula})] => {ex.Message}";
+				}
 
 			// pre-defined formulas
 			else if (formula.StartsWith("@"))
@@ -115,6 +120,7 @@ namespace net.vieapps.Services
 				{
 					var getHighValue = "true";
 					position = formula.IndexOf(":");
+					position = position > 0 ? position : formula.IndexOf(",");
 					if (position > 0)
 					{
 						getHighValue = formula.Right(formula.Length - position - 1).Trim();
@@ -152,12 +158,14 @@ namespace net.vieapps.Services
 					var cultureInfoName = "";
 					var format = formula.IsStartsWith("@date") ? "dd/MM/yyyy HH:mm:ss" : formula.IsStartsWith("@time") ? "hh:mm tt @ dd/MM/yyyy" : "";
 					position = formula.IndexOf(":");
+					position = position > 0 ? position : formula.IndexOf(",");
 					if (position > 0)
 					{
 						format = formula.Right(formula.Length - position - 1).Trim();
 						formula = formula.Left(position).Trim();
 						formula = string.IsNullOrWhiteSpace(formula) || formula.Equals("@") ? "@now" : formula;
 						position = format.IndexOf(":");
+						position = position > 0 ? position : format.IndexOf(",");
 						if (position > 0)
 						{
 							cultureInfoName = format.Right(format.Length - position - 1).Trim();
@@ -298,9 +306,7 @@ namespace net.vieapps.Services
 		public static IFilterBy Prepare(this IFilterBy filterBy, object @object, RequestInfo requestInfo, ExpandoObject @params = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null, Action<IFilterBy, PooledJsEngine> onCompleted = null)
 		{
 			using (var jsEngine = Extensions.GetJsEngine(embedObjects, embedTypes))
-			{
 				return filterBy?.Prepare(jsEngine, @object, requestInfo, @params, filter => onCompleted?.Invoke(filter, jsEngine));
-			}
 		}
 
 		/// <summary>
@@ -591,7 +597,6 @@ namespace net.vieapps.Services
 				var attribute = kvp.Key;
 				if (!((kvp.Value as JValue).Value?.ToString() ?? "Ascending").TryToEnum(out SortMode mode))
 					mode = SortMode.Ascending;
-
 				sort = sort != null
 					? mode.Equals(SortMode.Ascending)
 						? sort.ThenByAscending(attribute)
@@ -780,7 +785,7 @@ namespace net.vieapps.Services
 		/// <typeparam name="T"></typeparam>
 		/// <returns></returns>
 		public static string GetCacheKey<T>() where T : class
-		=> typeof(T).GetTypeName(true);
+			=> typeof(T).GetTypeName(true);
 
 		/// <summary>
 		/// Gets the caching key

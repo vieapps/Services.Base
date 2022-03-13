@@ -230,9 +230,7 @@ namespace net.vieapps.Services
 		public static object JsEvaluate(string expression, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 		{
 			using (var jsEngine = Extensions.GetJsEngine(embedObjects, embedTypes))
-			{
 				return jsEngine.JsEvaluate($"{Extensions.JsFunctions}{expression}");
-			}
 		}
 
 		/// <summary>
@@ -246,9 +244,7 @@ namespace net.vieapps.Services
 		public static T JsEvaluate<T>(string expression, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 		{
 			using (var jsEngine = Extensions.GetJsEngine(embedObjects, embedTypes))
-			{
 				return jsEngine.JsEvaluate<T>($"{Extensions.JsFunctions}{expression}");
-			}
 		}
 
 		/// <summary>
@@ -261,9 +257,7 @@ namespace net.vieapps.Services
 		public static IEnumerable<object> JsEvaluate(IEnumerable<string> expressions, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 		{
 			using (var jsEngine = Extensions.GetJsEngine(embedObjects, embedTypes))
-			{
 				return expressions.Select(expression => jsEngine.JsEvaluate($"{Extensions.JsFunctions}{expression}")).ToList();
-			}
 		}
 	}
 }
