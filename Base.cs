@@ -2036,7 +2036,7 @@ namespace net.vieapps.Services
 			// send the HTTP request to sync
 			try
 			{
-				using (var response = await UtilityService.SendHttpRequestAsync(url, "PATCH", requestInfo.Header, requestInfo.Body, "application/json", requestInfo.Session.AppAgent, null, 45, null, null, cancellationToken).ConfigureAwait(false))
+				using (var response = await UtilityService.SendHttpRequestAsync(url, "PATCH", new Dictionary<string, string>(requestInfo.Header) { ["Content-Type"] = "application/json; charset=utf-8", ["User-Agent"] = requestInfo.Session.AppAgent }, requestInfo.Body, 45, cancellationToken).ConfigureAwait(false))
 				{
 				}
 			}

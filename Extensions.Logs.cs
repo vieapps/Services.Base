@@ -41,7 +41,7 @@ namespace net.vieapps.Services
 						try
 						{
 							var filePath = Path.Combine(Extensions.LogsPath, $"logs.services.{DateTime.Now:yyyyMMddHHmmss}.{UtilityService.NewUUID}.json");
-							await UtilityService.WriteTextFileAsync(filePath, new JObject
+							await new JObject
 							{
 								{ "Time", log.Item1.Item1 },
 								{ "CorrelationID", log.Item1.Item2 },
@@ -52,7 +52,7 @@ namespace net.vieapps.Services
 								{ "ObjectName", log.Item1.Item7 },
 								{ "Logs", log.Item2?.Join("\r\n") ?? "" },
 								{ "Stack", log.Item3 }
-							}.ToString(Formatting.Indented), false, null, cancellationToken).ConfigureAwait(false);
+							}.ToString(Formatting.Indented).ToBytes().SaveAsTextAsync(filePath, cancellationToken).ConfigureAwait(false);
 						}
 						catch { }
 				}

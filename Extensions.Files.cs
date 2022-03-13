@@ -260,7 +260,7 @@ namespace net.vieapps.Services
 				if (string.IsNullOrWhiteSpace(data))
 					break;
 
-				await UtilityService.WriteBinaryFileAsync(filePath, data.Base64ToBytes(), offset > 0, cancellationToken).ConfigureAwait(false);
+				await data.Base64ToBytes().SaveAsBinaryAsync(filePath, cancellationToken, offset > 0).ConfigureAwait(false);
 				offset = response.Get<long>("Offset");
 			}
 
