@@ -21,11 +21,17 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <returns></returns>
 		public static string GetRuntimeOS()
-			=> RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
-				? "macOS"
-				: RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
-					? "Linux"
-					: "Windows";
+			=> RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+				? "Windows"
+				: RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
+					? "macOS"
+					: RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
+						? "Linux"
+#if NETSTANDARD2_0
+						: "Generic OS";
+#else
+						: RuntimeInformation.IsOSPlatform(OSPlatform.FreeBSD) ? "FreeBSD" : "Generic OS";
+#endif
 
 		/// <summary>
 		/// Gets the information of the runtime platform
@@ -34,7 +40,7 @@ namespace net.vieapps.Services
 		public static string GetRuntimePlatform(bool getFrameworkDescription = true)
 			=> (getFrameworkDescription ? $"{RuntimeInformation.FrameworkDescription.Trim()} @ " : "")
 				+ $"{Extensions.GetRuntimeOS()} {RuntimeInformation.OSArchitecture.ToString().ToLower()} "
-				+ $"({(RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "Macintosh; Intel Mac OS X; " : "")}{RuntimeInformation.OSDescription.Trim()})";
+				+ $"({(RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "Macintosh; Mac OS X; " : "")}{RuntimeInformation.OSDescription.Trim()})";
 
 		/// <summary>
 		/// Gets the runtime environment information
@@ -153,7 +159,7 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static Task SendServiceInfoAsync(string serviceName, IEnumerable<string> args, bool running, bool available = true, CancellationToken cancellationToken = default)
 		{
-			if (string.IsNullOrWhiteSpace(serviceName))
+			if (!string.IsNullOrWhiteSpace(serviceName))
 				new CommunicateMessage("APIGateway")
 				{
 					Type = "Service#Info",
