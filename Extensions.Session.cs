@@ -1,6 +1,9 @@
 ﻿#region Related components
+using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using net.vieapps.Components.Security;
 using net.vieapps.Components.Utility;
 #endregion
 
@@ -71,7 +74,7 @@ namespace net.vieapps.Services
 				: requestInfo.Session.GetLocationAsync(requestInfo.CorrelationID, cancellationToken);
 		#endregion
 
-		#region Encryption
+		#region Get encryption keys
 		/// <summary>
 		/// Gest a key for encrypting/decrypting data with this session
 		/// </summary>
@@ -133,6 +136,57 @@ namespace net.vieapps.Services
 			=> !string.IsNullOrWhiteSpace(id)
 				? id.HexToBytes().Decrypt(session.GetEncryptionKey(keySeeds?.ToBytes()), session.GetEncryptionIV(ivSeeds?.ToBytes())).ToHex()
 				: null;
+		#endregion
+
+		#region Check is system administrator/account
+		/// <summary>
+		/// Calls the Users service to check this user is system administrator or not
+		/// </summary>
+		/// <param name="user"></param>
+		/// <param name="correlationID"></param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		public static async Task<bool> IsSystemAdministratorAsync(this IUser user, string correlationID = null, CancellationToken cancellationToken = default)
+		{
+			if (user == null || !user.IsAuthenticated)
+				return false;
+
+			var isSystemAdministrator = user.IsSystemAdministrator;
+			if (!isSystemAdministrator)
+			{
+				var requestInfo = new RequestInfo(new Session { User = new User(user) }, "Users", "Account", "GET")
+				{
+					Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["IsSystemAdministrator"] = "" },
+					CorrelationID = correlationID
+				};
+				var response = await requestInfo.CallServiceAsync(cancellationToken).ConfigureAwait(false);
+				isSystemAdministrator = user.ID.IsEquals(response.Get<string>("ID")) && response.Get<bool>("IsSystemAdministrator");
+			}
+			return isSystemAdministrator;
+		}
+
+		/// <summary>
+		/// Calls the Users service to check this user is system administrator or not
+		/// </summary>
+		/// <param name="session"></param>
+		/// <param name="correlationID"></param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		public static Task<bool> IsSystemAdministratorAsync(this Session session, string correlationID = null, CancellationToken cancellationToken = default)
+			=> session == null || session.User == null
+				? Task.FromResult(false)
+				: session.User.IsSystemAdministratorAsync(correlationID, cancellationToken);
+
+		/// <summary>
+		/// Calls the Users service to check this user is system administrator or not
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		public static Task<bool> IsSystemAdministratorAsync(this RequestInfo requestInfo, CancellationToken cancellationToken = default)
+			=> requestInfo == null || requestInfo.Session == null || requestInfo.Session.User == null
+				? Task.FromResult(false)
+				: requestInfo.Session.User.IsSystemAdministratorAsync(requestInfo.CorrelationID, cancellationToken);
 		#endregion
 
 	}

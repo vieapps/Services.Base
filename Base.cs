@@ -783,10 +783,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of the service's object</param>
 		/// <returns></returns>
 		protected virtual List<Privilege> GetPrivileges(IUser user, string serviceName, string objectName)
-			=> new List<Privilege>
-			{
-				new Privilege(serviceName, objectName, "", PrivilegeRole.Viewer)
-			}
+			=> new List<Privilege> { new Privilege(serviceName, objectName, "", PrivilegeRole.Viewer) }
 			.Where(privilege => privilege.ServiceName.IsEquals(this.ServiceName))
 			.ToList();
 
@@ -840,18 +837,7 @@ namespace net.vieapps.Services
 				{
 					var @is = "Users".IsEquals(this.ServiceName) && user.IsSystemAdministrator;
 					if (!@is && !"Users".IsEquals(this.ServiceName))
-					{
-						var response = await this.CallServiceAsync(new RequestInfo(new Session { User = new User(user) }, "Users", "Account", "GET")
-						{
-							Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-							{
-								{ "IsSystemAdministrator", "" }
-							},
-							CorrelationID = correlationID
-						}, cancellationToken).ConfigureAwait(false);
-						@is = user.ID.IsEquals(response.Get<string>("ID")) && response.Get<bool>("IsSystemAdministrator");
-					}
-
+						@is = await user.IsSystemAdministratorAsync(correlationID, cancellationToken).ConfigureAwait(false);
 					if (this.IsDebugAuthorizationsEnabled)
 						await this.WriteLogsAsync(correlationID, $"Determines the user ({user.ID}) is system administrator => {@is}", null, this.ServiceName, "Authorization").ConfigureAwait(false);
 					return @is;
