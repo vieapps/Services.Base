@@ -8,9 +8,9 @@
 		<RootNamespace>net.vieapps.Services</RootNamespace>
 		<AssemblyName>VIEApps.Services.Base</AssemblyName>
 		<AssemblyTitle>VIEApps NGX Service Base</AssemblyTitle>
-		<AssemblyVersion>10.5.2205.1</AssemblyVersion>
-		<FileVersion>10.5.2205.1</FileVersion>
-		<Version>10.5.2205.1</Version>
+		<AssemblyVersion>10.5.2207.4</AssemblyVersion>
+		<FileVersion>10.5.2207.4</FileVersion>
+		<Version>10.5.2207.4</Version>
 		<InformationalVersion>10.5.$([System.DateTime]::Now.Year).$([System.DateTime]::Now.Month).$([System.DateTime]::Now.Day)@$(TargetFramework)#let.it.be</InformationalVersion>
 		<Title>VIEApps NGX Service Base</Title>
 		<Description>The base of all microservices in the VIEApps NGX</Description>
@@ -29,7 +29,7 @@
 		<PackageIcon>Icon.png</PackageIcon>
 		<PackageOutputPath>../../Components</PackageOutputPath>
 		<PackageTags>services;microservices;vieapps;vieapps.components;vieapps.services;vieapps.microservices</PackageTags>
-		<PackageReleaseNotes>WebSocket messages</PackageReleaseNotes>
+		<PackageReleaseNotes>Dependencies</PackageReleaseNotes>
 		<PackageProjectUrl>https://vieapps.net</PackageProjectUrl>
 		<RepositoryUrl>https://github.com/vieapps/Services.Base</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
@@ -39,7 +39,7 @@
 		<None Remove=".DS_Store" />
 		<None Remove=".gitattributes" />
 		<None Remove=".gitignore" />
-		<None Remove="README.md" />
+		<None Visible="false" Include="README.md" Pack="true" PackagePath="\" />
 		<None Visible="false" Include="LICENSE.md" Pack="true" PackagePath="\" />
 		<None Visible="false" Include="Icon.png" Pack="true" PackagePath="\" />
 	</ItemGroup>
@@ -53,16 +53,17 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="JavaScriptEngineSwitcher.ChakraCore" Version="3.16.0" />
+		<PackageReference Include="JavaScriptEngineSwitcher.ChakraCore" Version="3.18.2" />
 		<PackageReference Include="JSPool" Version="4.0.0" />
-		<PackageReference Include="MySqlConnector" Version="2.1.8" />
-		<PackageReference Include="Npgsql" Version="6.0.4" />
-		<PackageReference Include="Serilog.Extensions.Logging.File" Version="2.0.0" />
+		<PackageReference Include="MySqlConnector" Version="2.1.11" />
+		<PackageReference Include="Npgsql" Version="6.0.5" />
+		<PackageReference Include="Serilog.Extensions.Logging.File" Version="3.0.0" />
 		<PackageReference Include="System.Data.SqlClient" Version="4.8.3" />
+		<PackageReference Include="System.IO.FileSystem.Primitives" Version="4.3.0" />
 		<PackageReference Include="System.Text.Encoding.Extensions" Version="4.3.0" />
-		<PackageReference Include="VIEApps.Components.Repository" Version="10.5.2205.1" />
-		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.5.2205.1" />
-		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.5.2205.1" />
+		<PackageReference Include="VIEApps.Components.Repository" Version="10.5.2207.1" />
+		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.5.2207.1" />
+		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.5.2207.4" />
 	</ItemGroup>
 
 </Project>

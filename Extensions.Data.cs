@@ -33,7 +33,8 @@ namespace net.vieapps.Services
 			if (string.IsNullOrWhiteSpace(formula) || !formula.StartsWith("@"))
 				throw new InformationInvalidException($"The formula expression [{formula}] is invalid (the formula expression must started by the '@' character)");
 
-			var position = formula.IndexOf("(");
+			var isJsExpression = formula.StartsWith("@[") && formula.EndsWith("]");
+			var position = isJsExpression ? -1 : formula.IndexOf("(");
 			if (position > 0 && !formula.EndsWith(")"))
 				throw new InformationInvalidException($"The formula expression [{formula}] is invalid (the open and close tokens are required when the formula got a parameter, ex: @request.Body(ContentType.ID) - just like an Javascript function)");
 
@@ -76,7 +77,7 @@ namespace net.vieapps.Services
 					: @params?.Get(formula);
 
 			// value of an JavaScript expression
-			else if (name.IsEquals("@script") || name.IsEquals("@javascript") || name.IsEquals("@js"))
+			else if (isJsExpression || name.IsEquals("@script") || name.IsEquals("@javascript") || name.IsEquals("@js"))
 				value = Extensions.JsEvaluate(formula.GetJsExpression(@object, requestInfo, @params), embedObjects, embedTypes);
 
 			// current date-time
@@ -251,8 +252,8 @@ namespace net.vieapps.Services
 			{
 				// value of an JavaScript expression or of a pre-defined formula expression
 				if (filter?.Value != null && filter.Value is string value && value.StartsWith("@"))
-					filter.Value = value.StartsWith("@[") && value.EndsWith("]")
-						? jsEngine != null ? jsEngine.JsEvaluate(value.GetJsExpression(@object, requestInfo, @params)) : Extensions.JsEvaluate(value.GetJsExpression(@object, requestInfo, @params))
+					filter.Value = value.StartsWith("@[") && value.EndsWith("]") && jsEngine != null
+						? jsEngine.JsEvaluate(value.GetJsExpression(@object, requestInfo, @params))
 						: value.Evaluate(@object, requestInfo, @params);
 			}
 
