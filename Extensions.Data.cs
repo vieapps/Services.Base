@@ -30,6 +30,7 @@ namespace net.vieapps.Services
 		public static object Evaluate(this string formula, ExpandoObject @object, ExpandoObject requestInfo, ExpandoObject @params, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 		{
 			// check
+			formula = formula?.Trim();
 			if (string.IsNullOrWhiteSpace(formula) || !formula.StartsWith("@"))
 				throw new InformationInvalidException($"The formula expression [{formula}] is invalid (the formula expression must started by the '@' character)");
 

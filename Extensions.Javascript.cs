@@ -74,7 +74,7 @@ namespace net.vieapps.Services
 		public static T JsCast<T>(object jsValue)
 			=> jsValue == null || jsValue is Undefined
 				? default
-				: jsValue is string && typeof(T).Equals(typeof(DateTime)) && (jsValue as string).Contains("T") && (jsValue as string).Contains("Z") && DateTime.TryParse(jsValue as string, out DateTime datetime)
+				: jsValue is string jsStr && typeof(T).Equals(typeof(DateTime)) && jsStr.Contains("T") && jsStr.Contains("Z") && DateTime.TryParse(jsStr, out DateTime datetime)
 					? datetime.CastAs<T>()
 					: jsValue.CastAs<T>();
 
