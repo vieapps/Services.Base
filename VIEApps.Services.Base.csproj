@@ -62,7 +62,7 @@
 		<PackageReference Include="MySqlConnector" Version="2.1.13" />
 		<PackageReference Include="Npgsql" Version="6.0.7" />
 		<PackageReference Include="Serilog.Extensions.Logging.File" Version="3.0.0" />
-		<PackageReference Include="System.Data.SqlClient" Version="4.8.4" />
+		<PackageReference Include="System.Data.SqlClient" Version="4.8.5" />
 		<PackageReference Include="System.IO.FileSystem.Primitives" Version="4.3.0" />
 		<PackageReference Include="System.Text.Encoding.Extensions" Version="4.3.0" />
 		<PackageReference Include="VIEApps.Components.Repository" Version="10.6.2211.1" />
