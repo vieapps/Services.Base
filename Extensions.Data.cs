@@ -4,7 +4,8 @@ using System.Linq;
 using System.Dynamic;
 using System.Globalization;
 using System.Collections.Generic;
-using JSPool;
+using System.Threading;
+using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using net.vieapps.Components.Utility;
@@ -27,7 +28,7 @@ namespace net.vieapps.Services
 		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates (for evaluating an Javascript expression)</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types (for evaluating an Javascript expression)</param>
 		/// <returns></returns>
-		public static object Evaluate(this string formula, ExpandoObject @object, ExpandoObject requestInfo, ExpandoObject @params, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
+		public static object Evaluate(this string formula, ExpandoObject @object, ExpandoObject requestInfo = null, ExpandoObject @params = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 		{
 			// check
 			formula = formula?.Trim();
@@ -49,8 +50,12 @@ namespace net.vieapps.Services
 				formula = string.IsNullOrWhiteSpace(formula) || formula.Equals("@") ? "@now" : formula;
 			}
 
+			// value of an JavaScript expression
+			if (isJsExpression || name.IsEquals("@script") || name.IsEquals("@javascript") || name.IsEquals("@js"))
+				value = formula.JsEvaluate(@object, requestInfo, @params, embedObjects, embedTypes);
+
 			// value of current object
-			if (name.IsEquals("@current") || name.IsEquals("@object"))
+			else if (name.IsEquals("@current") || name.IsEquals("@object"))
 				value = formula.StartsWith("@")
 					? formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)
 					: @object?.Get(formula);
@@ -76,10 +81,6 @@ namespace net.vieapps.Services
 				value = formula.StartsWith("@")
 					? formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)
 					: @params?.Get(formula);
-
-			// value of an JavaScript expression
-			else if (isJsExpression || name.IsEquals("@script") || name.IsEquals("@javascript") || name.IsEquals("@js"))
-				value = Extensions.JsEvaluate(formula.GetJsExpression(@object, requestInfo, @params), embedObjects, embedTypes);
 
 			// current date-time
 			else if (name.IsEquals("@now") || name.IsEquals("@datetime.Now") || name.IsEquals("@date.Now") || name.IsEquals("@time.Now"))
@@ -107,33 +108,32 @@ namespace net.vieapps.Services
 					fetch.Wait();
 					value = string.IsNullOrWhiteSpace(element)
 						? fetch.Result
-						: fetch.Result.ToExpandoObject()?.Get(element)?.ToString();
+						: fetch.Result?.ToExpandoObject()?.Get(element)?.ToString();
 				}
 				catch (Exception ex)
 				{
 					value = $"Error [{name}({formula})] => {ex.Message}";
 				}
 
+			// generate UUID
+			else if (name.IsEquals("@uuid") || name.IsEquals("@generateid") || name.IsEquals("@generateuuid"))
+			{
+				var mode = "md5";
+				position = formula.IndexOf(",");
+				if (position > 0)
+				{
+					mode = formula.Right(formula.Length - position - 1).Trim();
+					formula = formula.Left(position).Trim();
+					formula = string.IsNullOrWhiteSpace(formula) || formula.Equals("@") ? "@now" : formula;
+				}
+				value = (formula.StartsWith("@") ? formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)?.ToString() ?? "" : formula).GenerateUUID(null, mode);
+			}
+
 			// pre-defined formulas
 			else if (formula.StartsWith("@"))
 			{
-				// get time quater
-				if (name.IsEquals("@datetime.Quarter") || name.IsEquals("@time.Quarter"))
-				{
-					var getHighValue = "true";
-					position = formula.IndexOf(":");
-					position = position > 0 ? position : formula.IndexOf(",");
-					if (position > 0)
-					{
-						getHighValue = formula.Right(formula.Length - position - 1).Trim();
-						formula = formula.Left(position).Trim();
-					}
-					value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes);
-					value = value is DateTime datetime ? datetime.GetTimeQuarter("true".IsEquals(getHighValue)) as object : null;
-				}
-
 				// convert the value to floating point number
-				else if (name.IsStartsWith("@toDec") || name.IsStartsWith("@toNum") || name.IsStartsWith("@toFloat") || name.IsStartsWith("@toDouble"))
+				if (name.IsStartsWith("@toDec") || name.IsStartsWith("@toNum") || name.IsStartsWith("@toFloat") || name.IsStartsWith("@toDouble"))
 				{
 					value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes);
 					value = value is DateTime datetime
@@ -144,7 +144,7 @@ namespace net.vieapps.Services
 				}
 
 				// convert the value to integral number
-				else if (name.IsStartsWith("@toInt") || name.IsStartsWith("@toLong") || name.IsStartsWith("@toByte"))
+				else if (name.IsStartsWith("@toInt") || name.IsStartsWith("@toLong") || name.IsStartsWith("@toByte") || name.IsStartsWith("@toShort"))
 				{
 					value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes);
 					value = value is DateTime datetime
@@ -158,16 +158,16 @@ namespace net.vieapps.Services
 				else if (name.IsStartsWith("@toStr") || name.IsStartsWith("@date.toStr") || name.IsStartsWith("@time.toStr"))
 				{
 					var cultureInfoName = "";
-					var format = formula.IsStartsWith("@date") ? "dd/MM/yyyy HH:mm:ss" : formula.IsStartsWith("@time") ? "hh:mm tt @ dd/MM/yyyy" : "";
-					position = formula.IndexOf(":");
-					position = position > 0 ? position : formula.IndexOf(",");
+					var format = formula.IsStartsWith("@date")
+						? "dd/MM/yyyy HH:mm:ss"
+						: formula.IsStartsWith("@time") ? "hh:mm tt @ dd/MM/yyyy" : "";
+					position = formula.IndexOf(",");
 					if (position > 0)
 					{
 						format = formula.Right(formula.Length - position - 1).Trim();
 						formula = formula.Left(position).Trim();
 						formula = string.IsNullOrWhiteSpace(formula) || formula.Equals("@") ? "@now" : formula;
-						position = format.IndexOf(":");
-						position = position > 0 ? position : format.IndexOf(",");
+						position = format.IndexOf(",");
 						if (position > 0)
 						{
 							cultureInfoName = format.Right(format.Length - position - 1).Trim();
@@ -218,21 +218,6 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static object Evaluate(this string formula, object @object = null, RequestInfo requestInfo = null, ExpandoObject @params = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 			=> formula?.Evaluate(@object is IBusinessEntity bizObject ? bizObject.ToExpandoObject() : @object?.ToExpandoObject(), requestInfo?.AsExpandoObject, @params, embedObjects, embedTypes);
-
-		/// <summary>
-		/// Gets the time quater
-		/// </summary>
-		/// <param name="time"></param>
-		/// <param name="getHighValue"></param>
-		/// <returns></returns>
-		public static DateTime GetTimeQuarter(this DateTime time, bool getHighValue = true)
-			=> time.Minute <= 15
-				? getHighValue ? DateTime.Parse($"{time:yyyy/MM/dd HH}:15:00") : DateTime.Parse($"{time:yyyy/MM/dd HH}:00:00")
-				: time.Minute <= 30
-					? getHighValue ? DateTime.Parse($"{time:yyyy/MM/dd HH}:30:00") : DateTime.Parse($"{time:yyyy/MM/dd HH}:16:00")
-					: time.Minute <= 45
-						? getHighValue ? DateTime.Parse($"{time:yyyy/MM/dd HH}:45:00") : DateTime.Parse($"{time:yyyy/MM/dd HH}:31:00")
-						: getHighValue ? DateTime.Parse($"{time:yyyy/MM/dd HH}:59:59") : DateTime.Parse($"{time:yyyy/MM/dd HH}:46:00");
 		#endregion
 
 		#region Filter
@@ -240,27 +225,23 @@ namespace net.vieapps.Services
 		/// Prepares the comparing values of the filtering expression (means evaluating all Formula/Javascript expressions)
 		/// </summary>
 		/// <param name="filterBy">The filtering expression</param>
-		/// <param name="jsEngine">The pooled JavaScript engine for evaluating all JavaScript expressions</param>
 		/// <param name="object">The object for fetching data from</param>
 		/// <param name="requestInfo">The object that presents the information of the request information</param>
 		/// <param name="params">The additional parameters for fetching data from</param>
 		/// <param name="onCompleted">The action to run when the preparing process is completed</param>
 		/// <returns>The filtering expression with all formula/expression values had been evaluated</returns>
-		public static IFilterBy Prepare(this IFilterBy filterBy, PooledJsEngine jsEngine, ExpandoObject @object, ExpandoObject requestInfo, ExpandoObject @params, Action<IFilterBy> onCompleted = null)
+		public static IFilterBy Prepare(this IFilterBy filterBy, ExpandoObject @object, ExpandoObject requestInfo = null, ExpandoObject @params = null, Action<IFilterBy> onCompleted = null)
 		{
-			// prepare value of a single filter
+			// prepare value of a single filter (that presented by an JavaScript/Formulla expression)
 			if (filterBy is FilterBy filter)
 			{
-				// value of an JavaScript expression or of a pre-defined formula expression
 				if (filter?.Value != null && filter.Value is string value && value.StartsWith("@"))
-					filter.Value = value.StartsWith("@[") && value.EndsWith("]") && jsEngine != null
-						? jsEngine.JsEvaluate(value.GetJsExpression(@object, requestInfo, @params))
-						: value.Evaluate(@object, requestInfo, @params);
+					filter.Value = value.Evaluate(@object, requestInfo, @params);
 			}
 
 			// prepare a group of filters
 			else
-				(filterBy as FilterBys)?.Children?.ForEach(filterby => filterby?.Prepare(jsEngine, @object, requestInfo, @params, onCompleted));
+				(filterBy as FilterBys)?.Children?.ForEach(filterby => filterby?.Prepare(@object, requestInfo, @params, onCompleted));
 
 			// complete
 			onCompleted?.Invoke(filterBy);
@@ -271,45 +252,13 @@ namespace net.vieapps.Services
 		/// Prepares the comparing values of the filtering expression (means evaluating all Formula/Javascript expressions)
 		/// </summary>
 		/// <param name="filterBy">The filtering expression</param>
-		/// <param name="requestInfo">The object that presents the information of the request information</param>
-		/// <param name="object">The object for fetching data from</param>
-		/// <param name="jsEngine">The pooled JavaScript engine for evaluating all JavaScript expressions</param>
-		/// <param name="params">The additional parameters for fetching data from</param>
-		/// <param name="onCompleted">The action to run when the preparing process is completed</param>
-		/// <returns>The filtering expression with all formula/expression values had been evaluated</returns>
-		public static IFilterBy Prepare(this IFilterBy filterBy, PooledJsEngine jsEngine = null, object @object = null, RequestInfo requestInfo = null, ExpandoObject @params = null, Action<IFilterBy> onCompleted = null)
-			=> filterBy?.Prepare(jsEngine, @object is IBusinessEntity bizObject ? bizObject.ToExpandoObject() : @object?.ToExpandoObject(), requestInfo?.AsExpandoObject, @params, onCompleted);
-
-		/// <summary>
-		/// Prepares the comparing values of the filtering expression (means evaluating all Formula/Javascript expressions)
-		/// </summary>
-		/// <typeparam name="T"></typeparam>
-		/// <param name="filterBy">The filtering expression</param>
-		/// <param name="jsEngine">The pooled JavaScript engine for evaluating all JavaScript expressions</param>
 		/// <param name="object">The object for fetching data from</param>
 		/// <param name="requestInfo">The object that presents the information of the request information</param>
 		/// <param name="params">The additional parameters for fetching data from</param>
 		/// <param name="onCompleted">The action to run when the preparing process is completed</param>
 		/// <returns>The filtering expression with all formula/expression values had been evaluated</returns>
-		public static IFilterBy<T> Prepare<T>(this IFilterBy<T> filterBy, PooledJsEngine jsEngine = null, object @object = null, RequestInfo requestInfo = null, ExpandoObject @params = null, Action<IFilterBy<T>> onCompleted = null) where T : class
-			=> (filterBy as IFilterBy)?.Prepare(jsEngine, @object, requestInfo, @params, onCompleted as Action<IFilterBy>) as IFilterBy<T>;
-
-		/// <summary>
-		/// Prepares the comparing values of the filtering expression (means evaluating all Formula/Javascript expressions)
-		/// </summary>
-		/// <param name="filterBy">The filtering expression</param>
-		/// <param name="object">The object for fetching data from</param>
-		/// <param name="requestInfo">The object that presents the information of the request information</param>
-		/// <param name="params">The additional parameters for fetching data from</param>
-		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
-		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
-		/// <param name="onCompleted">The action to run when the preparing process is completed</param>
-		/// <returns>The filtering expression with all formula/expression values had been evaluated</returns>
-		public static IFilterBy Prepare(this IFilterBy filterBy, object @object, RequestInfo requestInfo, ExpandoObject @params = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null, Action<IFilterBy, PooledJsEngine> onCompleted = null)
-		{
-			using (var jsEngine = Extensions.GetJsEngine(embedObjects, embedTypes))
-				return filterBy?.Prepare(jsEngine, @object, requestInfo, @params, filter => onCompleted?.Invoke(filter, jsEngine));
-		}
+		public static IFilterBy Prepare(this IFilterBy filterBy, object @object = null, RequestInfo requestInfo = null, ExpandoObject @params = null, Action<IFilterBy> onCompleted = null)
+			=> filterBy?.Prepare(@object is IBusinessEntity bizObject ? bizObject.ToExpandoObject() : @object?.ToExpandoObject(), requestInfo?.AsExpandoObject, @params, onCompleted);
 
 		/// <summary>
 		/// Prepares the comparing values of the filtering expression (means evaluating all Formula/Javascript expressions)
@@ -319,12 +268,10 @@ namespace net.vieapps.Services
 		/// <param name="object">The object for fetching data from</param>
 		/// <param name="requestInfo">The object that presents the information of the request information</param>
 		/// <param name="params">The additional parameters for fetching data from</param>
-		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
-		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
 		/// <param name="onCompleted">The action to run when the preparing process is completed</param>
 		/// <returns>The filtering expression with all formula/expression values had been evaluated</returns>
-		public static IFilterBy<T> Prepare<T>(this IFilterBy<T> filterBy, RequestInfo requestInfo, object @object, ExpandoObject @params = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null, Action<IFilterBy<T>, PooledJsEngine> onCompleted = null) where T : class
-			=> filterBy?.Prepare(@object, requestInfo, @params, embedObjects, embedTypes, onCompleted as Action<IFilterBy, PooledJsEngine>) as IFilterBy<T>;
+		public static IFilterBy<T> Prepare<T>(this IFilterBy<T> filterBy, object @object = null, RequestInfo requestInfo = null, ExpandoObject @params = null, Action<IFilterBy<T>> onCompleted = null) where T : class
+			=> (filterBy as IFilterBy)?.Prepare(@object, requestInfo, @params, onCompleted as Action<IFilterBy>) as IFilterBy<T>;
 
 		/// <summary>
 		/// Prepares the comparing values of the filtering expression (means evaluating all Formula/Javascript expressions)
@@ -335,7 +282,7 @@ namespace net.vieapps.Services
 		/// <returns>The filtering expression with all formula/expression values had been evaluated</returns>
 		public static IFilterBy Prepare(this IFilterBy filterBy, RequestInfo requestInfo, Action<IFilterBy> onCompleted = null)
 		{
-			filterBy?.Prepare(null, null, requestInfo, null, null);
+			filterBy?.Prepare(null, requestInfo, null);
 			onCompleted?.Invoke(filterBy);
 			return filterBy;
 		}
@@ -350,7 +297,7 @@ namespace net.vieapps.Services
 		/// <returns>The filtering expression with all formula/expression values had been evaluated</returns>
 		public static IFilterBy<T> Prepare<T>(this IFilterBy<T> filterBy, RequestInfo requestInfo, Action<IFilterBy<T>> onCompleted = null) where T : class
 		{
-			filterBy?.Prepare<T>(null, null, requestInfo, null, null);
+			filterBy?.Prepare(null, requestInfo, null);
 			onCompleted?.Invoke(filterBy);
 			return filterBy;
 		}
@@ -410,37 +357,37 @@ namespace net.vieapps.Services
 			IFilterBy<T> filter = null;
 			var attribute = property.Name;
 
-			// group comparisions
+			// group of comparisions
 			if (attribute.IsEquals("And") || attribute.IsEquals("Or"))
 			{
 				filter = attribute.IsEquals("Or") ? Filters<T>.Or() : Filters<T>.And();
-				(property.Value is JObject ? (property.Value as JObject).ToJArray(kvp => new JObject { { kvp.Key, kvp.Value } }) : property.Value).ForEach(exp => (filter as FilterBys<T>).Add(exp != null && exp is JObject ? (exp as JObject).GetFilterBy<T>() : null));
-				if ((filter as FilterBys<T>).Children.Count < 1)
+				(property.Value is JObject pobj ? pobj.ToJArray(kvp => new JObject { { kvp.Key, kvp.Value } }) : property.Value).ForEach(exp => (filter as FilterBys<T>).Add(exp != null && exp is JObject eobj ? eobj.GetFilterBy<T>() : null));
+				if (!(filter as FilterBys<T>).Children.Any())
 					filter = null;
 			}
 
-			// single comparisions
+			// single comparision
 			else
 			{
 				var @operator = "";
 				var value = JValue.CreateNull();
 
 				// special comparison
-				if (property.Value is JValue)
+				if (property.Value is JValue pvalue)
 				{
-					@operator = (property.Value as JValue).Value.ToString();
+					@operator = pvalue.Value.ToString();
 					if (!@operator.IsEquals("IsNull") && !@operator.IsEquals("IsNotNull") && !@operator.IsEquals("IsEmpty") && !@operator.IsEquals("IsNotEmpty"))
 						@operator = null;
 				}
 
 				// normal comparison
-				else if (property.Value is JObject)
+				else if (property.Value is JObject pobj)
 				{
-					property = (property.Value as JObject).Properties()?.FirstOrDefault();
-					if (property != null && property.Value != null && property.Value is JValue && (property.Value as JValue).Value != null)
+					property = pobj.Properties()?.FirstOrDefault();
+					if (property != null && property.Value != null && property.Value is JValue jvalue && jvalue.Value != null)
 					{
 						@operator = property.Name;
-						value = property.Value as JValue;
+						value = jvalue;
 					}
 					else
 						@operator = null;
@@ -484,13 +431,13 @@ namespace net.vieapps.Services
 			else
 			{
 				var children = property.Name.IsEquals("Or") ? expression["Or"] : expression["And"];
-				(children is JObject ? (children as JObject).ToJArray(kvp => new JObject
+				(children is JObject cobj ? cobj.ToJArray(kvp => new JObject
 				{
 					{ kvp.Key, kvp.Value }
-				}) : children as JArray).ForEach(exp => filter.Add(exp != null && exp is JObject ? (exp as JObject).GetFilterBy<T>() : null));
+				}) : children as JArray).ForEach(exp => filter.Add(exp != null && exp is JObject eobj ? eobj.GetFilterBy<T>() : null));
 			}
 
-			return filter != null && filter.Children.Count > 0 ? filter : null;
+			return filter != null && filter.Children.Any() ? filter : null;
 		}
 
 		/// <summary>
@@ -548,7 +495,7 @@ namespace net.vieapps.Services
 					var value = json.GetClientJson(out @operator);
 					return new JObject
 					{
-						{ @operator, value }
+						{ @operator, json.GetClientJson(out @operator) }
 					};
 				});
 			}
@@ -940,7 +887,34 @@ namespace net.vieapps.Services
 			=> Extensions.GetCacheKeyOfObjectsXml<T>((filter != null ? $"#f:{filter.GenerateUUID()}" : "") + (sort != null ? $"#s:{sort.GenerateUUID()}" : ""), pageSize, pageNumber, suffix);
 		#endregion
 
-		#region Parameters of double braces
+		#region Double braces tokens & date-time quater
+		/// <summary>
+		/// Prepares the parameters of double braces (mustache-style - {{ }}) parameters
+		/// </summary>
+		/// <param name="doubleBracesTokens"></param>
+		/// <param name="object"></param>
+		/// <param name="requestInfo"></param>
+		/// <param name="params"></param>
+		/// <returns></returns>
+		public static IDictionary<string, object> PrepareDoubleBracesParameters(this List<Tuple<string, string>> doubleBracesTokens, ExpandoObject @object, ExpandoObject requestInfo = null, ExpandoObject @params = null)
+			=> doubleBracesTokens == null || !doubleBracesTokens.Any()
+				? new Dictionary<string, object>()
+				: doubleBracesTokens
+					.Select(token => token.Item2)
+					.Distinct(StringComparer.OrdinalIgnoreCase)
+					.ToDictionary(token => token, token => token.StartsWith("@") ? token.Evaluate(@object, requestInfo, @params) : token);
+
+		/// <summary>
+		/// Prepares the parameters of double braces (mustache-style - {{ }}) parameters
+		/// </summary>
+		/// <param name="doubleBracesTokens"></param>
+		/// <param name="object"></param>
+		/// <param name="requestInfo"></param>
+		/// <param name="params"></param>
+		/// <returns></returns>
+		public static IDictionary<string, object> PrepareDoubleBracesParameters(this List<Tuple<string, string>> doubleBracesTokens, object @object = null, RequestInfo requestInfo = null, ExpandoObject @params = null)
+			=> doubleBracesTokens?.PrepareDoubleBracesParameters(@object is IBusinessEntity bizObject ? bizObject.ToExpandoObject() : @object?.ToExpandoObject(), requestInfo?.AsExpandoObject, @params);
+
 		/// <summary>
 		/// Prepares the parameters of double braces (mustache-style - {{ }}) parameters
 		/// </summary>
@@ -949,13 +923,10 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo"></param>
 		/// <param name="params"></param>
 		/// <returns></returns>
-		public static IDictionary<string, object> PrepareDoubleBracesParameters(this string @string, ExpandoObject @object, ExpandoObject requestInfo, ExpandoObject @params)
+		public static IDictionary<string, object> PrepareDoubleBracesParameters(this string @string, ExpandoObject @object, ExpandoObject requestInfo = null, ExpandoObject @params = null)
 			=> string.IsNullOrWhiteSpace(@string)
 				? new Dictionary<string, object>()
-				: @string.GetDoubleBracesTokens()
-					.Select(token => token.Item2)
-					.Distinct(StringComparer.OrdinalIgnoreCase)
-					.ToDictionary(token => token, token => token.StartsWith("@[") && token.EndsWith("]") ? Extensions.JsEvaluate(token.GetJsExpression(@object, requestInfo, @params)) : token.StartsWith("@") ? token.Evaluate(@object, requestInfo, @params) : token);
+				: @string.GetDoubleBracesTokens().PrepareDoubleBracesParameters(@object, requestInfo, @params);
 
 		/// <summary>
 		/// Prepares the parameters of double braces (mustache-style - {{ }}) parameters
@@ -967,6 +938,115 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static IDictionary<string, object> PrepareDoubleBracesParameters(this string @string, object @object = null, RequestInfo requestInfo = null, ExpandoObject @params = null)
 			=> @string?.PrepareDoubleBracesParameters(@object is IBusinessEntity bizObject ? bizObject.ToExpandoObject() : @object?.ToExpandoObject(), requestInfo?.AsExpandoObject, @params);
+
+		/// <summary>
+		/// Gets the time quater
+		/// </summary>
+		/// <param name="time"></param>
+		/// <param name="getHighValue"></param>
+		/// <returns></returns>
+		public static DateTime GetTimeQuarter(this DateTime time, bool getHighValue = true)
+			=> time.Minute <= 15
+				? getHighValue ? DateTime.Parse($"{time:yyyy/MM/dd HH}:15:00") : DateTime.Parse($"{time:yyyy/MM/dd HH}:00:00")
+				: time.Minute <= 30
+					? getHighValue ? DateTime.Parse($"{time:yyyy/MM/dd HH}:30:00") : DateTime.Parse($"{time:yyyy/MM/dd HH}:16:00")
+					: time.Minute <= 45
+						? getHighValue ? DateTime.Parse($"{time:yyyy/MM/dd HH}:45:00") : DateTime.Parse($"{time:yyyy/MM/dd HH}:31:00")
+						: getHighValue ? DateTime.Parse($"{time:yyyy/MM/dd HH}:59:59") : DateTime.Parse($"{time:yyyy/MM/dd HH}:46:00");
+		#endregion
+
+		#region Version contents
+		/// <summary>
+		/// Gets service name of an entity definition
+		/// </summary>
+		/// <param name="definition"></param>
+		/// <returns></returns>
+		public static string GetServiceName(this EntityDefinition definition)
+			=> definition?.RepositoryDefinition?.ServiceName;
+
+		/// <summary>
+		/// Gets service name of a service object
+		/// </summary>
+		/// <param name="object"></param>
+		/// <returns></returns>
+		public static string GetServiceName(this RepositoryBase @object)
+			=> RepositoryMediator.GetEntityDefinition(@object?.GetType())?.GetServiceName();
+
+		/// <summary>
+		/// Gets name of a service object of an entity definition
+		/// </summary>
+		/// <param name="definition"></param>
+		/// <param name="includePrefixAndSuffix"></param>
+		/// <returns></returns>
+		public static string GetObjectName(this EntityDefinition definition, bool includePrefixAndSuffix = true)
+			=> includePrefixAndSuffix
+				? $"{(string.IsNullOrWhiteSpace(definition?.ObjectNamePrefix) ? "" : definition?.ObjectNamePrefix)}{definition?.ObjectName}{(string.IsNullOrWhiteSpace(definition?.ObjectNameSuffix) ? "" : definition?.ObjectNameSuffix)}"
+				: definition?.ObjectName;
+
+		/// <summary>
+		/// Gets name of a service object
+		/// </summary>
+		/// <param name="object"></param>
+		/// <param name="includePrefixAndSuffix"></param>
+		/// <returns></returns>
+		public static string GetObjectName(this RepositoryBase @object, bool includePrefixAndSuffix = true)
+			=> RepositoryMediator.GetEntityDefinition(@object?.GetType())?.GetObjectName(includePrefixAndSuffix);
+
+		/// <summary>
+		/// Finds version contents of an object
+		/// </summary>
+		/// <param name="object"></param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		public static async Task<List<VersionContent>> FindVersionsAsync(this RepositoryBase @object, CancellationToken cancellationToken = default)
+		{
+			if (string.IsNullOrWhiteSpace(@object?.ID))
+				return null;
+
+			var definition = RepositoryMediator.GetEntityDefinition(@object.GetType());
+			var versions = definition.Cache != null
+				? await definition.Cache.GetAsync<List<VersionContent>>($"{@object.GetCacheKey()}:Versions", cancellationToken).ConfigureAwait(false)
+				: null;
+
+			if (versions == null)
+			{
+				versions = await RepositoryMediator.FindVersionContentsAsync(@object.ID, cancellationToken).ConfigureAwait(false);
+				if (definition.Cache != null)
+					await definition.Cache.SetAsync($"{@object.GetCacheKey()}:Versions", versions, 0, cancellationToken).ConfigureAwait(false);
+			}
+
+			new UpdateMessage
+			{
+				Type = $"{definition.GetServiceName()}#{definition.GetObjectName()}#Update",
+				Data = new JObject
+				{
+					["ID"] = @object.ID,
+					["SystemID"] = @object.SystemID,
+					["TotalVersions"] = versions != null ? versions.Count : 0,
+					["Versions"] = versions?.Select(obj => obj.ToJson(json => (json as JObject).Remove("Data"))).ToJArray()
+				},
+				DeviceID = "*"
+			}.Send();
+
+			return versions;
+		}
+
+		/// <summary>
+		/// Finds version contents of a collection of object
+		/// </summary>
+		/// <param name="objects"></param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		public static async Task<Dictionary<string, List<VersionContent>>> FindVersionsAsync(this IEnumerable<RepositoryBase> objects, CancellationToken cancellationToken = default)
+		{
+			var versions = new Dictionary<string, List<VersionContent>>();
+			if (objects != null && objects.Any())
+				await Task.WhenAll(objects.Select(async @object =>
+				{
+					versions[@object.ID] = await @object.FindVersionsAsync(cancellationToken).ConfigureAwait(false);
+				})).ConfigureAwait(false);
+			return versions;
+		}
 		#endregion
 
 	}

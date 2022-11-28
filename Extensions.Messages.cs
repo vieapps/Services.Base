@@ -37,11 +37,13 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="message"></param>
 		/// <param name="cancellationToken"></param>
+		/// <param name="defer"></param>
 		/// <returns></returns>
-		public static Task SendAsync(this UpdateMessage message, CancellationToken cancellationToken = default)
+		public static async Task SendAsync(this UpdateMessage message, CancellationToken cancellationToken = default, int defer = 0)
 		{
+			if (defer > 0)
+				await Task.Delay(defer, cancellationToken).ConfigureAwait(false);
 			message?.Send();
-			return Task.CompletedTask;
 		}
 
 		/// <summary>
@@ -70,11 +72,13 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="messages"></param>
 		/// <param name="cancellationToken"></param>
+		/// <param name="defer"></param>
 		/// <returns></returns>
-		public static Task SendAsync(this IEnumerable<UpdateMessage> messages, CancellationToken cancellationToken = default)
+		public static async Task SendAsync(this IEnumerable<UpdateMessage> messages, CancellationToken cancellationToken = default, int defer = 0)
 		{
+			if (defer > 0)
+				await Task.Delay(defer, cancellationToken).ConfigureAwait(false);
 			messages?.Send();
-			return Task.CompletedTask;
 		}
 
 		/// <summary>
@@ -106,17 +110,21 @@ namespace net.vieapps.Services
 		/// <param name="deviceID"></param>
 		/// <param name="excludedDeviceID"></param>
 		/// <param name="cancellationToken"></param>
+		/// <param name="defer"></param>
 		/// <returns></returns>
-		public static Task SendAsync(this List<BaseMessage> messages, string deviceID, string excludedDeviceID, CancellationToken cancellationToken = default)
-			=> messages != null && messages.Any()
-				? messages.Select(message => new UpdateMessage
+		public static async Task SendAsync(this List<BaseMessage> messages, string deviceID, string excludedDeviceID, CancellationToken cancellationToken = default, int defer = 0)
+		{
+			if (defer > 0)
+				await Task.Delay(defer, cancellationToken).ConfigureAwait(false);
+			if (messages != null && messages.Any())
+				messages.Select(message => new UpdateMessage
 				{
 					Type = message.Type,
 					Data = message.Data,
 					DeviceID = deviceID,
 					ExcludedDeviceID = excludedDeviceID
-				}).SendAsync(cancellationToken)
-				: Task.CompletedTask;
+				}).Send();
+		}
 
 		static ConcurrentDictionary<string, ISubject<CommunicateMessage>> CommunicatingSubjects { get; } = new ConcurrentDictionary<string, ISubject<CommunicateMessage>>();
 
@@ -151,11 +159,13 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="message"></param>
 		/// <param name="cancellationToken"></param>
+		/// <param name="defer"></param>
 		/// <returns></returns>
-		public static Task SendAsync(this CommunicateMessage message, CancellationToken cancellationToken = default)
+		public static async Task SendAsync(this CommunicateMessage message, CancellationToken cancellationToken = default, int defer = 0)
 		{
+			if (defer > 0)
+				await Task.Delay(defer, cancellationToken).ConfigureAwait(false);
 			message?.Send();
-			return Task.CompletedTask;
 		}
 
 		/// <summary>
@@ -184,11 +194,13 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="messages"></param>
 		/// <param name="cancellationToken"></param>
+		/// <param name="defer"></param>
 		/// <returns></returns>
-		public static Task SendAsync(this IEnumerable<CommunicateMessage> messages, CancellationToken cancellationToken = default)
+		public static async Task SendAsync(this IEnumerable<CommunicateMessage> messages, CancellationToken cancellationToken = default, int defer = 0)
 		{
+			if (defer > 0)
+				await Task.Delay(defer, cancellationToken).ConfigureAwait(false);
 			messages?.Send();
-			return Task.CompletedTask;
 		}
 
 		/// <summary>
@@ -219,11 +231,13 @@ namespace net.vieapps.Services
 		/// <param name="messages"></param>
 		/// <param name="serviceName"></param>
 		/// <param name="cancellationToken"></param>
+		/// <param name="defer"></param>
 		/// <returns></returns>
-		public static Task SendAsync(this List<BaseMessage> messages, string serviceName, CancellationToken cancellationToken = default)
+		public static async Task SendAsync(this List<BaseMessage> messages, string serviceName, CancellationToken cancellationToken = default, int defer = 0)
 		{
+			if (defer > 0)
+				await Task.Delay(defer, cancellationToken).ConfigureAwait(false);
 			messages?.Send(serviceName);
-			return Task.CompletedTask;
 		}
 	}
 }

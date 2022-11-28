@@ -175,57 +175,48 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Validates a web-hook message
+		/// Converts and validates this request information as a web-hook message
 		/// </summary>
 		/// <param name="requestInfo"></param>
+		/// <param name="secretToken"></param>
+		/// <param name="secretTokenName"></param>
 		/// <param name="signAlgorithm"></param>
 		/// <param name="signKey"></param>
+		/// <param name="signKeyIsHex"></param>
 		/// <param name="signatureName"></param>
 		/// <param name="signatureAsHex"></param>
-		/// <param name="signatureInQuery"></param>
-		/// <param name="query"></param>
-		/// <param name="header"></param>
-		public static void ValidateWebHookMessage(this RequestInfo requestInfo, string signAlgorithm, string signKey, string signatureName, bool signatureAsHex = true, bool signatureInQuery = false, IDictionary<string, string> query = null, IDictionary<string, string> header = null)
-		{
-			if (string.IsNullOrWhiteSpace(signAlgorithm) || !CryptoService.HmacHashAlgorithmFactories.ContainsKey(signAlgorithm))
-				signAlgorithm = "SHA256";
-
-			var signature = "";
-			using (var hasher = CryptoService.GetHMACHashAlgorithm((signKey ?? CryptoService.DEFAULT_PASS_PHRASE).ToBytes(), signAlgorithm))
+		/// <param name="requiredQuery"></param>
+		/// <param name="requiredHeader"></param>
+		/// <param name="decryptionKey"></param>
+		/// <param name="decryptionIV"></param>
+		/// <returns></returns>
+		public static WebHookMessage ToWebHookMessage(this RequestInfo requestInfo, string secretToken, string secretTokenName, string signAlgorithm, string signKey, bool signKeyIsHex, string signatureName, bool signatureAsHex, IDictionary<string, string> requiredQuery, IDictionary<string, string> requiredHeader, byte[] decryptionKey, byte[] decryptionIV)
+			=> new WebHookMessage
 			{
-				var body = (requestInfo.Body ?? "").ToBytes();
-				signature = signatureAsHex
-					? hasher.ComputeHash(body).ToHex()
-					: hasher.ComputeHash(body).ToBase64();
-			}
+				EndpointURL = requestInfo.Session?.AppOrigin ?? requestInfo.GetHeaderParameter("Origin"),
+				Body = requestInfo.Body,
+				Query = requestInfo.Query,
+				Header  = requestInfo.Header,
+				CorrelationID = requestInfo.CorrelationID
+			}.Validate(secretToken, secretTokenName, signAlgorithm, signKey, signKeyIsHex, signatureName, signatureAsHex, requiredQuery, requiredHeader, decryptionKey, decryptionIV);
 
-			if (string.IsNullOrWhiteSpace(signatureName))
-				signatureName = $"Hmac{signAlgorithm.GetCapitalizedFirstLetter()}Signature";
-
-			var signatureOfMessage = signatureInQuery
-				? requestInfo.Query != null && requestInfo.Query.ContainsKey(signatureName) ? requestInfo.Query[signatureName] : ""
-				: requestInfo.Header != null && requestInfo.Header.ContainsKey(signatureName) ? requestInfo.Header[signatureName] : "";
-
-			if (!signature.IsEquals(signatureOfMessage))
-				throw new InformationInvalidException("Invalid (signature)");
-
-			if (query != null && query.Count > 0)
-				foreach (var kvp in query)
-				{
-					var key = kvp.Key;
-					var value = kvp.Value;
-					if (!string.IsNullOrWhiteSpace(key) && !string.IsNullOrWhiteSpace(value) && !value.IsEquals(requestInfo.Query != null && requestInfo.Query.ContainsKey(key) ? requestInfo.Query[key] : ""))
-						throw new InformationInvalidException("Invalid (query)");
-				}
-
-			if (header != null && header.Count > 0)
-				foreach (var kvp in header)
-				{
-					var key = kvp.Key;
-					var value = kvp.Value;
-					if (!string.IsNullOrWhiteSpace(key) && !string.IsNullOrWhiteSpace(value) && !value.IsEquals(requestInfo.Header != null && requestInfo.Header.ContainsKey(key) ? requestInfo.Header[key] : ""))
-						throw new InformationInvalidException("Invalid (header)");
-				}
-		}
+		/// <summary>
+		/// Converts and validates this request information as a web-hook message
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <param name="secretToken"></param>
+		/// <param name="secretTokenName"></param>
+		/// <param name="signAlgorithm"></param>
+		/// <param name="signKey"></param>
+		/// <param name="signKeyIsHex"></param>
+		/// <param name="signatureName"></param>
+		/// <param name="signatureAsHex"></param>
+		/// <param name="requiredQuery"></param>
+		/// <param name="requiredHeader"></param>
+		/// <param name="decryptionKey"></param>
+		/// <param name="decryptionIV"></param>
+		/// <returns></returns>
+		public static WebHookMessage ToWebHookMessage(this RequestInfo requestInfo, string secretToken, string secretTokenName, string signAlgorithm, string signKey, bool signKeyIsHex, string signatureName, bool signatureAsHex, JObject requiredQuery = null, JObject requiredHeader = null, byte[] decryptionKey = null, byte[] decryptionIV = null)
+			=> requestInfo?.ToWebHookMessage(secretToken, secretTokenName, signAlgorithm, signKey, signKeyIsHex, signatureName, signatureAsHex, requiredQuery?.ToDictionary<string>(), requiredHeader?.ToDictionary<string>(), decryptionKey, decryptionIV);
 	}
 }

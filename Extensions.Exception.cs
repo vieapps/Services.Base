@@ -214,11 +214,9 @@ namespace net.vieapps.Services
 				: exception;
 
 			// prepare message
-			message = string.IsNullOrWhiteSpace(message)
-				? exception != null
-					? exception.Message
-					: $"Error occurred while processing"
-				: message;
+			message = exception != null
+				? string.IsNullOrWhiteSpace(message) ? exception.Message : $"{message} => {exception.Message}"
+				: message ?? "Error occurred while processing";
 
 			// pre-process
 			onCompleted?.Invoke(message, exception);

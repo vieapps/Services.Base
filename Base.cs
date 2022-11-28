@@ -32,6 +32,28 @@ namespace net.vieapps.Services
 
 		public abstract Task<JToken> ProcessRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default);
 
+		public virtual Task<JToken> ProcessRollbackRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
+			=> Task.FromResult<JToken>(null);
+
+		public virtual Task ProcessWebHookMessageAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
+			=> Task.CompletedTask;
+
+		/// <summary>
+		/// Processes the inter-communicate messages between the services' instances
+		/// </summary>
+		/// <param name="message">The message</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		protected virtual Task ProcessInterCommunicateMessageAsync(CommunicateMessage message, CancellationToken cancellationToken = default)
+			=> Task.CompletedTask;
+
+		/// <summary>
+		/// Processes the inter-communicate messages between the service and API Gateway
+		/// </summary>
+		/// <param name="message">The message</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		protected virtual Task ProcessGatewayCommunicateMessageAsync(CommunicateMessage message, CancellationToken cancellationToken = default)
+			=> Task.CompletedTask;
+
 		public virtual Task<JToken> SyncAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
 		{
 			// validate
@@ -51,26 +73,7 @@ namespace net.vieapps.Services
 		public virtual Task<JToken> FetchTemporaryFileAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
 			=> requestInfo.FetchTemporaryFileAsync(cancellationToken);
 
-		public virtual Task ProcessWebHookMessageAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
-			=> Task.CompletedTask;
-
 		public virtual void DoWork(string[] args = null) { }
-
-		/// <summary>
-		/// Processes the inter-communicate messages between the services' instances
-		/// </summary>
-		/// <param name="message">The message</param>
-		/// <param name="cancellationToken">The cancellation token</param>
-		protected virtual Task ProcessInterCommunicateMessageAsync(CommunicateMessage message, CancellationToken cancellationToken = default)
-			=> Task.CompletedTask;
-
-		/// <summary>
-		/// Processes the inter-communicate messages between the service and API Gateway
-		/// </summary>
-		/// <param name="message">The message</param>
-		/// <param name="cancellationToken">The cancellation token</param>
-		protected virtual Task ProcessGatewayCommunicateMessageAsync(CommunicateMessage message, CancellationToken cancellationToken = default)
-			=> Task.CompletedTask;
 
 		#region Properties
 		IAsyncDisposable ServiceInstance { get; set; }
@@ -303,21 +306,24 @@ namespace net.vieapps.Services
 		/// <param name="message">The message to send</param>
 		/// <param name="developerID">The identity of developer</param>
 		/// <param name="appID">The identity of app</param>
-		/// <param name="signAlgorithm">The HMAC algorithm to sign the body with the specified key (md5, sha1, sha256, sha384, sha512, ripemd/ripemd160, blake128, blake/blake256, blake384, blake512)</param>
+		/// <param name="signAlgorithm">The HMAC algorithm to sign with the body by a specified key (md5, sha1, sha256, sha384, sha512, ripemd/ripemd160, blake128, blake/blake256, blake384, blake512)</param>
 		/// <param name="signKey">The key that use to sign</param>
+		/// <param name="signKeyIsHex">true to use bytes of hex-string sign-key</param>
 		/// <param name="signatureName">The name of the signature parameter, default is combination of algorithm and the string 'Signature', ex: HmacSha256Signature</param>
 		/// <param name="signatureAsHex">true to use signature as hex, false to use as Base64</param>
 		/// <param name="signatureInQuery">true to place the signature in query string, false to place in header, default is false</param>
 		/// <param name="additionalQuery">The additional query string</param>
 		/// <param name="additionalHeader">The additional header</param>
+		/// <param name="encryptionKey">The AES key for encrypting message's body</param>
+		/// <param name="encryptionIV">The AES initialize vector for encrypting message's body</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected virtual Task SendWebHookAsync(WebHookMessage message, string developerID, string appID, string signAlgorithm = "SHA256", string signKey = null, string signatureName = null, bool signatureAsHex = true, bool signatureInQuery = false, Dictionary<string, string> additionalQuery = null, Dictionary<string, string> additionalHeader = null, CancellationToken cancellationToken = default)
-			=> this.SendWebHookAsync(message?.Normalize(signAlgorithm, signKey ?? appID, signatureName, signatureAsHex, signatureInQuery, additionalQuery, new Dictionary<string, string>(additionalHeader ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase)
+		protected virtual Task SendWebHookAsync(WebHookMessage message, string developerID, string appID, string signAlgorithm = "SHA256", string signKey = null, bool signKeyIsHex = false, string signatureName = null, bool signatureAsHex = true, bool signatureInQuery = false, Dictionary<string, string> additionalQuery = null, Dictionary<string, string> additionalHeader = null, byte[] encryptionKey = null, byte[] encryptionIV = null, CancellationToken cancellationToken = default)
+			=> this.SendWebHookAsync(message?.Normalize(signAlgorithm, signKey ?? appID, signKeyIsHex, signatureName, signatureAsHex, signatureInQuery, additionalQuery, new Dictionary<string, string>(additionalHeader ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase)
 			{
 				{ "DeveloperID", developerID },
 				{ "AppID", appID }
-			}), cancellationToken);
+			}, encryptionKey, encryptionIV), cancellationToken);
 		#endregion
 
 		#region Loggings
@@ -1926,7 +1932,7 @@ namespace net.vieapps.Services
 					DeviceID = deviceID ?? $"{this.NodeID}@synchronizer",
 					AppName = appName ?? "VIEApps NGX Synchronizer",
 					AppPlatform = $"{Extensions.GetRuntimeOS()} Daemon",
-					AppAgent = appAgent ?? $"{UtilityService.DesktopUserAgent} VIEApps NGX Daemon/{this.GetType().Assembly.GetVersion(false)}",
+					AppAgent = appAgent ?? $"{UtilityService.DesktopUserAgent} NGX-Daemon/{Assembly.GetExecutingAssembly().GetVersion(false)}",
 					AppOrigin = null,
 					Verified = true
 				},
@@ -2086,17 +2092,11 @@ namespace net.vieapps.Services
 			}
 
 			this.NodeID = this.NodeID ?? Extensions.GetNodeID(args);
-
 			try
 			{
-				while (Router.IncomingChannel == null)
-					await Task.Delay(UtilityService.GetRandomNumber(234, 567)).ConfigureAwait(false);
-
 				await registerServiceAsync().ConfigureAwait(false);
-
 				if (this.State == ServiceState.Disconnected)
 					this.Logger?.LogInformation("The service was re-started successful");
-
 				this.State = ServiceState.Connected;
 				onSuccess?.Invoke(this);
 			}
@@ -2192,21 +2192,17 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Initializes the helper services from API Gateway
+		/// Initializes the helper services from API Gateway (when outgoing channel is established)
 		/// </summary>
-		/// <param name="onSuccess">The action to run when the service was registered successful</param>
+		/// <param name="onSuccess">The action to run when the helper services were initialized</param>
 		/// <param name="onError">The action to run when got any error</param>
 		/// <returns></returns>
-		protected virtual async Task InitializeHelperServicesAsync(Action<IService> onSuccess = null, Action<Exception> onError = null)
+		protected virtual Task InitializeHelperServicesAsync(Action<IService> onSuccess = null, Action<Exception> onError = null)
 		{
 			try
 			{
-				while (Router.OutgoingChannel == null)
-					await Task.Delay(UtilityService.GetRandomNumber(234, 567)).ConfigureAwait(false);
-
 				this.MessagingService = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IMessagingService>(ProxyInterceptor.Create());
 				this.Logger?.LogDebug($"The helper services are{(this.State == ServiceState.Disconnected ? " re-" : " ")}initialized");
-
 				onSuccess?.Invoke(this);
 			}
 			catch (Exception ex)
@@ -2214,6 +2210,7 @@ namespace net.vieapps.Services
 				this.Logger?.LogError($"Error occurred while{(this.State == ServiceState.Disconnected ? " re-" : " ")}initializing the helper services", ex);
 				onError?.Invoke(ex);
 			}
+			return Task.CompletedTask;
 		}
 		#endregion
 

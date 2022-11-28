@@ -8,10 +8,10 @@
 		<RootNamespace>net.vieapps.Services</RootNamespace>
 		<AssemblyName>VIEApps.Services.Base</AssemblyName>
 		<AssemblyTitle>VIEApps NGX Service Base</AssemblyTitle>
-		<AssemblyVersion>10.6.2211.1</AssemblyVersion>
-		<FileVersion>10.6.2211.1</FileVersion>
-		<Version>10.6.2211.1</Version>
-		<InformationalVersion>10.6.$([System.DateTime]::Now.Year).$([System.DateTime]::Now.Month).$([System.DateTime]::Now.Day)@$(TargetFramework)#inner.peace</InformationalVersion>
+		<AssemblyVersion>10.7.2211.1</AssemblyVersion>
+		<FileVersion>10.7.2211.1</FileVersion>
+		<Version>10.7.2211.1</Version>
+		<InformationalVersion>10.7.$([System.DateTime]::Now.Year).$([System.DateTime]::Now.Month).$([System.DateTime]::Now.Day)@$(TargetFramework)#inner.peace</InformationalVersion>
 		<Title>VIEApps NGX Service Base</Title>
 		<Description>The base of all microservices in the VIEApps NGX</Description>
 		<Authors>VIEApps.net</Authors>
@@ -29,7 +29,7 @@
 		<PackageIcon>Icon.png</PackageIcon>
 		<PackageOutputPath>../../Components</PackageOutputPath>
 		<PackageTags>services;microservices;vieapps;vieapps.components;vieapps.services;vieapps.microservices</PackageTags>
-		<PackageReleaseNotes>Add supports of .NET 7</PackageReleaseNotes>
+		<PackageReleaseNotes>Add supports of .NET 7 with more useful Javascript/Formula expressions</PackageReleaseNotes>
 		<PackageProjectUrl>https://vieapps.net</PackageProjectUrl>
 		<RepositoryUrl>https://github.com/vieapps/Services.Base</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
@@ -57,17 +57,17 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="JavaScriptEngineSwitcher.ChakraCore" Version="3.20.5" />
+		<PackageReference Include="JavaScriptEngineSwitcher.ChakraCore" Version="3.20.6" />
 		<PackageReference Include="JSPool" Version="4.0.0" />
-		<PackageReference Include="MySqlConnector" Version="2.1.13" />
-		<PackageReference Include="Npgsql" Version="6.0.7" />
+		<PackageReference Include="MySqlConnector" Version="2.2.1" />
+		<PackageReference Include="Npgsql" Version="7.0.0" />
 		<PackageReference Include="Serilog.Extensions.Logging.File" Version="3.0.0" />
-		<PackageReference Include="System.Data.SqlClient" Version="4.8.4" />
+		<PackageReference Include="System.Data.SqlClient" Version="4.8.5" />
 		<PackageReference Include="System.IO.FileSystem.Primitives" Version="4.3.0" />
 		<PackageReference Include="System.Text.Encoding.Extensions" Version="4.3.0" />
-		<PackageReference Include="VIEApps.Components.Repository" Version="10.6.2211.1" />
-		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.6.2211.1" />
-		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.6.2211.1" />
+		<PackageReference Include="VIEApps.Components.Repository" Version="10.7.2211.1" />
+		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.7.2211.1" />
+		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.7.2211.1" />
 	</ItemGroup>
 
 </Project>
