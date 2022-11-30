@@ -92,20 +92,19 @@ namespace net.vieapps.Services
 			else if (name.IsEquals("@today") || name.IsStartsWith("@todayStr") || name.IsEquals("@datetime.Today") || name.IsEquals("@date.Today") || name.IsEquals("@time.Today") || name.IsStartsWith("@nowStr") || name.IsStartsWith("@datetime.NowStr") || name.IsStartsWith("@date.NowStr") || name.IsStartsWith("@time.NowStr"))
 				value = DateTime.Now.ToDTString(false, name.IsStartsWith("@nowStr") || name.IsStartsWith("@datetime.NowStr") || name.IsStartsWith("@date.NowStr") || name.IsStartsWith("@time.NowStr"));
 
-			// import static text/html from a remote end-point
-			else if (name.IsEquals("@import") && (formula.IsStartsWith("https://") || formula.IsStartsWith("http://")))
+			// import static text/html/json from a remote end-point
+			else if ((name.IsEquals("@import") || name.IsEquals("@static")) && (formula.IsStartsWith("https://") || formula.IsStartsWith("http://")))
 				try
 				{
 					string url = formula, element = null;
-					position = url.IndexOf(":", url.IndexOf("://") + 1);
-					position = position > 0 ? position : url.IndexOf(",");
+					position = url.IndexOf(",");
 					if (position > 0)
 					{
 						element = url.Right(url.Length - position - 1).Trim();
 						url = url.Left(position).Trim();
 					}
-					var fetch = new Uri(url).FetchHttpAsync(null, 3);
-					fetch.Wait();
+					var fetch = new Uri(url).FetchHttpAsync(null, 5);
+					fetch.Wait(5000);
 					value = string.IsNullOrWhiteSpace(element)
 						? fetch.Result
 						: fetch.Result?.ToExpandoObject()?.Get(element)?.ToString();
@@ -997,8 +996,9 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="object"></param>
 		/// <param name="cancellationToken"></param>
+		/// <param name="sendUpdateMessage"></param>
 		/// <returns></returns>
-		public static async Task<List<VersionContent>> FindVersionsAsync(this RepositoryBase @object, CancellationToken cancellationToken = default)
+		public static async Task<List<VersionContent>> FindVersionsAsync(this RepositoryBase @object, CancellationToken cancellationToken = default, bool sendUpdateMessage = true)
 		{
 			if (string.IsNullOrWhiteSpace(@object?.ID))
 				return null;
@@ -1015,18 +1015,19 @@ namespace net.vieapps.Services
 					await definition.Cache.SetAsync($"{@object.GetCacheKey()}:Versions", versions, 0, cancellationToken).ConfigureAwait(false);
 			}
 
-			new UpdateMessage
-			{
-				Type = $"{definition.GetServiceName()}#{definition.GetObjectName()}#Update",
-				Data = new JObject
+			if (sendUpdateMessage)
+				new UpdateMessage
 				{
-					["ID"] = @object.ID,
-					["SystemID"] = @object.SystemID,
-					["TotalVersions"] = versions != null ? versions.Count : 0,
-					["Versions"] = versions?.Select(obj => obj.ToJson(json => (json as JObject).Remove("Data"))).ToJArray()
-				},
-				DeviceID = "*"
-			}.Send();
+					Type = $"{definition.GetServiceName()}#{definition.GetObjectName()}#Update",
+					Data = new JObject
+					{
+						["ID"] = @object.ID,
+						["SystemID"] = @object.SystemID,
+						["TotalVersions"] = versions != null ? versions.Count : 0,
+						["Versions"] = (versions ?? new List<VersionContent>()).Select(obj => obj.ToJson(json => (json as JObject).Remove("Data"))).ToJArray()
+					},
+					DeviceID = "*"
+				}.Send();
 
 			return versions;
 		}
@@ -1036,14 +1037,15 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="objects"></param>
 		/// <param name="cancellationToken"></param>
+		/// <param name="sendUpdateMessages"></param>
 		/// <returns></returns>
-		public static async Task<Dictionary<string, List<VersionContent>>> FindVersionsAsync(this IEnumerable<RepositoryBase> objects, CancellationToken cancellationToken = default)
+		public static async Task<Dictionary<string, List<VersionContent>>> FindVersionsAsync(this IEnumerable<RepositoryBase> objects, CancellationToken cancellationToken = default, bool sendUpdateMessages = true)
 		{
 			var versions = new Dictionary<string, List<VersionContent>>();
 			if (objects != null && objects.Any())
 				await Task.WhenAll(objects.Select(async @object =>
 				{
-					versions[@object.ID] = await @object.FindVersionsAsync(cancellationToken).ConfigureAwait(false);
+					versions[@object.ID] = await @object.FindVersionsAsync(cancellationToken, sendUpdateMessages).ConfigureAwait(false);
 				})).ConfigureAwait(false);
 			return versions;
 		}
