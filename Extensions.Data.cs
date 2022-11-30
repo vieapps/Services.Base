@@ -104,10 +104,10 @@ namespace net.vieapps.Services
 						url = url.Left(position).Trim();
 					}
 					var fetch = new Uri(url).FetchHttpAsync(null, 5);
-					fetch.Wait(5000);
-					value = string.IsNullOrWhiteSpace(element)
-						? fetch.Result
-						: fetch.Result?.ToExpandoObject()?.Get(element)?.ToString();
+					if (fetch.Wait(5000))
+						value = string.IsNullOrWhiteSpace(element)
+							? fetch.Result
+							: fetch.Result?.ToExpandoObject()?.Get(element)?.ToString();
 				}
 				catch (Exception ex)
 				{
@@ -166,7 +166,7 @@ namespace net.vieapps.Services
 						format = formula.Right(formula.Length - position - 1).Trim();
 						formula = formula.Left(position).Trim();
 						formula = string.IsNullOrWhiteSpace(formula) || formula.Equals("@") ? "@now" : formula;
-						position = format.IndexOf(",");
+						position = format.IndexOf("|");
 						if (position > 0)
 						{
 							cultureInfoName = format.Right(format.Length - position - 1).Trim();
@@ -1001,7 +1001,7 @@ namespace net.vieapps.Services
 		public static async Task<List<VersionContent>> FindVersionsAsync(this RepositoryBase @object, CancellationToken cancellationToken = default, bool sendUpdateMessage = true)
 		{
 			if (string.IsNullOrWhiteSpace(@object?.ID))
-				return null;
+				return new List<VersionContent>();
 
 			var definition = RepositoryMediator.GetEntityDefinition(@object.GetType());
 			var versions = definition.Cache != null
