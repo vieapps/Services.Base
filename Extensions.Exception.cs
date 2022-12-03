@@ -22,7 +22,7 @@ namespace net.vieapps.Services
 		public static string GetStack(this Exception exception, bool onlyStack = true, RequestInfo requestInfo = null)
 		{
 			var stack = "";
-			if (exception != null && exception is WampException wampException)
+			if (exception is WampException wampException)
 			{
 				if (wampException.Details != null && wampException.Details.Count == 7)
 				{
@@ -64,17 +64,15 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static Tuple<int, string, string, string, Exception, JObject> GetDetails(this WampException wampException, RequestInfo requestInfo = null)
 		{
-			var message = "";
-			var type = "";
-			var stack = "";
+			string message = "", type = "", stack = "";
 			JObject innerJson = null;
 
 			// unavailable
 			if (wampException.ErrorUri.Equals("wamp.error.no_such_procedure") || wampException.ErrorUri.Equals("wamp.error.no_such_registration") || wampException.ErrorUri.Equals("wamp.error.callee_unregistered"))
 			{
-				if (wampException.Arguments != null && wampException.Arguments.Length > 0 && wampException.Arguments[0] != null && wampException.Arguments[0] is JValue)
+				if (wampException.Arguments != null && wampException.Arguments.Length > 0 && wampException.Arguments[0] != null && wampException.Arguments[0] is JValue msg)
 				{
-					message = (wampException.Arguments[0] as JValue).Value.ToString();
+					message = $"{msg.Value}";
 					var start = message.IndexOf("'") + 1;
 					var end = message.IndexOf("'", start);
 					message = $"The service ({message.Substring(start, end - start).Replace("'", "")}) is unavailable";
@@ -90,8 +88,8 @@ namespace net.vieapps.Services
 			else if (wampException.ErrorUri.Equals("wamp.error.invalid_argument"))
 			{
 				message = "Cannot serialize or deserialize one of arguments, all arguments must be instance of a serializable class - interfaces are not be deserialized";
-				if (wampException.Arguments != null && wampException.Arguments.Length > 0 && wampException.Arguments[0] != null && wampException.Arguments[0] is JValue)
-					message += $" => {(wampException.Arguments[0] as JValue).Value}";
+				if (wampException.Arguments != null && wampException.Arguments.Length > 0 && wampException.Arguments[0] != null && wampException.Arguments[0] is JValue msg)
+					message += $" => {msg.Value}";
 				type = "SerializationException";
 				stack = wampException.StackTrace;
 			}
@@ -110,15 +108,15 @@ namespace net.vieapps.Services
 				else
 				{
 					var firstArgument = wampException.Arguments?.First();
-					var infoJson = firstArgument != null && firstArgument is JObject ? firstArgument as JObject : null;
-					var infoValue = firstArgument != null && firstArgument is JValue ? firstArgument as JValue : null;
-					var requestJson = wampException.Arguments != null && wampException.Arguments.Length > 2 && wampException.Arguments[2] != null && wampException.Arguments[2] is JObject ? wampException.Arguments[2] as JObject : null;
-					var exceptionJson = wampException.Arguments != null && wampException.Arguments.Length > 4 && wampException.Arguments[4] != null && wampException.Arguments[4] is JObject ? wampException.Arguments[4] as JObject : null;
+					var infoJson = firstArgument != null && firstArgument is JObject jinfo ? jinfo : null;
+					var infoValue = firstArgument != null && firstArgument is JValue vinfo ? vinfo : null;
+					var requestJson = wampException.Arguments != null && wampException.Arguments.Length > 2 && wampException.Arguments[2] != null && wampException.Arguments[2] is JObject jrequest ? jrequest : null;
+					var exceptionJson = wampException.Arguments != null && wampException.Arguments.Length > 4 && wampException.Arguments[4] != null && wampException.Arguments[4] is JObject jexception ? jexception : null;
 
 					if (infoJson != null)
 						foreach (var info in infoJson)
 						{
-							var infoVal = info.Value != null && info.Value is JValue ? info.Value as JValue : null;
+							var infoVal = info.Value != null && info.Value is JValue jval ? jval : null;
 							if (infoVal != null && infoVal.Value != null)
 								stack += (stack.Equals("") ? "" : "\r\n" + $"----- Inner ({info.Key}) --------------------" + "\r\n")
 									+ infoVal.Value.ToString();
@@ -132,8 +130,8 @@ namespace net.vieapps.Services
 					else if (requestJson != null)
 					{
 						var info = requestJson.First;
-						if (info != null && info is JProperty && (info as JProperty).Name.Equals("RequestInfo") && (info as JProperty).Value != null && (info as JProperty).Value is JObject)
-							serviceName = (info as JProperty).Value.FromJson<RequestInfo>()?.ServiceName ?? "unknown";
+						if (info != null && info is JProperty jprop && jprop.Name.Equals("RequestInfo") && jprop.Value != null && jprop.Value is JObject jobj)
+							serviceName = jobj.As<RequestInfo>()?.ServiceName ?? "unknown";
 					}
 
 					innerJson = exceptionJson?.GetJsonException();
@@ -209,7 +207,7 @@ namespace net.vieapps.Services
 		public static WampException GetRuntimeException(this RequestInfo requestInfo, Exception exception, string message = null, Action<string, Exception> onCompleted = null)
 		{
 			// normalize exception
-			exception = exception != null && exception is RepositoryOperationException
+			exception = exception is RepositoryOperationException
 				? exception.InnerException
 				: exception;
 

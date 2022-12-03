@@ -140,7 +140,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <returns></returns>
 		public static ExpandoObject GetRequestExpando(this RequestInfo requestInfo)
-			=> requestInfo?.GetQueryParameter("x-request")?.Url64Decode()?.ToExpandoObject() ?? new ExpandoObject();
+			=> requestInfo?.GetRequestJson()?.ToExpandoObject() ?? new ExpandoObject();
 
 		/// <summary>
 		/// Gets the full URI

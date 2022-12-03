@@ -2075,7 +2075,17 @@ namespace net.vieapps.Services
 					.GetSubject<CommunicateMessage>($"messages.services.{this.ServiceName.Trim().ToLower()}")
 					.Subscribe
 					(
-						async message => await (this.NodeID.IsEquals(message.ExcludedNodeID) ? Task.CompletedTask : this.ProcessInterCommunicateMessageAsync(message, this.CancellationToken)).ConfigureAwait(false),
+						async message =>
+						{
+							try
+							{
+								await (this.NodeID.IsEquals(message.ExcludedNodeID) ? Task.CompletedTask : this.ProcessInterCommunicateMessageAsync(message, this.CancellationToken)).ConfigureAwait(false);
+							}
+							catch (Exception ex)
+							{
+								await this.WriteLogsAsync(UtilityService.NewUUID, this.Logger, $"Error occurred while processing an inter-communicate message => {ex.Message}", ex, this.ServiceName, "Errors", LogLevel.Error).ConfigureAwait(false);
+							}
+						},
 						exception => this.Logger?.LogError($"Error occurred while fetching an inter-communicate message => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
 					);
 
@@ -2084,7 +2094,17 @@ namespace net.vieapps.Services
 					.GetSubject<CommunicateMessage>("messages.services.apigateway")
 					.Subscribe
 					(
-						async message => await (this.NodeID.IsEquals(message.ExcludedNodeID) ? Task.CompletedTask : this.ProcessGatewayCommunicateMessageAsync(message, this.CancellationToken)).ConfigureAwait(false),
+						async message =>
+						{
+							try
+							{
+								await (this.NodeID.IsEquals(message.ExcludedNodeID) ? Task.CompletedTask : this.ProcessGatewayCommunicateMessageAsync(message, this.CancellationToken)).ConfigureAwait(false);
+							}
+							catch (Exception ex)
+							{
+								await this.WriteLogsAsync(UtilityService.NewUUID, this.Logger, $"Error occurred while processing an inter-communicate message of API Gateway => {ex.Message}", ex, this.ServiceName, "Errors", LogLevel.Error).ConfigureAwait(false);
+							}
+						},
 						exception => this.Logger?.LogError($"Error occurred while fetching an inter-communicate message of API Gateway => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
 					);
 

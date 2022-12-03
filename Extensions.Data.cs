@@ -1024,7 +1024,7 @@ namespace net.vieapps.Services
 						["ID"] = @object.ID,
 						["SystemID"] = @object.SystemID,
 						["TotalVersions"] = versions != null ? versions.Count : 0,
-						["Versions"] = (versions ?? new List<VersionContent>()).Select(obj => obj.ToJson(json => (json as JObject).Remove("Data"))).ToJArray()
+						["Versions"] = (versions ?? new List<VersionContent>()).Select(version => version.ToJson(json => (json as JObject).Remove("Data"))).ToJArray()
 					},
 					DeviceID = "*"
 				}.Send();
