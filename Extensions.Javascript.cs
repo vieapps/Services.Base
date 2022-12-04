@@ -141,7 +141,7 @@ namespace net.vieapps.Services
 		/// <param name="params">The object that presents the additional parameters (the variable named as '__params')</param>
 		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
-		/// <returns>The object that presents the returning value from .NET objects or Javascript object (only supported and converted to Undefined, Boolean, Int, Double and String)</returns>
+		/// <returns>The object that presents the returning value - supported types: Undefined, Boolean, Int, Double, String</returns>
 		public static object JsEvaluate(this string expression, JToken @object, JToken requestInfo = null, JToken @params = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 		{
 			if (!string.IsNullOrWhiteSpace(expression))
@@ -174,7 +174,7 @@ namespace net.vieapps.Services
 		/// <param name="params">The object that presents the additional parameters (the variable named as '__params')</param>
 		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
-		/// <returns>The object that presents the returning value from .NET objects or Javascript object (only supported and converted to Undefined, Boolean, Int, Double and String)</returns>
+		/// <returns>The object that presents the returning value - supported types: Undefined, Boolean, Int, Double, String</returns>
 		public static object JsEvaluate(this string expression, ExpandoObject @object, ExpandoObject requestInfo = null, ExpandoObject @params = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 			=> expression?.JsEvaluate(@object?.ToJson(), requestInfo?.ToJson(), @params?.ToJson(), embedObjects, embedTypes);
 
@@ -187,7 +187,7 @@ namespace net.vieapps.Services
 		/// <param name="params">The object that presents the additional parameters (the variable named as '__params')</param>
 		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
-		/// <returns>The object that presents the returning value from .NET objects or Javascript object (only supported and converted to Undefined, Boolean, Int, Double and String)</returns>
+		/// <returns>The object that presents the returning value - supported types: Undefined, Boolean, Int, Double, String</returns>
 		public static object JsEvaluate(this string expression, object @object = null, RequestInfo requestInfo = null, ExpandoObject @params = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
 			=> expression?.JsEvaluate(@object is IBusinessEntity bizObject ? bizObject.ToExpandoObject() : @object?.ToExpandoObject(), requestInfo?.AsExpandoObject, @params, embedObjects, embedTypes);
 	}
