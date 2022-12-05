@@ -8,9 +8,9 @@
 		<RootNamespace>net.vieapps.Services</RootNamespace>
 		<AssemblyName>VIEApps.Services.Base</AssemblyName>
 		<AssemblyTitle>VIEApps NGX Service Base</AssemblyTitle>
-		<AssemblyVersion>10.7.2212.1</AssemblyVersion>
-		<FileVersion>10.7.2212.1</FileVersion>
-		<Version>10.7.2212.1</Version>
+		<AssemblyVersion>10.7.2212.3</AssemblyVersion>
+		<FileVersion>10.7.2212.3</FileVersion>
+		<Version>10.7.2212.3</Version>
 		<InformationalVersion>10.7.$([System.DateTime]::Now.Year).$([System.DateTime]::Now.Month).$([System.DateTime]::Now.Day)@$(TargetFramework)#inner.peace</InformationalVersion>
 		<Title>VIEApps NGX Service Base</Title>
 		<Description>The base of all microservices in the VIEApps NGX</Description>
@@ -29,7 +29,7 @@
 		<PackageIcon>Icon.png</PackageIcon>
 		<PackageOutputPath>../../Components</PackageOutputPath>
 		<PackageTags>services;microservices;vieapps;vieapps.components;vieapps.services;vieapps.microservices</PackageTags>
-		<PackageReleaseNotes>Add supports of .NET 7 with more useful Javascript/Formula expressions</PackageReleaseNotes>
+		<PackageReleaseNotes>Add supports of .NET 7 with rollback/restore requests and more useful Javascript/Formula expressions</PackageReleaseNotes>
 		<PackageProjectUrl>https://vieapps.net</PackageProjectUrl>
 		<RepositoryUrl>https://github.com/vieapps/Services.Base</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
@@ -67,7 +67,7 @@
 		<PackageReference Include="System.Text.Encoding.Extensions" Version="4.3.0" />
 		<PackageReference Include="VIEApps.Components.Repository" Version="10.7.2212.1" />
 		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.7.2212.1" />
-		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.7.2212.1" />
+		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.7.2212.3" />
 	</ItemGroup>
 
 </Project>

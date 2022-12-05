@@ -33,10 +33,13 @@ namespace net.vieapps.Services
 		public abstract Task<JToken> ProcessRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default);
 
 		public virtual Task<JToken> ProcessRollbackRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
-			=> Task.FromResult<JToken>(null);
+			=> Task.FromException<JToken>(new NotImplementedException());
+
+		public virtual Task<JToken> ProcessRestoreRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
+			=> Task.FromException<JToken>(new NotImplementedException());
 
 		public virtual Task ProcessWebHookMessageAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
-			=> Task.CompletedTask;
+			=> Task.FromException(new NotImplementedException());
 
 		/// <summary>
 		/// Processes the inter-communicate messages between the services' instances
