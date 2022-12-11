@@ -2053,7 +2053,9 @@ namespace net.vieapps.Services
 				this.ServiceSyncInstance = await Router.IncomingChannel.RealmProxy.Services.RegisterCallee<ISyncableService>(() => this, RegistrationInterceptor.Create(this.ServiceName)).ConfigureAwait(false);
 			}
 
-			async Task registerServiceAsync()
+			this.NodeID = this.NodeID ?? Extensions.GetNodeID(args);
+
+			try
 			{
 				try
 				{
@@ -2061,7 +2063,7 @@ namespace net.vieapps.Services
 				}
 				catch
 				{
-					await Task.Delay(UtilityService.GetRandomNumber(456, 789)).ConfigureAwait(false);
+					await Task.Delay(UtilityService.GetRandomNumber(234, 567)).ConfigureAwait(false);
 					try
 					{
 						await registerCalleesAsync().ConfigureAwait(false);
@@ -2112,15 +2114,10 @@ namespace net.vieapps.Services
 					);
 
 				this.Logger?.LogInformation($"The inter-communicate message updater was{(this.State == ServiceState.Disconnected ? " re-" : " ")}subscribed successful");
-			}
-
-			this.NodeID = this.NodeID ?? Extensions.GetNodeID(args);
-			try
-			{
-				await registerServiceAsync().ConfigureAwait(false);
 				if (this.State == ServiceState.Disconnected)
 					this.Logger?.LogInformation("The service was re-started successful");
 				this.State = ServiceState.Connected;
+
 				onSuccess?.Invoke(this);
 			}
 			catch (Exception ex)

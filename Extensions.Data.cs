@@ -115,7 +115,7 @@ namespace net.vieapps.Services
 				}
 
 			// generate UUID
-			else if (name.IsEquals("@uuid") || name.IsEquals("@generateid") || name.IsEquals("@generateuuid"))
+			else if (name.IsEquals("@uuid") || name.IsEquals("@generateID") || name.IsEquals("@generateUUID"))
 			{
 				var mode = "md5";
 				position = formula.IndexOf(",");
@@ -483,7 +483,7 @@ namespace net.vieapps.Services
 				name = serverJson.Get<string>("Attribute");
 				return @operator.IsEquals("IsNull") || @operator.IsEquals("IsNotNull") || @operator.IsEquals("IsEmpty") || @operator.IsEquals("IsNotEmpty")
 					? new JValue(@operator) as JToken
-					: new JObject { { @operator, serverJson["Value"] as JValue } };
+					: new JObject { [@operator] = serverJson["Value"] };
 			}
 			else
 			{
@@ -492,10 +492,7 @@ namespace net.vieapps.Services
 				return children.ToJArray(json =>
 				{
 					var value = json.GetClientJson(out @operator);
-					return new JObject
-					{
-						{ @operator, json.GetClientJson(out @operator) }
-					};
+					return new JObject { [@operator] = json.GetClientJson(out @operator) };
 				});
 			}
 		}
@@ -514,7 +511,7 @@ namespace net.vieapps.Services
 			if (!string.IsNullOrWhiteSpace(query))
 				clientJson["Query"] = query;
 
-			var json = filter.ToJson().GetClientJson(out string @operator);
+			var json = filter.ToJson().GetClientJson(out var @operator);
 			clientJson[@operator] = json;
 
 			return clientJson;
@@ -543,7 +540,7 @@ namespace net.vieapps.Services
 			expression?.ForEach(kvp =>
 			{
 				var attribute = kvp.Key;
-				if (!((kvp.Value as JValue).Value?.ToString() ?? "Ascending").TryToEnum(out SortMode mode))
+				if (!((kvp.Value as JValue).Value?.ToString() ?? "Ascending").TryToEnum<SortMode>(out var mode))
 					mode = SortMode.Ascending;
 				sort = sort != null
 					? mode.Equals(SortMode.Ascending)

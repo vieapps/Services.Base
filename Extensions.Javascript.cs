@@ -27,9 +27,9 @@ namespace net.vieapps.Services
 
 			Extensions.JsEnginePool = new JsPool(new JsPoolConfig
 			{
-				MaxEngines = UtilityService.GetAppSetting("JsEngine:MaxEngines", "25").CastAs<int>(),
-				MaxUsagesPerEngine = UtilityService.GetAppSetting("JsEngine:MaxUsagesPerEngine", "100").CastAs<int>(),
-				GetEngineTimeout = TimeSpan.FromSeconds(UtilityService.GetAppSetting("JsEngine:GetEngineTimeout", "3").CastAs<int>())
+				MaxEngines = UtilityService.GetAppSetting("JsEngine:MaxEngines", "25").As<int>(),
+				MaxUsagesPerEngine = UtilityService.GetAppSetting("JsEngine:MaxUsagesPerEngine", "100").As<int>(),
+				GetEngineTimeout = TimeSpan.FromSeconds(UtilityService.GetAppSetting("JsEngine:GetEngineTimeout", "3").As<int>())
 			});
 
 			Extensions.JsFunctions = @"
@@ -80,9 +80,9 @@ namespace net.vieapps.Services
 		public static T JsCast<T>(object jsValue)
 			=> jsValue == null || jsValue is Undefined
 				? default
-				: jsValue is string jsStr && typeof(T).Equals(typeof(DateTime)) && jsStr.Contains("T") && jsStr.Contains("Z") && DateTime.TryParse(jsStr, out var datetime)
-					? datetime.CastAs<T>()
-					: jsValue.CastAs<T>();
+				: jsValue is string @string && typeof(T).Equals(typeof(DateTime)) && @string.Contains("T") && @string.Contains("Z") && DateTime.TryParse(@string, out var datetime)
+					? datetime.As<T>()
+					: jsValue.As<T>();
 
 		/// <summary>
 		/// Gets the Javascript expression for evaluating
