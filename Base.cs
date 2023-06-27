@@ -17,7 +17,6 @@ using Newtonsoft.Json.Linq;
 using Microsoft.Extensions.Logging;
 using net.vieapps.Components.Utility;
 using net.vieapps.Components.Security;
-using net.vieapps.Components.Caching;
 using net.vieapps.Components.Repository;
 #endregion
 
@@ -647,8 +646,8 @@ namespace net.vieapps.Services
 			=> this.WriteLogsAsync(requestInfo.CorrelationID, requestInfo.Session?.DeveloperID, requestInfo.Session?.AppID, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, requestInfo.ServiceName, requestInfo.ObjectName, mode).Run(ex => this.Logger?.LogError($"Error occurred while writting logs => {ex.Message}", ex));
 		#endregion
 
-		#region Call services
-		protected Action<string, Exception> GetTracker(RequestInfo requestInfo)
+		#region Services & Sessions
+		protected virtual Action<string, Exception> GetTracker(RequestInfo requestInfo)
 		{
 			var objectName = this.ServiceName.IsEquals(requestInfo.ServiceName) ? "" : requestInfo.ServiceName;
 			void tracker(string log, Exception exception)
@@ -668,11 +667,9 @@ namespace net.vieapps.Services
 		/// <param name="onSuccess">The action to run when success</param>
 		/// <param name="onError">The action to run when got an error</param>
 		/// <returns>A <see cref="JObject">JSON</see> object that presents the results of the business service</returns>
-		protected virtual async Task<JToken> CallServiceAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default, Action<RequestInfo> onStart = null, Action<RequestInfo, JToken> onSuccess = null, Action<RequestInfo, Exception> onError = null)
-			=> await requestInfo.CallServiceAsync(cancellationToken, onStart, onSuccess, onError, this.GetTracker(requestInfo), this.JsonFormat).ConfigureAwait(false);
-		#endregion
+		protected virtual Task<JToken> CallServiceAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default, Action<RequestInfo> onStart = null, Action<RequestInfo, JToken> onSuccess = null, Action<RequestInfo, Exception> onError = null)
+			=> requestInfo.CallServiceAsync(cancellationToken, onStart, onSuccess, onError, this.GetTracker(requestInfo), this.JsonFormat);
 
-		#region Sessions
 		/// <summary>
 		/// Gets the sessions of an user. 1st element is session identity, 2nd element is device identity, 3rd element is app info, 4th element is online status
 		/// </summary>
@@ -680,18 +677,8 @@ namespace net.vieapps.Services
 		/// <param name="userID"></param>
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		protected virtual async Task<List<Tuple<string, string, string, bool>>> GetSessionsAsync(RequestInfo requestInfo, string userID = null, CancellationToken cancellationToken = default)
-		{
-			var result = await this.CallServiceAsync(new RequestInfo(requestInfo.Session, "Users", "Account", "HEAD")
-			{
-				Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-				{
-					{ "object-identity", userID ?? requestInfo.Session.User.ID }
-				},
-				CorrelationID = requestInfo.CorrelationID
-			}, cancellationToken).ConfigureAwait(false);
-			return (result["Sessions"] as JArray).ToList(info => new Tuple<string, string, string, bool>(info.Get<string>("SessionID"), info.Get<string>("DeviceID"), info.Get<string>("AppInfo"), info.Get<bool>("IsOnline")));
-		}
+		protected virtual Task<List<Tuple<string, string, string, bool>>> GetSessionsAsync(RequestInfo requestInfo, string userID = null, CancellationToken cancellationToken = default)
+			=> requestInfo.GetUserSessionsAsync(userID, cancellationToken);
 		#endregion
 
 		#region Settings: Keys, Http URIs, Paths

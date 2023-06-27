@@ -1,7 +1,10 @@
 ﻿#region Related components
 using System;
+using System.Linq;
 using System.Dynamic;
 using System.Collections.Generic;
+using System.Threading.Tasks;
+using System.Threading;
 using Newtonsoft.Json.Linq;
 using net.vieapps.Components.Utility;
 #endregion
@@ -172,6 +175,106 @@ namespace net.vieapps.Services
 				}
 			}
 			return transformer != null ? transformer(uri) : uri;
+		}
+
+		/// <summary>
+		/// Gets profile of collection of users
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <param name="userIDs"></param>
+		/// <param name="fetchSessions"></param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		public static Task<JToken> GetUserProfilesAsync(this RequestInfo requestInfo, IEnumerable<string> userIDs, bool fetchSessions = true, CancellationToken cancellationToken = default)
+			=> new RequestInfo(requestInfo.Session, "Users", "Profile", "GET")
+			{
+				Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+				{
+					{ "object-identity", "fetch" },
+					{ "x-request", new JObject { { "IDs", userIDs.ToJArray() } }.ToString(Newtonsoft.Json.Formatting.None).Url64Encode() }
+				},
+				Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+				{
+					{ "x-notifications-key", UtilityService.GetAppSetting("Keys:Notifications", "") },
+					{ "x-fetch-sessions", fetchSessions.ToString().ToLower() }
+				},
+				CorrelationID = requestInfo.CorrelationID
+			}.CallServiceAsync(cancellationToken);
+
+		/// <summary>
+		/// Gets the sessions of an user. 1st element is session identity, 2nd element is device identity, 3rd element is app info, 4th element is online status
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <param name="userID"></param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		public static async Task<List<Tuple<string, string, string, bool>>> GetUserSessionsAsync(this RequestInfo requestInfo, string userID = null, CancellationToken cancellationToken = default)
+		{
+			var result = await new RequestInfo(requestInfo.Session, "Users", "Account", "HEAD")
+			{
+				Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+				{
+					{ "object-identity", userID ?? requestInfo.Session.User.ID }
+				},
+				CorrelationID = requestInfo.CorrelationID
+			}.CallServiceAsync(cancellationToken).ConfigureAwait(false);
+			return (result["Sessions"] as JArray).ToList(info => new Tuple<string, string, string, bool>(info.Get<string>("SessionID"), info.Get<string>("DeviceID"), info.Get<string>("AppInfo"), info.Get<bool>("IsOnline")));
+		}
+
+		/// <summary>
+		/// Sends an app notification (using Notifications service)
+		/// </summary>
+		/// <param name="requestInfo">The requesting information</param>
+		/// <param name="senderID">The identity of an user who send this notification</param>
+		/// <param name="senderName">The name of an user who send this notification</param>
+		/// <param name="recipients">The collection of user identities</param>
+		/// <param name="detail">The detail of this notification</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		public static async Task SendNotificationAsync(this RequestInfo requestInfo, string senderID, string senderName, IEnumerable<string> recipients, JObject detail, CancellationToken cancellationToken = default)
+		{
+			// prepare sender information
+			senderID = senderID ?? requestInfo.Session.User.ID;
+			if (string.IsNullOrWhiteSpace(senderName))
+			{
+				var sender = (await requestInfo.GetUserProfilesAsync(new[] { senderID }, false, cancellationToken).ConfigureAwait(false) as JArray)?.FirstOrDefault();
+				senderName = sender?.Get<string>("Name") ?? "Unknown";
+			}
+
+			// prepare body
+			detail = detail ?? new JObject();
+			var body = new JObject
+			{
+				{ "Time", DateTime.Now },
+				{ "Action", detail.Get<string>("Action") ?? detail.Get("Event", "Update") },
+				{ "SenderID", senderID },
+				{ "SenderName", senderName },
+				{ "Recipients", recipients?.ToJArray() },
+				{ "ServiceName", requestInfo.ServiceName },
+				{ "ObjectName", requestInfo.ObjectName },
+				{ "Title", detail.Get<string>("Title") ?? detail.Get<string>("ObjectTitle") },
+			};
+			var excluded = new[] { "Time", "Sender", "SenderID", "SenderName", "Recipients", "RecipientIDs", "RecipientID", "Action", "Event", "ServiceName", "ServiceName", "ObjectName", "SystemID", "RepositoryID", "RepositoryEntityID", "ObjectID", "Title", "ObjectTitle", "Status", "PreviousStatus", "Additionals" }.ToHashSet();
+			var excludedOfBody = new[] { "Time", "Sender", "SenderID", "SenderName", "Recipients", "RecipientIDs", "RecipientID", "Action", "Event", "ServiceName", "ServiceName", "ObjectName", "Title", "ObjectTitle", "Additionals" }.ToHashSet();
+			var additionals = new JObject();
+			detail.ForEach(kvp =>
+			{
+				if (!excluded.Contains(kvp.Key))
+					additionals[kvp.Key] = kvp.Value;
+				else if (!excludedOfBody.Contains(kvp.Key))
+					body[kvp.Key] = kvp.Value;
+			});
+			detail["Additionals"] = additionals;
+
+			// send the notification
+			await new RequestInfo(requestInfo.Session, "Notifications", "Notification", "POST")
+			{
+				Body = body.ToString(Newtonsoft.Json.Formatting.None),
+				Extra = new Dictionary<string, string>(requestInfo.Extra ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase)
+				{
+					{ "x-notifications-key", UtilityService.GetAppSetting("Keys:Notifications", "") }
+				},
+				CorrelationID = requestInfo.CorrelationID
+			}.CallServiceAsync(cancellationToken).ConfigureAwait(false);
 		}
 
 		/// <summary>

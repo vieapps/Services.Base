@@ -128,75 +128,97 @@ namespace net.vieapps.Services
 				value = (formula.StartsWith("@") ? formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)?.ToString() ?? "" : formula).GenerateUUID(null, mode);
 			}
 
-			// pre-defined formulas
-			else if (formula.StartsWith("@"))
+			// get 'left-string'
+			else if (name.IsStartsWith("@left"))
 			{
-				// convert the value to floating point number
-				if (name.IsStartsWith("@toDec") || name.IsStartsWith("@toNum") || name.IsStartsWith("@toFloat") || name.IsStartsWith("@toDouble"))
+				var length = 0;
+				position = formula.IndexOf(",");
+				if (position > 0)
 				{
-					value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes);
-					value = value is DateTime datetime
-						? datetime.ToUnixTimestamp().As<decimal>()
-						: value != null && value.IsNumericType()
-							? value.As<decimal>()
-							: value;
+					length = Int32.TryParse(formula.Right(formula.Length - position - 1).Trim(), out var len) ? len : 0;
+					formula = formula.Left(position).Trim();
+					formula = string.IsNullOrWhiteSpace(formula) || formula.Equals("@") ? "@now" : formula;
 				}
+				value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)?.ToString();
+				value = value is string @string ? @string.Left(length > 0 ? length : @string.Length) : value;
+			}
 
-				// convert the value to integral number
-				else if (name.IsStartsWith("@toInt") || name.IsStartsWith("@toLong") || name.IsStartsWith("@toByte") || name.IsStartsWith("@toShort"))
+			// get 'right-string'
+			else if (name.IsStartsWith("@right"))
+			{
+				var length = 0;
+				position = formula.IndexOf(",");
+				if (position > 0)
 				{
-					value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes);
-					value = value is DateTime datetime
-						? datetime.ToUnixTimestamp()
-						: value != null && value.IsNumericType()
-							? value.As<long>()
-							: value;
+					length = Int32.TryParse(formula.Right(formula.Length - position - 1).Trim(), out var len) ? len : 0;
+					formula = formula.Left(position).Trim();
+					formula = string.IsNullOrWhiteSpace(formula) || formula.Equals("@") ? "@now" : formula;
 				}
+				value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)?.ToString();
+				value = value is string @string ? @string.Right(length > 0 ? length : @string.Length) : value;
+			}
 
-				// convert the value to string
-				else if (name.IsStartsWith("@toStr") || name.IsStartsWith("@date.toStr") || name.IsStartsWith("@time.toStr"))
+			// convert the value to floating point number
+			else if (name.IsStartsWith("@toDec") || name.IsStartsWith("@toNum") || name.IsStartsWith("@toFloat") || name.IsStartsWith("@toDouble"))
+			{
+				value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes);
+				value = value is DateTime datetime
+					? datetime.ToUnixTimestamp().As<decimal>()
+					: value != null && value.IsNumericType()
+						? value.As<decimal>()
+						: value;
+			}
+
+			// convert the value to integral number
+			else if (name.IsStartsWith("@toInt") || name.IsStartsWith("@toLong") || name.IsStartsWith("@toByte") || name.IsStartsWith("@toShort"))
+			{
+				value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes);
+				value = value is DateTime datetime
+					? datetime.ToUnixTimestamp()
+					: value != null && value.IsNumericType()
+						? value.As<long>()
+						: value;
+			}
+
+			// convert the value to string
+			else if (name.IsStartsWith("@toStr") || name.IsStartsWith("@date.toStr") || name.IsStartsWith("@time.toStr"))
+			{
+				var cultureInfoName = "";
+				var format = formula.IsStartsWith("@date")
+					? "dd/MM/yyyy HH:mm:ss"
+					: formula.IsStartsWith("@time") ? "hh:mm tt @ dd/MM/yyyy" : "";
+				position = formula.IndexOf(",");
+				if (position > 0)
 				{
-					var cultureInfoName = "";
-					var format = formula.IsStartsWith("@date")
-						? "dd/MM/yyyy HH:mm:ss"
-						: formula.IsStartsWith("@time") ? "hh:mm tt @ dd/MM/yyyy" : "";
-					position = formula.IndexOf(",");
+					format = formula.Right(formula.Length - position - 1).Trim();
+					formula = formula.Left(position).Trim();
+					formula = string.IsNullOrWhiteSpace(formula) || formula.Equals("@") ? "@now" : formula;
+					position = format.IndexOf("|");
 					if (position > 0)
 					{
-						format = formula.Right(formula.Length - position - 1).Trim();
-						formula = formula.Left(position).Trim();
-						formula = string.IsNullOrWhiteSpace(formula) || formula.Equals("@") ? "@now" : formula;
-						position = format.IndexOf("|");
-						if (position > 0)
-						{
-							cultureInfoName = format.Right(format.Length - position - 1).Trim();
-							format = format.Left(position).Trim();
-						}
+						cultureInfoName = format.Right(format.Length - position - 1).Trim();
+						format = format.Left(position).Trim();
 					}
-					value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes);
-					value = value == null || string.IsNullOrWhiteSpace(format)
-						? value?.ToString()
-						: value.IsDateTimeType()
-							? string.IsNullOrWhiteSpace(cultureInfoName) ? value.As<DateTime>().ToString(format) : value.As<DateTime>().ToString(format, CultureInfo.GetCultureInfo(cultureInfoName))
-							: value.IsFloatingPointType()
-								? string.IsNullOrWhiteSpace(cultureInfoName) ? value.As<decimal>().ToString(format) : value.As<decimal>().ToString(format, CultureInfo.GetCultureInfo(cultureInfoName))
-								: value.IsIntegralType()
-									? string.IsNullOrWhiteSpace(cultureInfoName) ? value.As<long>().ToString(format) : value.As<long>().ToString(format, CultureInfo.GetCultureInfo(cultureInfoName))
-									: value.ToString();
 				}
-
-				// convert the value to lower-case string
-				else if (name.IsStartsWith("@toLower"))
-					value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)?.ToString().ToLower();
-
-				// convert the value to upper-case string
-				else if (name.IsStartsWith("@toUpper"))
-					value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)?.ToString().ToUpper();
-
-				// unknown => return the original formula
-				else
-					value = $"{name}{(string.IsNullOrWhiteSpace(formula) ? "" : $"({formula})")}";
+				value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes);
+				value = value == null || string.IsNullOrWhiteSpace(format)
+					? value?.ToString()
+					: value.IsDateTimeType()
+						? string.IsNullOrWhiteSpace(cultureInfoName) ? value.As<DateTime>().ToString(format) : value.As<DateTime>().ToString(format, CultureInfo.GetCultureInfo(cultureInfoName))
+						: value.IsFloatingPointType()
+							? string.IsNullOrWhiteSpace(cultureInfoName) ? value.As<decimal>().ToString(format) : value.As<decimal>().ToString(format, CultureInfo.GetCultureInfo(cultureInfoName))
+							: value.IsIntegralType()
+								? string.IsNullOrWhiteSpace(cultureInfoName) ? value.As<long>().ToString(format) : value.As<long>().ToString(format, CultureInfo.GetCultureInfo(cultureInfoName))
+								: value.ToString();
 			}
+
+			// convert the value to lower-case string
+			else if (name.IsStartsWith("@toLower"))
+				value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)?.ToString().ToLower();
+
+			// convert the value to upper-case string
+			else if (name.IsStartsWith("@toUpper"))
+				value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)?.ToString().ToUpper();
 
 			// unknown => return the original formula
 			else
@@ -908,6 +930,17 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo"></param>
 		/// <param name="params"></param>
 		/// <returns></returns>
+		public static IDictionary<string, object> PrepareDoubleBracesParameters(this List<Tuple<string, string>> doubleBracesTokens, JToken @object, JToken requestInfo = null, JToken @params = null)
+			=> doubleBracesTokens?.PrepareDoubleBracesParameters(@object?.ToExpandoObject(), requestInfo?.ToExpandoObject(), @params?.ToExpandoObject());
+
+		/// <summary>
+		/// Prepares the parameters of double braces (mustache-style - {{ }}) parameters
+		/// </summary>
+		/// <param name="doubleBracesTokens"></param>
+		/// <param name="object"></param>
+		/// <param name="requestInfo"></param>
+		/// <param name="params"></param>
+		/// <returns></returns>
 		public static IDictionary<string, object> PrepareDoubleBracesParameters(this List<Tuple<string, string>> doubleBracesTokens, object @object = null, RequestInfo requestInfo = null, ExpandoObject @params = null)
 			=> doubleBracesTokens?.PrepareDoubleBracesParameters(@object is IBusinessEntity bizObject ? bizObject.ToExpandoObject() : @object?.ToExpandoObject(), requestInfo?.AsExpandoObject, @params);
 
@@ -932,8 +965,19 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo"></param>
 		/// <param name="params"></param>
 		/// <returns></returns>
+		public static IDictionary<string, object> PrepareDoubleBracesParameters(this string @string, JToken @object, JToken requestInfo = null, JToken @params = null)
+			=> @string?.PrepareDoubleBracesParameters(@object?.ToExpandoObject(), requestInfo?.ToExpandoObject(), @params?.ToExpandoObject()) ?? new Dictionary<string, object>();
+
+		/// <summary>
+		/// Prepares the parameters of double braces (mustache-style - {{ }}) parameters
+		/// </summary>
+		/// <param name="string"></param>
+		/// <param name="object"></param>
+		/// <param name="requestInfo"></param>
+		/// <param name="params"></param>
+		/// <returns></returns>
 		public static IDictionary<string, object> PrepareDoubleBracesParameters(this string @string, object @object = null, RequestInfo requestInfo = null, ExpandoObject @params = null)
-			=> @string?.PrepareDoubleBracesParameters(@object is IBusinessEntity bizObject ? bizObject.ToExpandoObject() : @object?.ToExpandoObject(), requestInfo?.AsExpandoObject, @params);
+			=> @string?.PrepareDoubleBracesParameters(@object is IBusinessEntity bizObject ? bizObject.ToExpandoObject() : @object?.ToExpandoObject(), requestInfo?.AsExpandoObject, @params) ?? new Dictionary<string, object>();
 
 		/// <summary>
 		/// Gets the time quater
