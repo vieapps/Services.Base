@@ -466,7 +466,7 @@ namespace net.vieapps.Services
 		internal static ConcurrentDictionary<string, IService> Services { get; } = new ConcurrentDictionary<string, IService>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>
-		/// Gets a service by name
+		/// Gets a service instance by name
 		/// </summary>
 		/// <param name="name">The string that presents the name of a service</param>
 		/// <returns></returns>
@@ -485,10 +485,18 @@ namespace net.vieapps.Services
 			return service ?? throw new ServiceNotFoundException($"The service \"{name.ToLower()}\" is not found");
 		}
 
+		/// <summary>
+		/// Gets a service instance
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <returns></returns>
+		public static IService GetService(this RequestInfo requestInfo)
+			=> Router.GetService(requestInfo?.ServiceName);
+
 		internal static ConcurrentDictionary<string, IUniqueService> UniqueServices { get; } = new ConcurrentDictionary<string, IUniqueService>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>
-		/// Gets an unique service by name (means a service at a specified node)
+		/// Gets an unique service instance by name (means a service at a specified node)
 		/// </summary>
 		/// <param name="name">The string that presents the unique name of a service</param>
 		/// <returns></returns>
@@ -570,7 +578,7 @@ namespace net.vieapps.Services
 		internal static ConcurrentDictionary<string, ISyncableService> SyncableServices { get; } = new ConcurrentDictionary<string, ISyncableService>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>
-		/// Gets a syncable service by name
+		/// Gets a syncable service instance by name
 		/// </summary>
 		/// <param name="name">The string that presents the name of a syncable service</param>
 		/// <returns></returns>

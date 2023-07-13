@@ -220,6 +220,10 @@ namespace net.vieapps.Services
 			else if (name.IsStartsWith("@toUpper"))
 				value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)?.ToString().ToUpper();
 
+			// convert the value to capitalized-words string
+			else if (name.IsStartsWith("@toCapitalizedWords"))
+				value = formula.Evaluate(@object, requestInfo, @params, embedObjects, embedTypes)?.ToString().GetCapitalizedWords();
+
 			// unknown => return the original formula
 			else
 				value = $"{name}{(string.IsNullOrWhiteSpace(formula) ? "" : $"({formula})")}";

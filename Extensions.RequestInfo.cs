@@ -321,5 +321,53 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static WebHookMessage ToWebHookMessage(this RequestInfo requestInfo, string secretToken, string secretTokenName, string signAlgorithm, string signKey, bool signKeyIsHex, string signatureName, bool signatureAsHex, JObject requiredQuery = null, JObject requiredHeader = null, byte[] decryptionKey = null, byte[] decryptionIV = null)
 			=> requestInfo?.ToWebHookMessage(secretToken, secretTokenName, signAlgorithm, signKey, signKeyIsHex, signatureName, signatureAsHex, requiredQuery?.ToDictionary<string>(), requiredHeader?.ToDictionary<string>(), decryptionKey, decryptionIV);
+
+		/// <summary>
+		/// Sends a web-hook message as call the destination service
+		/// </summary>
+		/// <param name="message"></param>
+		/// <param name="cancellationToken"></param>
+		/// <param name="preparer"></param>
+		/// <returns></returns>
+		public static Task SendAsCallServiceAsync(this WebHookMessage message, CancellationToken cancellationToken = default, Action<RequestInfo> preparer = null)
+		{
+			if (string.IsNullOrWhiteSpace(message.EndpointURL) || string.IsNullOrWhiteSpace(message.Body))
+				throw new MessageException("Invalid (end-point/body)");
+
+			var path = new Uri(message.EndpointURL).PathAndQuery;
+			var pos = path.IndexOf("?");
+			path = pos > 0 ? path.Left(pos) : path;
+			while (path.StartsWith("/"))
+				path = path.Right(path.Length - 1);
+			while (path.EndsWith("/"))
+				path = path.Left(path.Length - 1);
+			var pathSegments = path.ToArray("/");
+
+			var requestInfo = new RequestInfo
+			{
+				ServiceName = pathSegments.Length > 1 && !string.IsNullOrWhiteSpace(pathSegments[1]) ? pathSegments[1].GetANSIUri(false, true).GetCapitalizedFirstLetter() : "",
+				ObjectName = "",
+				Verb = "POST",
+				Query = message.Query,
+				Header = message.Header,
+				Body = message.Body,
+				CorrelationID = message.CorrelationID
+			};
+			requestInfo.Header["x-webhook-service"] = requestInfo.ServiceName;
+			if (pathSegments.Length > 2 && !string.IsNullOrWhiteSpace(pathSegments[2]))
+				requestInfo.Header["x-webhook-system"] = pathSegments[2].GetANSIUri();
+			if (pathSegments.Length > 3 && !string.IsNullOrWhiteSpace(pathSegments[3]))
+			{
+				if (pathSegments[3].GetANSIUri().IsValidUUID())
+					requestInfo.Header["x-webhook-entity"] = pathSegments[3].GetANSIUri();
+				else
+					requestInfo.Header["x-webhook-object"] = pathSegments[3].GetANSIUri(false, true).Replace("-", "").Replace("_", "");
+			}
+			if (pathSegments.Length > 4 && !string.IsNullOrWhiteSpace(pathSegments[4]))
+				requestInfo.Header["x-webhook-adapter"] = pathSegments[4].GetANSIUri().Replace("-", "").Replace("_", "");
+
+			preparer?.Invoke(requestInfo);
+			return requestInfo.GetService().ProcessWebHookMessageAsync(requestInfo, cancellationToken);
+		}
 	}
 }
