@@ -96,7 +96,7 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the cancellation token source
 		/// </summary>
-		protected CancellationTokenSource CancellationTokenSource { get; } = new CancellationTokenSource();
+		protected CancellationTokenSource CancellationTokenSource { get; private set; } = new CancellationTokenSource();
 
 		/// <summary>
 		/// Gets the cancellation token source
@@ -403,7 +403,7 @@ namespace net.vieapps.Services
 			}
 
 			// update queue & write to centerlized logs
-			this.Logs.Enqueue(new Tuple<Tuple<DateTime, string, string, string, string, string, string>, List<string>, string>(new Tuple<DateTime, string, string, string, string, string, string>(DateTime.Now, correlationID, developerID, appID, this.NodeID ?? Extensions.GetNodeID(), serviceName ?? this.ServiceName ?? "APIGateway", objectName), logs, exception?.GetStack()));
+			this.Logs.Enqueue(new Tuple<Tuple<DateTime, string, string, string, string, string, string>, List<string>, string>(new Tuple<DateTime, string, string, string, string, string, string>(DateTime.Now, correlationID, developerID, appID, this.NodeID ?? Extensions.GetNodeID(), serviceName ?? this.ServiceName ?? "APIGateway", objectName), logs, exception?.GetStack(false)));
 			return this.Logs.WriteLogsAsync(this.CancellationToken, this.Logger);
 		}
 
@@ -2030,6 +2030,210 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
+		#region Connect to API Gateway Router & Initialize the repository
+		/// <summary>
+		/// Creates new cancellation token source
+		/// </summary>
+		/// <returns></returns>
+		public CancellationTokenSource CreateNewCancellationTokenSource()
+			=> this.CancellationTokenSource = new CancellationTokenSource();
+			
+		/// <summary>
+		/// Prepares the node identity
+		/// </summary>
+		/// <param name="args"></param>
+		public string PrepareNodeID(IEnumerable<string> args)
+			=> this.NodeID = Extensions.GetNodeID(args);
+
+		/// <summary>
+		/// Connects to API Gateway Router
+		/// </summary>
+		/// <param name="args">The arguments</param>
+		/// <param name="onIncomingConnectionEstablished">The action to run when the incomming connection is established</param>
+		/// <param name="onIncomingConnectionBroken">The action to run when the incomming connection is broken</param>
+		/// <param name="onIncomingConnectionError">The action to run when the incomming connection got any error</param>
+		/// <param name="onOutgoingConnectionEstablished">The action to run when the outgoing connection is established</param>
+		/// <param name="onOutgoingConnectionBroken">The action to run when the outgoing connection is broken</param>
+		/// <param name="onOutgoingConnectionError">The action to run when the outgoing connection got any error</param>
+		/// <returns></returns>
+		public virtual Task ConnectAsync(
+			string[] args,
+			Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null,
+			Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null,
+			Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null,
+			Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null,
+			Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null,
+			Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null
+		)
+		{
+			this.PrepareNodeID(args);
+			this.Logger?.LogInformation($"Attempting to connect to API Gateway Router [{new Uri(Router.GetRouterStrInfo()).GetResolvedURI()}]");
+			return Router.ConnectAsync
+			(
+				(sender, arguments) =>
+				{
+					// update session info
+					Router.IncomingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Incoming ({this.ServiceURI})", this.Logger).Run();
+					this.Logger?.LogInformation($"The incoming channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
+
+					// update state
+					if (this.State == ServiceState.Initializing)
+						this.State = ServiceState.Ready;
+
+					// handling the established event
+					try
+					{
+						onIncomingConnectionEstablished?.Invoke(sender, arguments);
+					}
+					catch (Exception ex)
+					{
+						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionEstablished)}\" => {ex.Message}", ex);
+					}
+				},
+				(sender, arguments) =>
+				{
+					// update state
+					if (this.State == ServiceState.Connected)
+						this.State = ServiceState.Disconnected;
+
+					// re-connect
+					if (Router.ChannelsAreClosedBySystem || (arguments.CloseType.Equals(SessionCloseType.Goodbye) && "wamp.close.normal".IsEquals(arguments.Reason)))
+						this.Logger?.LogDebug($"The incoming channel to API Gateway Router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+
+					else if (Router.IncomingChannel != null)
+					{
+						this.Logger?.LogDebug($"The incoming channel to API Gateway Router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+						Router.IncomingChannel.ReOpen(this.CancellationToken, (msg, ex) => this.Logger?.LogDebug(msg, ex), "Incoming");
+					}
+
+					// handling the broken event
+					try
+					{
+						onIncomingConnectionBroken?.Invoke(sender, arguments);
+					}
+					catch (Exception ex)
+					{
+						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionBroken)}\" => {ex.Message}", ex);
+					}
+				},
+				(sender, arguments) =>
+				{
+					// handling the error event
+					this.Logger?.LogError($"Got an unexpected error of the incoming channel to API Gateway Router => {arguments.Exception.Message}", arguments.Exception);
+					try
+					{
+						onIncomingConnectionError?.Invoke(sender, arguments);
+					}
+					catch (Exception ex)
+					{
+						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionError)}\" => {ex.Message}", ex);
+					}
+				},
+				(sender, arguments) =>
+				{
+					// update session info
+					Router.OutgoingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Outgoing ({this.ServiceURI})", this.Logger).Run();
+					this.Logger?.LogInformation($"The outgoing channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
+
+					// handling the established event
+					try
+					{
+						onOutgoingConnectionEstablished?.Invoke(sender, arguments);
+					}
+					catch (Exception ex)
+					{
+						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionEstablished)}\" => {ex.Message}", ex);
+					}
+				},
+				(sender, arguments) =>
+				{
+					// re-connect
+					if (Router.ChannelsAreClosedBySystem || (arguments.CloseType.Equals(SessionCloseType.Goodbye) && "wamp.close.normal".IsEquals(arguments.Reason)))
+						this.Logger?.LogDebug($"The outgoing channel to API Gateway Router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+
+					else if (Router.OutgoingChannel != null)
+					{
+						this.Logger?.LogDebug($"The outgoing channel to API Gateway Router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+						Router.OutgoingChannel.ReOpen(this.CancellationToken, (msg, ex) => this.Logger?.LogDebug(msg, ex), "Outgoing");
+					}
+
+					// handling the broken event
+					try
+					{
+						onOutgoingConnectionBroken?.Invoke(sender, arguments);
+					}
+					catch (Exception ex)
+					{
+						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionBroken)}\" => {ex.Message}", ex);
+					}
+				},
+				(sender, arguments) =>
+				{
+					// handling the error event
+					this.Logger?.LogError($"Got an unexpected error of the outgoing channel to API Gateway Router => {arguments.Exception.Message}", arguments.Exception);
+					try
+					{
+						onOutgoingConnectionError?.Invoke(sender, arguments);
+					}
+					catch (Exception ex)
+					{
+						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionError)}\" => {ex.Message}", ex);
+					}
+				},
+				this.CancellationToken,
+				exception => this.Logger?.LogError($"Error occurred while connecting to API Gateway Router => {exception.Message}", exception)
+			);
+		}
+
+		/// <summary>
+		/// Initializes the repository
+		/// </summary>
+		public virtual void InitializeRepository()
+		{
+			try
+			{
+				if (this.IsDebugLogEnabled)
+					this.Logger?.LogDebug("Initializing the repository");
+
+				RepositoryStarter.Initialize
+				(
+					new[] { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
+						.Where(a => !a.Name.IsStartsWith("System") && !a.Name.IsStartsWith("Microsoft") && !a.Name.IsStartsWith("mscorlib") && !a.Name.IsEquals("NETStandard")
+							&& !a.Name.IsStartsWith("Newtonsoft") && !a.Name.IsStartsWith("WampSharp") && !a.Name.IsStartsWith("Castle.") && !a.Name.IsStartsWith("StackExchange.")
+							&& !a.Name.IsStartsWith("MongoDB") && !a.Name.IsStartsWith("MySql") && !a.Name.IsStartsWith("Oracle") && !a.Name.IsStartsWith("Npgsql")
+							&& !a.Name.IsStartsWith("Serilog") && !a.Name.IsStartsWith("MsgPack") && !a.Name.IsStartsWith("ExcelData") && !a.Name.IsStartsWith("JavaScript")
+							&& !a.Name.IsStartsWith("VIEApps.Components.") && !a.Name.IsStartsWith("VIEApps.Services.Abstractions") && !a.Name.IsStartsWith("VIEApps.Services.Base")
+						)
+						.Select(assemblyName =>
+						{
+							try
+							{
+								return Assembly.Load(assemblyName);
+							}
+							catch (Exception ex)
+							{
+								this.Logger?.LogError($"Error occurred while loading an assembly [{assemblyName.Name}] => {ex.Message}", ex);
+								return null;
+							}
+						})
+						.Where(assembly => assembly != null)
+					),
+					(msg, ex) =>
+					{
+						if (ex != null)
+							this.Logger?.LogError(msg, ex);
+						else if (this.IsDebugLogEnabled)
+							this.Logger?.LogDebug(msg);
+					}
+				);
+			}
+			catch (Exception ex)
+			{
+				this.Logger?.LogError($"Error occurred while initializing the repository => {ex.Message}", ex);
+			}
+		}
+		#endregion
+
 		#region Register/Unregister the service
 		public virtual async Task RegisterServiceAsync(IEnumerable<string> args, Action<IService> onSuccess = null, Action<Exception> onError = null)
 		{
@@ -2040,7 +2244,7 @@ namespace net.vieapps.Services
 				this.ServiceSyncInstance = await Router.IncomingChannel.RealmProxy.Services.RegisterCallee<ISyncableService>(() => this, RegistrationInterceptor.Create(this.ServiceName)).ConfigureAwait(false);
 			}
 
-			this.NodeID = this.NodeID ?? Extensions.GetNodeID(args);
+			this.PrepareNodeID(args);
 
 			try
 			{
@@ -2223,7 +2427,7 @@ namespace net.vieapps.Services
 
 		#region Start the service
 		/// <summary>
-		/// Starts the service (the short way - connect to API Gateway and register the service)
+		/// Starts the service (the short way - connect to API Gateway Router and register the service)
 		/// </summary>
 		/// <param name="args">The arguments</param>
 		/// <param name="onRegisterSuccess">The action to run when the service was registered successful</param>
@@ -2246,18 +2450,11 @@ namespace net.vieapps.Services
 			Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null,
 			Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null
 		)
-		{
-			this.NodeID = Extensions.GetNodeID(args);
-			this.Logger?.LogInformation($"Attempting to connect to API Gateway Router [{new Uri(Router.GetRouterStrInfo()).GetResolvedURI()}]");
-			return Router.ConnectAsync(
+			=> this.ConnectAsync
+			(
+				args,
 				async (sender, arguments) =>
 				{
-					// update session info
-					await Router.IncomingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Incoming ({this.ServiceURI})", this.Logger).ConfigureAwait(false);
-					this.Logger?.LogInformation($"The incoming channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
-					if (this.State == ServiceState.Initializing)
-						this.State = ServiceState.Ready;
-
 					// register the service
 					await this.RegisterServiceAsync(args, onRegisterSuccess, onRegisterError).ConfigureAwait(false);
 
@@ -2271,51 +2468,10 @@ namespace net.vieapps.Services
 						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionEstablished)}\" => {ex.Message}", ex);
 					}
 				},
-				(sender, arguments) =>
-				{
-					// update state
-					if (this.State == ServiceState.Connected)
-						this.State = ServiceState.Disconnected;
-
-					// re-connect
-					if (Router.ChannelsAreClosedBySystem || (arguments.CloseType.Equals(SessionCloseType.Goodbye) && "wamp.close.normal".IsEquals(arguments.Reason)))
-						this.Logger?.LogDebug($"The incoming channel to API Gateway Router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
-
-					else if (Router.IncomingChannel != null)
-					{
-						this.Logger?.LogDebug($"The incoming channel to API Gateway Router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
-						Router.IncomingChannel.ReOpen(this.CancellationToken, (msg, ex) => this.Logger?.LogDebug(msg, ex), "Incoming");
-					}
-
-					// handling the broken event
-					try
-					{
-						onIncomingConnectionBroken?.Invoke(sender, arguments);
-					}
-					catch (Exception ex)
-					{
-						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionBroken)}\" => {ex.Message}", ex);
-					}
-				},
-				(sender, arguments) =>
-				{
-					// handling the error event
-					this.Logger?.LogError($"Got an unexpected error of the incoming channel to API Gateway Router => {arguments.Exception.Message}", arguments.Exception);
-					try
-					{
-						onIncomingConnectionError?.Invoke(sender, arguments);
-					}
-					catch (Exception ex)
-					{
-						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionError)}\" => {ex.Message}", ex);
-					}
-				},
+				onIncomingConnectionBroken,
+				onIncomingConnectionError,
 				async (sender, arguments) =>
 				{
-					// update session info
-					await Router.OutgoingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Outgoing ({this.ServiceURI})", this.Logger).ConfigureAwait(false);
-					this.Logger?.LogInformation($"The outgoing channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
-
 					// initialize all helper services
 					await this.InitializeHelperServicesAsync().ConfigureAwait(false);
 
@@ -2355,45 +2511,9 @@ namespace net.vieapps.Services
 						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionEstablished)}\" => {ex.Message}", ex);
 					}
 				},
-				(sender, arguments) =>
-				{
-					// re-connect
-					if (Router.ChannelsAreClosedBySystem || (arguments.CloseType.Equals(SessionCloseType.Goodbye) && "wamp.close.normal".IsEquals(arguments.Reason)))
-						this.Logger?.LogDebug($"The outgoing channel to API Gateway Router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
-
-					else if (Router.OutgoingChannel != null)
-					{
-						this.Logger?.LogDebug($"The outgoing channel to API Gateway Router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
-						Router.OutgoingChannel.ReOpen(this.CancellationToken, (msg, ex) => this.Logger?.LogDebug(msg, ex), "Outgoing");
-					}
-
-					// handling the broken event
-					try
-					{
-						onOutgoingConnectionBroken?.Invoke(sender, arguments);
-					}
-					catch (Exception ex)
-					{
-						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionBroken)}\" => {ex.Message}", ex);
-					}
-				},
-				(sender, arguments) =>
-				{
-					// handling the error event
-					this.Logger?.LogError($"Got an unexpected error of the outgoing channel to API Gateway Router => {arguments.Exception.Message}", arguments.Exception);
-					try
-					{
-						onOutgoingConnectionError?.Invoke(sender, arguments);
-					}
-					catch (Exception ex)
-					{
-						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionError)}\" => {ex.Message}", ex);
-					}
-				},
-				this.CancellationToken,
-				exception => this.Logger?.LogError($"Error occurred while connecting to API Gateway Router => {exception.Message}", exception)
+				onOutgoingConnectionBroken,
+				onOutgoingConnectionError
 			);
-		}
 
 		public virtual Task StartAsync(string[] args = null, bool initializeRepository = true, Action<IService> next = null)
 		{
@@ -2411,54 +2531,6 @@ namespace net.vieapps.Services
 
 		public virtual void Start(string[] args = null, bool initializeRepository = true, Action<IService> next = null)
 			=> this.StartAsync(args, initializeRepository, next).Run(true);
-
-		/// <summary>
-		/// Initializes the repository
-		/// </summary>
-		public virtual void InitializeRepository()
-		{
-			try
-			{
-				if (this.IsDebugLogEnabled)
-					this.Logger?.LogDebug("Initializing the repository");
-
-				RepositoryStarter.Initialize
-				(
-					new[] { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
-						.Where(a => !a.Name.IsStartsWith("System") && !a.Name.IsStartsWith("Microsoft") && !a.Name.IsStartsWith("mscorlib") && !a.Name.IsEquals("NETStandard")
-							&& !a.Name.IsStartsWith("Newtonsoft") && !a.Name.IsStartsWith("WampSharp") && !a.Name.IsStartsWith("Castle.") && !a.Name.IsStartsWith("StackExchange.")
-							&& !a.Name.IsStartsWith("MongoDB") && !a.Name.IsStartsWith("MySql") && !a.Name.IsStartsWith("Oracle") && !a.Name.IsStartsWith("Npgsql")
-							&& !a.Name.IsStartsWith("Serilog") && !a.Name.IsStartsWith("MsgPack") && !a.Name.IsStartsWith("ExcelData") && !a.Name.IsStartsWith("JavaScript")
-							&& !a.Name.IsStartsWith("VIEApps.Components.") && !a.Name.IsStartsWith("VIEApps.Services.Abstractions") && !a.Name.IsStartsWith("VIEApps.Services.Base")
-						)
-						.Select(assemblyName =>
-						{
-							try
-							{
-								return Assembly.Load(assemblyName);
-							}
-							catch (Exception ex)
-							{
-								this.Logger?.LogError($"Error occurred while loading an assembly [{assemblyName.Name}] => {ex.Message}", ex);
-								return null;
-							}
-						})
-						.Where(assembly => assembly != null)
-					),
-					(msg, ex) =>
-					{
-						if (ex != null)
-							this.Logger?.LogError(msg, ex);
-						else if (this.IsDebugLogEnabled)
-							this.Logger?.LogDebug(msg);
-					}
-				);
-			}
-			catch (Exception ex)
-			{
-				this.Logger?.LogError($"Error occurred while initializing the repository => {ex.Message}", ex);
-			}
-		}
 		#endregion
 
 		#region Stop the service
