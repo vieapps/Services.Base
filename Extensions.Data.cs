@@ -1087,11 +1087,11 @@ namespace net.vieapps.Services
 		public static async Task<Dictionary<string, List<VersionContent>>> FindVersionsAsync(this IEnumerable<RepositoryBase> objects, CancellationToken cancellationToken = default, bool sendUpdateMessages = true)
 		{
 			var versions = new Dictionary<string, List<VersionContent>>();
-			if (objects != null && objects.Any())
-				await Task.WhenAll(objects.Select(async @object =>
+			if (objects != null)
+				await objects.ForEachAsync(async @object =>
 				{
 					versions[@object.ID] = await @object.FindVersionsAsync(cancellationToken, sendUpdateMessages).ConfigureAwait(false);
-				})).ConfigureAwait(false);
+				}, true, false).ConfigureAwait(false);
 			return versions;
 		}
 		#endregion
