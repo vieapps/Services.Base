@@ -8,10 +8,10 @@
 		<RootNamespace>net.vieapps.Services</RootNamespace>
 		<AssemblyName>VIEApps.Services.Base</AssemblyName>
 		<AssemblyTitle>VIEApps NGX Service Base</AssemblyTitle>
-		<AssemblyVersion>10.8.2405.1</AssemblyVersion>
-		<FileVersion>10.8.2405.1</FileVersion>
-		<Version>10.8.2405.1</Version>
-		<InformationalVersion>10.8.$([System.DateTime]::Now.Year).$([System.DateTime]::Now.Month).$([System.DateTime]::Now.Day)@$(TargetFramework)#that.love</InformationalVersion>
+		<AssemblyVersion>10.8.2406.4</AssemblyVersion>
+		<FileVersion>10.8.2406.4</FileVersion>
+		<Version>10.8.2406.4</Version>
+		<InformationalVersion>10.8.$([System.DateTime]::Now.Year).$([System.DateTime]::Now.Month).$([System.DateTime]::Now.Day)@$(TargetFramework)#next.year</InformationalVersion>
 		<Title>VIEApps NGX Service Base</Title>
 		<Description>The base of all microservices in the VIEApps NGX</Description>
 		<Authors>VIEApps.net</Authors>
@@ -49,15 +49,15 @@
 		<PackageReference Include="JSPool" Version="4.0.0" />
 		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
 		<PackageReference Include="MySqlConnector" Version="2.3.7" />
-		<PackageReference Include="Npgsql" Version="8.0.2" />
+		<PackageReference Include="Npgsql" Version="8.0.3" />
 		<PackageReference Include="Serilog.Extensions.Logging.File" Version="3.0.0" />
 		<PackageReference Include="System.Data.SqlClient" Version="4.8.6" />
 		<PackageReference Include="System.Data.SQLite" Version="1.0.118" />
 		<PackageReference Include="System.IO.FileSystem.Primitives" Version="4.3.0" />
 		<PackageReference Include="System.Text.Encoding.Extensions" Version="4.3.0" />
-		<PackageReference Include="VIEApps.Components.Repository" Version="10.8.2404.1" />
-		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.8.2404.1" />
-		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.8.2405.1" />
+		<PackageReference Include="VIEApps.Components.Repository" Version="10.8.2406.2" />
+		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.8.2406.2" />
+		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.8.2406.4" />
 	</ItemGroup>
 
 </Project>

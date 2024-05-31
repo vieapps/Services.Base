@@ -37,8 +37,8 @@ namespace net.vieapps.Services
 		public virtual Task<JToken> ProcessRestoreRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
 			=> Task.FromException<JToken>(new NotImplementedException());
 
-		public virtual Task ProcessWebHookMessageAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
-			=> Task.FromException(new NotImplementedException());
+		public virtual Task<JToken> ProcessWebHookMessageAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
+			=> Task.FromException<JToken>(new NotImplementedException());
 
 		/// <summary>
 		/// Processes the inter-communicate messages between the services' instances

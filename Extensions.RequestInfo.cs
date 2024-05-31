@@ -5,6 +5,7 @@ using System.Dynamic;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Threading;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using net.vieapps.Components.Utility;
 #endregion
@@ -33,7 +34,7 @@ namespace net.vieapps.Services
 		/// <param name="name">The string that presents name of parameter want to get</param>
 		/// <returns></returns>
 		public static string GetHeaderParameter(this RequestInfo requestInfo, string name)
-			=> requestInfo != null && requestInfo.Header != null && !string.IsNullOrWhiteSpace(name) 
+			=> requestInfo != null && requestInfo.Header != null && !string.IsNullOrWhiteSpace(name)
 				? requestInfo.Header.TryGetValue(name, out var value) ? value : null
 				: null;
 
@@ -43,7 +44,7 @@ namespace net.vieapps.Services
 		/// <param name="name">The string that presents name of parameter want to get</param>
 		/// <returns></returns>
 		public static string GetQueryParameter(this RequestInfo requestInfo, string name)
-			=> requestInfo != null && requestInfo.Query != null && !string.IsNullOrWhiteSpace(name) 
+			=> requestInfo != null && requestInfo.Query != null && !string.IsNullOrWhiteSpace(name)
 				? requestInfo.Query.TryGetValue(name, out var value) ? value : null
 				: null;
 
@@ -299,7 +300,7 @@ namespace net.vieapps.Services
 				EndpointURL = requestInfo.Session?.AppOrigin ?? requestInfo.GetHeaderParameter("Origin"),
 				Body = requestInfo.Body,
 				Query = requestInfo.Query,
-				Header  = requestInfo.Header,
+				Header = requestInfo.Header,
 				CorrelationID = requestInfo.CorrelationID
 			}.Validate(secretToken, secretTokenName, signAlgorithm, signKey, signKeyIsHex, signatureName, signatureAsHex, requiredQuery, requiredHeader, decryptionKey, decryptionIV);
 
@@ -322,6 +323,219 @@ namespace net.vieapps.Services
 		public static WebHookMessage ToWebHookMessage(this RequestInfo requestInfo, string secretToken, string secretTokenName, string signAlgorithm, string signKey, bool signKeyIsHex, string signatureName, bool signatureAsHex, JObject requiredQuery = null, JObject requiredHeader = null, byte[] decryptionKey = null, byte[] decryptionIV = null)
 			=> requestInfo?.ToWebHookMessage(secretToken, secretTokenName, signAlgorithm, signKey, signKeyIsHex, signatureName, signatureAsHex, requiredQuery?.ToDictionary<string>(), requiredHeader?.ToDictionary<string>(), decryptionKey, decryptionIV);
 
+		static string GetValue(this Dictionary<string, string> dictionary, string name)
+			=> dictionary.TryGetValue(name, out var @string) ? @string : null;
+
+		static Dictionary<string, string> GetDictionary(this Dictionary<string, string> dictionary, string name)
+			=> (dictionary.GetValue(name)?.ToJson() as JObject)?.ToDictionary<string>();
+
+		/// <summary>
+		/// Forwards a request as a web-hook message
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <param name="settings"></param>
+		/// <param name="paramsJson"></param>
+		/// <param name="secretToken"></param>
+		/// <param name="secretTokenName"></param>
+		/// <param name="writeLogsAsync"></param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		public static async Task<JToken> ForwardAsWebHookMessageAsync(this RequestInfo requestInfo, WebHookInfo settings, JToken paramsJson = null, string secretToken = null, string secretTokenName = "x-webhook-secret-token", Func<Exception, string, Task> writeLogsAsync = null, CancellationToken cancellationToken = default)
+		{
+			var signKey = settings.SignKey ?? requestInfo.GetAppID() ?? requestInfo.GetDeveloperID();
+			var webhookQuery = settings.QueryAsJson;
+			var webhookHeader = settings.HeaderAsJson;
+			var encryptionKey = settings.EncryptionKey?.HexToBytes();
+			var encryptionIV = settings.EncryptionIV?.HexToBytes();
+
+			var message = requestInfo.ToWebHookMessage(secretToken, secretTokenName, settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, webhookQuery, webhookHeader, encryptionKey, encryptionIV);
+
+			var messageJson = new JObject
+			{
+				["Header"] = message.Header.ToJObject(),
+				["Query"] = message.Query.ToJObject()
+			};
+
+			try
+			{
+				messageJson["Body"] = requestInfo.BodyAsJson;
+			}
+			catch
+			{
+				try
+				{
+					messageJson["Body"] = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(requestInfo.Body).ToDictionary(kvp => kvp.Key.ToLower(), kvp => kvp.Value.Where(@string => @string != null).Select(@string => @string.AsciiDecode()).Join(","), StringComparer.OrdinalIgnoreCase).ToJObject();
+				}
+				catch
+				{
+					messageJson["Body"] = new JObject { ["_original"] = requestInfo.Body };
+				}
+			}
+
+			var verb = "POST";
+			var debugLogs = "";
+			var writeLogs = requestInfo.Query.TryGetValue("x-logs", out var _);
+			var jsonFormat = writeLogs ? Formatting.Indented : Formatting.None;
+
+			if (message.Header.TryGetValue("x-webhook-pre-endpoint-url", out var preEndpointURL))
+			{
+				verb = message.Header.TryGetValue("x-webhook-pre-verb", out var preVerb) ? preVerb : "POST";
+				var status = "OK";
+				JToken response = null;
+
+				message = new WebHookMessage
+				{
+					EndpointURL = preEndpointURL,
+					Header = message.Header.GetDictionary("x-webhook-pre-header"),
+					Query = message.Header.GetDictionary("x-webhook-pre-query"),
+					Body = message.Header.GetValue("x-webhook-pre-body") ?? "{}",
+				}.Normalize(settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, false, webhookQuery?.ToDictionary<string>(), webhookHeader?.ToDictionary<string>(), encryptionKey, encryptionIV);
+				if (!string.IsNullOrWhiteSpace(secretToken))
+					message.Header[string.IsNullOrWhiteSpace(secretTokenName) ? "x-webhook-secret-token" : secretTokenName] = secretToken;
+
+				try
+				{
+					using (var httpResponseMessage = await message.SendAsync(cancellationToken, verb).ConfigureAwait(false))
+						response = (await httpResponseMessage.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false) ?? "{}").ToJson();
+				}
+				catch (Exception ex)
+				{
+					status = "Error";
+					var additional = "";
+					if (ex is RemoteServerException rse)
+					{
+						try
+						{
+							response = (rse.Body ?? "{}").ToJson();
+						}
+						catch { }
+						additional = $"\r\n\r\nError: {response?.ToString(jsonFormat)}";
+					}
+					await (writeLogsAsync == null ? Task.CompletedTask : writeLogsAsync(ex, $"Error occurred while processing a pre-message when forward a web-hook message => {ex.Message}\r\n\r\n{verb}: {message.EndpointURL}\r\n\r\nMessage: {message.AsJson.ToString(jsonFormat)}{additional}")).ConfigureAwait(false);
+				}
+
+				messageJson["PreRequest"] = new JObject
+				{
+					["Status"] = status,
+					["URL"] = message.EndpointURL,
+					["Header"] = message.Header.ToJObject(),
+					["Query"] = message.Query.ToJObject(),
+					["Body"] = message.Body.ToJson(),
+					["Response"] = response
+				};
+
+				if (writeLogs)
+					debugLogs += $"PRE-PREPARE STEP ------:\r\n\r\n{verb}: {message.EndpointURL}\r\n\r\nPre-prepared message: {message.AsJson}\r\n\r\nUpdated message: {messageJson}\r\n\r\n";
+			}
+
+			JToken result = null;
+			try
+			{
+				result = string.IsNullOrWhiteSpace(settings.PrepareBodyScript) ? messageJson : settings.PrepareBodyScript.JsEvaluate(messageJson, requestInfo.AsJson, paramsJson)?.ToString().ToJson();
+				if (writeLogs)
+					debugLogs += $"PREPARE STEP ------:\r\n\r\nPrepared message [{!string.IsNullOrWhiteSpace(settings.PrepareBodyScript)}]: {result}\r\n\r\n";
+			}
+			catch (Exception ex)
+			{
+				await (writeLogsAsync == null ? Task.CompletedTask : writeLogsAsync(ex, $"Error occurred while preparing a web-hook message to forward => {ex.Message}\r\n\r\nMessage: {messageJson.ToString(jsonFormat)}")).ConfigureAwait(false);
+				throw;
+			}
+
+			verb = result?.Get<string>("Verb") ?? "POST";
+			var body = result?.Get<JObject>("Body") ?? new JObject();
+			var endpointURLs = result?.Get<JArray>("EndpointURLs")?.ToList<string>() ?? new List<string>();
+			endpointURLs.Add(result?.Get<string>("EndpointURL"));
+			endpointURLs = endpointURLs.Select(endpointURL => endpointURL?.Trim()).Where(endpointURL => !string.IsNullOrWhiteSpace(endpointURL) && (endpointURL.IsStartsWith("https://") || endpointURL.IsStartsWith("http://"))).ToList();
+
+			message = new WebHookMessage
+			{
+				EndpointURL = "https://apis.vieapps.net/webhooks",
+				Header = result?.Get<JObject>("Header")?.ToDictionary<string>(),
+				Query = result?.Get<JObject>("Query")?.ToDictionary<string>(),
+				Body = body.ToString(Formatting.None)
+			}.Normalize(settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, false, webhookQuery?.ToDictionary<string>(), webhookHeader?.ToDictionary<string>(), encryptionKey, encryptionIV);
+			if (!string.IsNullOrWhiteSpace(secretToken))
+				message.Header[string.IsNullOrWhiteSpace(secretTokenName) ? "x-webhook-secret-token" : secretTokenName] = secretToken;
+
+			var responses = new JArray();
+			await endpointURLs.ForEachAsync(async endpointURL =>
+			{
+				var status = "OK";
+				JToken response = null;
+				message.EndpointURL = endpointURL;
+
+				try
+				{
+					using (var httpResponseMessage = await message.SendAsync(cancellationToken, verb).ConfigureAwait(false))
+						response = (await httpResponseMessage.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false) ?? "{}").ToJson();
+				}
+				catch (Exception ex)
+				{
+					status = "Error";
+					var additional = "";
+					if (ex is RemoteServerException rse)
+					{
+						try
+						{
+							response = (rse.Body ?? "{}").ToJson();
+						}
+						catch { }
+						additional = $"\r\n\r\nError: {response?.ToString(jsonFormat)}";
+					}
+					await (writeLogsAsync == null ? Task.CompletedTask : writeLogsAsync(ex, $"Error occurred while forwarding a web-hook message => {ex.Message}\r\n\r\n{verb}: {message.EndpointURL}\r\n\r\nMessage: {message.AsJson.ToString(jsonFormat)}{additional}")).ConfigureAwait(false);
+				}
+
+				responses.Add(new JObject
+				{
+					["Status"] = status,
+					["URL"] = message.EndpointURL,
+					["Response"] = response
+				});
+
+				if (writeLogs)
+					debugLogs += $"FORWARD STEP ------:\r\n\r\n{verb}: {message.EndpointURL}\r\n\r\nMessage: {message.AsJson}\r\n\r\nResponse: {response}\r\n\r\n";
+			}, true, false).ConfigureAwait(false);
+			result = responses;
+
+			if (message.Header.TryGetValue("x-webhook-post-endpoint-url", out var postEndpointURL))
+			{
+				body["Responses"] = responses;
+				verb = message.Header.TryGetValue("x-webhook-post-verb", out var postVerb) ? postVerb : "POST";
+
+				message = new WebHookMessage
+				{
+					EndpointURL = postEndpointURL,
+					Header = message.Header.GetDictionary("x-webhook-post-header") ?? message.Header,
+					Query = message.Header.GetDictionary("x-webhook-post-query") ?? message.Query,
+					Body = body.ToString(Formatting.None),
+				}.Normalize(settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, false, webhookQuery?.ToDictionary<string>(), webhookHeader?.ToDictionary<string>(), encryptionKey, encryptionIV);
+				if (!string.IsNullOrWhiteSpace(secretToken))
+					message.Header[string.IsNullOrWhiteSpace(secretTokenName) ? "x-webhook-secret-token" : secretTokenName] = secretToken;
+
+				try
+				{
+					using (var httpResponseMessage = await message.SendAsync(cancellationToken, verb).ConfigureAwait(false))
+					{
+						result = (await httpResponseMessage.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false) ?? "{}").ToJson();
+						if (writeLogs)
+							debugLogs += $"POST-FORWARD STEP ------:\r\n\r\n{verb}: {message.EndpointURL}\r\n\r\nMessage: {message.AsJson}\r\n\r\nResponse: {result}\r\n\r\n";
+					}
+				}
+				catch (Exception ex)
+				{
+					result = responses;
+					var additional = ex is RemoteServerException rse ? $"\r\n\r\nError: {(rse.Body ?? "{}").ToJson().ToString(jsonFormat)}" : "";
+					await (writeLogsAsync == null ? Task.CompletedTask : writeLogsAsync(ex, $"Error occurred while processing a post-message when forward a web-hook message => {ex.Message}\r\n\r\n{verb}: {message.EndpointURL}\r\n\r\nMessage: {message.AsJson.ToString(jsonFormat)}{additional}")).ConfigureAwait(false);
+				}
+			}
+
+			if (writeLogs)
+				debugLogs = $"\r\n\r\nINIT STEP ------:\r\n\r\nMessage: {requestInfo.AsJson}\r\n\r\n" + debugLogs;
+			await (writeLogsAsync == null ? Task.CompletedTask : writeLogsAsync(null, $"Forward a web-hook message successful [{requestInfo.Header["x-webhook-uri"]}]{debugLogs}")).ConfigureAwait(false);
+
+			return result;
+		}
+
 		/// <summary>
 		/// Sends a web-hook message as call the destination service
 		/// </summary>
@@ -329,10 +543,10 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken"></param>
 		/// <param name="preparer"></param>
 		/// <returns></returns>
-		public static Task SendAsCallServiceAsync(this WebHookMessage message, CancellationToken cancellationToken = default, Action<RequestInfo> preparer = null)
+		public static Task<JToken> SendAsCallServiceAsync(this WebHookMessage message, CancellationToken cancellationToken = default, Action<RequestInfo> preparer = null)
 		{
 			if (string.IsNullOrWhiteSpace(message.EndpointURL) || string.IsNullOrWhiteSpace(message.Body))
-				throw new MessageException("Invalid (end-point/body)");
+				return Task.FromException<JToken>(new MessageException("Invalid (end-point/body)"));
 
 			var path = new Uri(message.EndpointURL).PathAndQuery;
 			var pos = path.IndexOf("?");
@@ -369,5 +583,6 @@ namespace net.vieapps.Services
 			preparer?.Invoke(requestInfo);
 			return requestInfo.GetService().ProcessWebHookMessageAsync(requestInfo, cancellationToken);
 		}
+
 	}
 }
