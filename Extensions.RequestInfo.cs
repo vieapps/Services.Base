@@ -349,28 +349,12 @@ namespace net.vieapps.Services
 			var encryptionIV = settings.EncryptionIV?.HexToBytes();
 
 			var message = requestInfo.ToWebHookMessage(secretToken, secretTokenName, settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, webhookQuery, webhookHeader, encryptionKey, encryptionIV);
-
 			var messageJson = new JObject
 			{
 				["Header"] = message.Header.ToJObject(),
-				["Query"] = message.Query.ToJObject()
+				["Query"] = message.Query.ToJObject(),
+				["Body"] = requestInfo.BodyAsJson
 			};
-
-			try
-			{
-				messageJson["Body"] = requestInfo.BodyAsJson;
-			}
-			catch
-			{
-				try
-				{
-					messageJson["Body"] = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(requestInfo.Body).ToDictionary(kvp => kvp.Key.ToLower(), kvp => kvp.Value.Where(@string => @string != null).Select(@string => @string.AsciiDecode()).Join(","), StringComparer.OrdinalIgnoreCase).ToJObject();
-				}
-				catch
-				{
-					messageJson["Body"] = new JObject { ["_original"] = requestInfo.Body };
-				}
-			}
 
 			var verb = "POST";
 			var debugLogs = "";
