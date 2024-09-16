@@ -1,5 +1,6 @@
 ﻿#region Related components
 using System;
+using System.Net;
 using System.Linq;
 using System.Dynamic;
 using System.Collections.Generic;
@@ -365,6 +366,7 @@ namespace net.vieapps.Services
 			{
 				verb = message.Header.TryGetValue("x-webhook-pre-verb", out var preVerb) ? preVerb : "POST";
 				var status = "OK";
+				var code = (int)HttpStatusCode.OK;
 				JToken response = null;
 
 				message = new WebHookMessage
@@ -385,9 +387,11 @@ namespace net.vieapps.Services
 				catch (Exception ex)
 				{
 					status = "Error";
+					code = (int)HttpStatusCode.InternalServerError;
 					var additional = "";
 					if (ex is RemoteServerException rse)
 					{
+						code = (int)rse.StatusCode;
 						try
 						{
 							response = (rse.Body ?? "{}").ToJson();
@@ -401,6 +405,7 @@ namespace net.vieapps.Services
 				messageJson["PreRequest"] = new JObject
 				{
 					["Status"] = status,
+					["Code"] = code,
 					["URL"] = message.EndpointURL,
 					["Header"] = message.Header.ToJObject(),
 					["Query"] = message.Query.ToJObject(),
@@ -445,6 +450,7 @@ namespace net.vieapps.Services
 			await endpointURLs.ForEachAsync(async endpointURL =>
 			{
 				var status = "OK";
+				var code = (int)HttpStatusCode.OK;
 				JToken response = null;
 				message.EndpointURL = endpointURL;
 
@@ -456,9 +462,11 @@ namespace net.vieapps.Services
 				catch (Exception ex)
 				{
 					status = "Error";
+					code = (int)HttpStatusCode.InternalServerError;
 					var additional = "";
 					if (ex is RemoteServerException rse)
 					{
+						code = (int)rse.StatusCode;
 						try
 						{
 							response = (rse.Body ?? "{}").ToJson();
@@ -472,6 +480,7 @@ namespace net.vieapps.Services
 				responses.Add(new JObject
 				{
 					["Status"] = status,
+					["Code"] = code,
 					["URL"] = message.EndpointURL,
 					["Response"] = response
 				});
