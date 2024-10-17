@@ -661,15 +661,15 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="info"></param>
 		/// <returns></returns>
-		public static int GetTotalPages(this Tuple<long, int> info)
-			=> Extensions.GetTotalPages(info.Item1, info.Item2);
+		public static int GetTotalPages(this (long TotalRecords, int TotalPages) info)
+			=> Extensions.GetTotalPages(info.TotalRecords, info.TotalPages);
 
 		/// <summary>
-		/// Gets the tuple of pagination from this JSON (1st element is total records, 2nd element is total pages, 3rd element is page size, 4th element is page number)
+		/// Gets the pagination from this JSON
 		/// </summary>
 		/// <param name="pagination"></param>
 		/// <returns></returns>
-		public static Tuple<long, int, int, int> GetPagination(this JObject pagination)
+		public static (long TotalRecords, int TotalPages, int PageSize, int PageNumber) GetPagination(this JObject pagination)
 		{
 			var totalRecords = pagination["TotalRecords"] != null && pagination["TotalRecords"] is JValue totalRecordsAsJValue && totalRecordsAsJValue.Value != null
 				? totalRecordsAsJValue.Value.CastAs<long>()
@@ -695,15 +695,15 @@ namespace net.vieapps.Services
 			else if (totalPages > 0 && pageNumber > totalPages)
 				pageNumber = totalPages;
 
-			return new Tuple<long, int, int, int>(totalRecords, totalPages, pageSize, pageNumber);
+			return (totalRecords, totalPages, pageSize, pageNumber);
 		}
 
 		/// <summary>
-		/// Gets the tuple of pagination from this object (1st element is total records, 2nd element is total pages, 3rd element is page size, 4th element is page number)
+		/// Gets the pagination from this object
 		/// </summary>
 		/// <param name="pagination"></param>
 		/// <returns></returns>
-		public static Tuple<long, int, int, int> GetPagination(this ExpandoObject pagination)
+		public static (long TotalRecords, int TotalPages, int PageSize, int PageNumber) GetPagination(this ExpandoObject pagination)
 		{
 			var totalRecords = pagination.Get<long>("TotalRecords", -1);
 
@@ -720,7 +720,7 @@ namespace net.vieapps.Services
 				? 1
 				: totalPages > 0 && pageNumber > totalPages ? totalPages : pageNumber;
 
-			return new Tuple<long, int, int, int>(totalRecords, totalPages, pageSize, pageNumber);
+			return (totalRecords, totalPages, pageSize, pageNumber);
 		}
 
 		/// <summary>
@@ -745,8 +745,8 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="pagination"></param>
 		/// <returns></returns>
-		public static JObject GetPagination(this Tuple<long, int, int, int> pagination)
-			=> Extensions.GetPagination(pagination.Item1, pagination.Item2, pagination.Item3, pagination.Item4);
+		public static JObject GetPagination(this (long TotalRecords, int TotalPages, int PageSize, int PageNumber) pagination)
+			=> Extensions.GetPagination(pagination.TotalRecords, pagination.TotalPages, pagination.PageSize, pagination.PageNumber);
 		#endregion
 
 		#region Cache keys
@@ -919,7 +919,7 @@ namespace net.vieapps.Services
 		/// <param name="params"></param>
 		/// <returns></returns>
 		public static IDictionary<string, object> PrepareDoubleBracesParameters(this List<Tuple<string, string>> doubleBracesTokens, ExpandoObject @object, ExpandoObject requestInfo = null, ExpandoObject @params = null)
-			=> doubleBracesTokens == null || !doubleBracesTokens.Any()
+			=> doubleBracesTokens == null || doubleBracesTokens.Count < 1
 				? new Dictionary<string, object>()
 				: doubleBracesTokens
 					.Select(token => token.Item2)

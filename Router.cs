@@ -59,13 +59,8 @@ namespace net.vieapps.Services
 		/// Gets information of API Gateway Router
 		/// </summary>
 		/// <returns></returns>
-		public static Tuple<string, string, bool> GetRouterInfo()
-			=> new Tuple<string, string, bool>
-			(
-				UtilityService.GetAppSetting("Router:Uri", "ws://127.0.0.1:16429/"),
-				UtilityService.GetAppSetting("Router:Realm", "VIEAppsRealm"),
-				"json".IsEquals(UtilityService.GetAppSetting("Router:ChannelsMode", "MessagePack"))
-			);
+		public static (string Address, string Realm, bool UseJSON) GetRouterInfo()
+			=> (UtilityService.GetAppSetting("Router:Uri", "ws://127.0.0.1:16429/"), UtilityService.GetAppSetting("Router:Realm", "VIEAppsRealm"), "json".IsEquals(UtilityService.GetAppSetting("Router:ChannelsMode", "MessagePack")));
 
 		/// <summary>
 		/// Gets information of API Gateway Router
@@ -73,8 +68,8 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static string GetRouterStrInfo()
 		{
-			var routerInfo = Router.GetRouterInfo();
-			return $"{routerInfo.Item1}{(routerInfo.Item1.EndsWith("/") ? "" : "/")}{routerInfo.Item2}";
+			var (address, realm, useJSON) = Router.GetRouterInfo();
+			return $"{address}{(realm.EndsWith("/") ? "" : "/")}{useJSON}";
 		}
 		#endregion
 
@@ -127,11 +122,7 @@ namespace net.vieapps.Services
 			CancellationToken cancellationToken = default
 		)
 		{
-			var routerInfo = Router.GetRouterInfo();
-			var address = routerInfo.Item1;
-			var realm = routerInfo.Item2;
-			var useJsonChannel = routerInfo.Item3;
-
+			var (address, realm, useJsonChannel) = Router.GetRouterInfo();
 			var wampChannel = useJsonChannel ? new DefaultWampChannelFactory().CreateJsonChannel(address, realm) : new DefaultWampChannelFactory().CreateMsgpackChannel(address, realm);
 			return wampChannel.OpenAsync(cancellationToken, onConnectionEstablished, onConnectionBroken, onConnectionError);
 		}
