@@ -661,8 +661,16 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="info"></param>
 		/// <returns></returns>
-		public static int GetTotalPages(this (long TotalRecords, int TotalPages) info)
-			=> Extensions.GetTotalPages(info.TotalRecords, info.TotalPages);
+		public static int GetTotalPages(this Tuple<long, int> info)
+			=> Extensions.GetTotalPages(info.Item1, info.Item2);
+
+		/// <summary>
+		/// Computes the total of pages from total of records and page size
+		/// </summary>
+		/// <param name="info"></param>
+		/// <returns></returns>
+		public static int GetTotalPages(this (long TotalRecords, int PageSize) info)
+			=> Extensions.GetTotalPages(info.TotalRecords, info.PageSize);
 
 		/// <summary>
 		/// Gets the pagination from this JSON
@@ -685,7 +693,7 @@ namespace net.vieapps.Services
 				? totalPagesAsJValue.Value.CastAs<int>()
 				: -1;
 			if (totalPages < 0)
-				totalPages = Extensions.GetTotalPages(totalRecords, pageSize);
+				totalPages = (totalRecords, pageSize).GetTotalPages();
 
 			var pageNumber = pagination["PageNumber"] != null && pagination["PageNumber"] is JValue pageNumberAsJValue && pageNumberAsJValue.Value != null
 				? pageNumberAsJValue.Value.CastAs<int>()
@@ -708,11 +716,11 @@ namespace net.vieapps.Services
 			var totalRecords = pagination.Get<long>("TotalRecords", -1);
 
 			var pageSize = pagination.Get("PageSize", 20);
-			pageSize = pageSize < 0 ? 10 : pageSize;
+			pageSize = pageSize < 0 ? 20 : pageSize;
 
 			var totalPages = pagination.Get("TotalPages", -1);
 			totalPages = totalPages < 0
-				? totalRecords > 0 ? Extensions.GetTotalPages(totalRecords, pageSize) : 0
+				? totalRecords > 0 ? (totalRecords, pageSize).GetTotalPages() : 0
 				: totalPages;
 
 			var pageNumber = pagination.Get("PageNumber", 1);
@@ -747,6 +755,14 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static JObject GetPagination(this (long TotalRecords, int TotalPages, int PageSize, int PageNumber) pagination)
 			=> Extensions.GetPagination(pagination.TotalRecords, pagination.TotalPages, pagination.PageSize, pagination.PageNumber);
+
+		/// <summary>
+		/// Gets the pagination JSON
+		/// </summary>
+		/// <param name="pagination"></param>
+		/// <returns></returns>
+		public static JObject GetPagination(this Tuple<long, int, int, int> pagination)
+			=> Extensions.GetPagination(pagination.Item1, pagination.Item2, pagination.Item3, pagination.Item4);
 		#endregion
 
 		#region Cache keys

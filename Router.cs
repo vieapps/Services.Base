@@ -68,8 +68,8 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static string GetRouterStrInfo()
 		{
-			var (address, realm, useJSON) = Router.GetRouterInfo();
-			return $"{address}{(realm.EndsWith("/") ? "" : "/")}{useJSON}";
+			var (address, realm, _) = Router.GetRouterInfo();
+			return $"{address}{(address.EndsWith("/") ? "" : "/")}{realm}";
 		}
 		#endregion
 

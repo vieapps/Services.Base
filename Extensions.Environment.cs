@@ -54,14 +54,8 @@ namespace net.vieapps.Services
 		/// Gets the run-time arguments (for working with service/node identity)
 		/// </summary>
 		/// <returns></returns>
-		public static Tuple<string, string, string, string> GetRuntimeArguments()
-			=> new Tuple<string, string, string, string>
-			(
-				Environment.UserName.Trim().ToLower(),
-				Environment.MachineName.Trim().ToLower(),
-				RuntimeInformation.FrameworkDescription.Trim(),
-				Extensions.GetRuntimePlatform(false)
-			);
+		public static (string User, string Host, string Platform, string OS) GetRuntimeArguments()
+			=> (Environment.UserName.Trim().ToLower(), Environment.MachineName.Trim().ToLower(), RuntimeInformation.FrameworkDescription.Trim(), Extensions.GetRuntimePlatform(false));
 		#endregion
 
 		#region Get node identity, unique name & end-point
@@ -76,10 +70,10 @@ namespace net.vieapps.Services
 		public static string GetNodeID(string user = null, string host = null, string platform = null, string os = null)
 		{
 			var runtimeArguments = Extensions.GetRuntimeArguments();
-			user = user?.Trim().ToLower() ?? runtimeArguments.Item1;
-			host = host?.Trim().ToLower() ?? runtimeArguments.Item2;
-			platform = platform?.Trim() ?? runtimeArguments.Item3;
-			os = os?.Trim() ?? runtimeArguments.Item4;
+			user = user?.Trim().ToLower() ?? runtimeArguments.User;
+			host = host?.Trim().ToLower() ?? runtimeArguments.Host;
+			platform = platform?.Trim() ?? runtimeArguments.Platform;
+			os = os?.Trim() ?? runtimeArguments.OS;
 			return $"{user}-{host}-" + $"{platform} @ {os}".GenerateUUID();
 		}
 
@@ -144,8 +138,8 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static string GetInvokeInfo()
 		{
-			var runtimeArguments = Extensions.GetRuntimeArguments();
-			return $"{runtimeArguments.Item1} [Host: {runtimeArguments.Item2} - Platform: {runtimeArguments.Item3} @ {runtimeArguments.Item4}]";
+			var (User, Host, Platform, OS) = Extensions.GetRuntimeArguments();
+			return $"{User} [Host: {Host} - Platform: {Platform} @ {OS}]";
 		}
 
 		/// <summary>
