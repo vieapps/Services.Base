@@ -30,7 +30,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken"></param>
 		/// <param name="logger"></param>
 		/// <returns></returns>
-		public static async Task WriteLogsAsync(this ConcurrentQueue<Tuple<Tuple<DateTime, string, string, string, string, string, string>, List<string>, string>> logs, CancellationToken cancellationToken = default, ILogger logger = null)
+		public static async Task WriteLogsAsync(this ConcurrentQueue<((DateTime Time, string CorrelationID, string DeveloperID, string AppID, string NodeID, string ServiceName, string ObjectName) Info, List<string> Logs, string Stack)> logs, CancellationToken cancellationToken = default, ILogger logger = null)
 		{
 			if (!Extensions.Writting)
 				try
@@ -43,15 +43,15 @@ namespace net.vieapps.Services
 							var filePath = Path.Combine(Extensions.LogsPath, $"logs.services.{DateTime.Now:yyyyMMddHHmmss}.{UtilityService.NewUUID}.json");
 							await new JObject
 							{
-								{ "Time", log.Item1.Item1 },
-								{ "CorrelationID", log.Item1.Item2 },
-								{ "DeveloperID", log.Item1.Item3 },
-								{ "AppID", log.Item1.Item4 },
-								{ "NodeID", log.Item1.Item5 },
-								{ "ServiceName", log.Item1.Item6 },
-								{ "ObjectName", log.Item1.Item7 },
-								{ "Logs", log.Item2?.Join("\r\n") ?? "" },
-								{ "Stack", log.Item3 }
+								{ "Time", log.Info.Time },
+								{ "CorrelationID", log.Info.CorrelationID },
+								{ "DeveloperID", log.Info.DeveloperID },
+								{ "AppID", log.Info.AppID },
+								{ "NodeID", log.Info.NodeID },
+								{ "ServiceName", log.Info.ServiceName },
+								{ "ObjectName", log.Info.ObjectName },
+								{ "Logs", log.Logs?.Join("\r\n") ?? "" },
+								{ "Stack", log.Stack }
 							}.ToString(Formatting.Indented).ToBytes().SaveAsTextAsync(filePath, cancellationToken).ConfigureAwait(false);
 						}
 						catch { }

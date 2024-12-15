@@ -36,9 +36,9 @@ namespace net.vieapps.Services
 				else
 				{
 					var wampDetails = wampException.GetDetails(requestInfo);
-					stack = wampDetails.Item6 != null
-						? (onlyStack ? wampDetails.Item6.Get<string>("Stack") : wampDetails.Item6.ToString(Formatting.Indented))?.Replace("\\r", "\r").Replace("\\n", "\n").Replace(@"\\", @"\")
-						: wampDetails.Item4?.Replace("\\r", "\r")?.Replace("\\n", "\n")?.Replace(@"\\", @"\");
+					stack = wampDetails.InnerJSON != null
+						? (onlyStack ? wampDetails.InnerJSON.Get<string>("Stack") : wampDetails.InnerJSON.ToString(Formatting.Indented))?.Replace("\\r", "\r").Replace("\\n", "\n").Replace(@"\\", @"\")
+						: wampDetails.Stack?.Replace("\\r", "\r")?.Replace("\\n", "\n")?.Replace(@"\\", @"\");
 				}
 			}
 			else if (exception != null)
@@ -62,7 +62,7 @@ namespace net.vieapps.Services
 		/// <param name="wampException"></param>
 		/// <param name="requestInfo"></param>
 		/// <returns></returns>
-		public static Tuple<int, string, string, string, Exception, JObject> GetDetails(this WampException wampException, RequestInfo requestInfo = null)
+		public static (int Code, string Message, string Type, string Stack, Exception InnerException, JObject InnerJSON) GetDetails(this WampException wampException, RequestInfo requestInfo = null)
 		{
 			string message = "", type = "", stack = "";
 			JObject innerJson = null;
@@ -148,7 +148,7 @@ namespace net.vieapps.Services
 				stack = wampException.StackTrace;
 			}
 
-			return new Tuple<int, string, string, string, Exception, JObject>(type.GetErrorCode(), message, type, stack, wampException.InnerException, innerJson);
+			return (type.GetErrorCode(), message, type, stack, wampException.InnerException, innerJson);
 		}
 
 		static int GetErrorCode(this string type)
@@ -237,12 +237,12 @@ namespace net.vieapps.Services
 				}
 				var details = new Dictionary<string, object>
 				{
-					["Code"] = wampDetails.Item1,
-					["Message"] = wampDetails.Item2,
-					["Type"] = wampDetails.Item3,
-					["Stack"] = wampDetails.Item4,
+					["Code"] = wampDetails.Code,
+					["Message"] = wampDetails.Message,
+					["Type"] = wampDetails.Type,
+					["Stack"] = wampDetails.Stack,
 					["InnerStack"] = innerStack,
-					["InnerJson"] = wampDetails.Item6,
+					["InnerJson"] = wampDetails.InnerJSON,
 					["RequestInfo"] = requestInfo.ToJson()
 				};
 				return new WampException(details, wampException.ErrorUri, new object[0]);

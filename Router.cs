@@ -429,11 +429,10 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Disconnects from API Gateway Router and close all WAMP channels
 		/// </summary>
-		/// <param name="waitingTimes">Times (miliseconds) for waiting to disconnect</param>
 		/// <param name="message">The message to send to API Gateway Router before closing the channel</param>
 		/// <param name="onError">The action to run when got any error</param>
-		public static void Disconnect(int waitingTimes = 1234, string message = null, Action<Exception> onError = null)
-			=> Router.DisconnectAsync(message, onError).Wait(waitingTimes > 0 ? waitingTimes : 1234);
+		public static void Disconnect(string message = null, Action<Exception> onError = null)
+			=> Router.DisconnectAsync(message, onError).Run(true);
 
 		static IDisposable ReconnectTimer { get; set; }
 

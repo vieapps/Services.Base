@@ -210,7 +210,7 @@ namespace net.vieapps.Services
 		/// <param name="userID"></param>
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		public static async Task<List<Tuple<string, string, string, bool>>> GetUserSessionsAsync(this RequestInfo requestInfo, string userID = null, CancellationToken cancellationToken = default)
+		public static async Task<List<(string SessionID, string DeviceID, string AppInfo, bool IsOnline)>> GetUserSessionsAsync(this RequestInfo requestInfo, string userID = null, CancellationToken cancellationToken = default)
 		{
 			var result = await new RequestInfo(requestInfo.Session, "Users", "Account", "HEAD")
 			{
@@ -219,8 +219,8 @@ namespace net.vieapps.Services
 					{ "object-identity", userID ?? requestInfo.Session.User.ID }
 				},
 				CorrelationID = requestInfo.CorrelationID
-			}.CallServiceAsync(cancellationToken).ConfigureAwait(false);
-			return (result["Sessions"] as JArray).ToList(info => new Tuple<string, string, string, bool>(info.Get<string>("SessionID"), info.Get<string>("DeviceID"), info.Get<string>("AppInfo"), info.Get<bool>("IsOnline")));
+			}.CallServiceAsync(cancellationToken).ConfigureAwait(false);			
+			return (result["Sessions"] as JArray).ToList(info => (info.Get<string>("SessionID"), info.Get<string>("DeviceID"), info.Get<string>("AppInfo"), info.Get<bool>("IsOnline")));
 		}
 
 		/// <summary>

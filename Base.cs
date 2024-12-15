@@ -337,7 +337,7 @@ namespace net.vieapps.Services
 
 		public ILogger Logger { get; private set; }
 
-		ConcurrentQueue<Tuple<Tuple<DateTime, string, string, string, string, string, string>, List<string>, string>> Logs { get; } = new ConcurrentQueue<Tuple<Tuple<DateTime, string, string, string, string, string, string>, List<string>, string>>();
+		ConcurrentQueue<((DateTime Time, string CorrelationID, string DeveloperID, string AppID, string NodeID, string ServiceName, string ObjectName) Info, List<string> Logs, string Stack)> Logs { get; } = new ConcurrentQueue<((DateTime Time, string CorrelationID, string DeveloperID, string AppID, string NodeID, string ServiceName, string ObjectName) Info, List<string> Logs, string Stack)>();
 
 		string _isDebugResultsEnabled = null, _isDebugStacksEnabled = null, _isDebugAuthorizationsEnabled = null;
 
@@ -393,8 +393,8 @@ namespace net.vieapps.Services
 			if (exception != null && exception is WampException wampException)
 			{
 				var details = wampException.GetDetails();
-				logs.Add($"> Message: {details.Item2}");
-				logs.Add($"> Type: {details.Item3}");
+				logs.Add($"> Message: {details.Message}");
+				logs.Add($"> Type: {details.Type}");
 			}
 			else if (exception != null)
 			{
@@ -403,7 +403,7 @@ namespace net.vieapps.Services
 			}
 
 			// update queue & write to centerlized logs
-			this.Logs.Enqueue(new Tuple<Tuple<DateTime, string, string, string, string, string, string>, List<string>, string>(new Tuple<DateTime, string, string, string, string, string, string>(DateTime.Now, correlationID, developerID, appID, this.NodeID ?? Extensions.GetNodeID(), serviceName ?? this.ServiceName ?? "APIGateway", objectName), logs, exception?.GetStack(false)));
+			this.Logs.Enqueue(((DateTime.Now, correlationID, developerID, appID, this.NodeID ?? Extensions.GetNodeID(), serviceName ?? this.ServiceName ?? "APIGateway", objectName), logs, exception?.GetStack(false)));
 			return this.Logs.WriteLogsAsync(this.CancellationToken, this.Logger);
 		}
 
@@ -677,7 +677,7 @@ namespace net.vieapps.Services
 		/// <param name="userID"></param>
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		protected virtual Task<List<Tuple<string, string, string, bool>>> GetSessionsAsync(RequestInfo requestInfo, string userID = null, CancellationToken cancellationToken = default)
+		protected virtual Task<List<(string SessionID, string DeviceID, string AppInfo, bool IsOnline)>> GetSessionsAsync(RequestInfo requestInfo, string userID = null, CancellationToken cancellationToken = default)
 			=> requestInfo.GetUserSessionsAsync(userID, cancellationToken);
 		#endregion
 
@@ -2625,7 +2625,9 @@ namespace net.vieapps.Services
 		public bool Disposed { get; private set; } = false;
 
 		public virtual ValueTask DisposeAsync(string[] args, bool available = true, bool disconnect = true, Action<IService> next = null)
-			=> new ValueTask(this.Disposed ? Task.CompletedTask : this.StopAsync(args, available, disconnect, _ =>
+		{
+			GC.SuppressFinalize(this);
+			return new ValueTask(this.Disposed ? Task.CompletedTask : this.StopAsync(args, available, disconnect, _ =>
 			{
 				// clean up
 				this.Disposed = true;
@@ -2652,6 +2654,7 @@ namespace net.vieapps.Services
 					this.Logger?.LogError($"Error occurred while invoking the next action when dispose the service => {ex.Message}", ex);
 				}
 			}));
+		}
 
 		/// <summary>
 		/// Disposes the service (unregister the service, disconnect from API Gateway and do the clean-up tasks)
@@ -2666,10 +2669,7 @@ namespace net.vieapps.Services
 		/// Disposes the service (unregister the service, disconnect from API Gateway and do the clean-up tasks)
 		/// </summary>
 		public virtual void Dispose()
-		{
-			GC.SuppressFinalize(this);
-			this.Dispose(null);
-		}
+			=> this.Dispose(null);
 
 		~ServiceBase()
 			=> this.Dispose();
