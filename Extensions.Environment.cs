@@ -69,12 +69,8 @@ namespace net.vieapps.Services
 		/// <returns>The string that presents the identity of a node (include user and host)</returns>
 		public static string GetNodeID(string user = null, string host = null, string platform = null, string os = null)
 		{
-			var runtimeArguments = Extensions.GetRuntimeArguments();
-			user = user?.Trim().ToLower() ?? runtimeArguments.User;
-			host = host?.Trim().ToLower() ?? runtimeArguments.Host;
-			platform = platform?.Trim() ?? runtimeArguments.Platform;
-			os = os?.Trim() ?? runtimeArguments.OS;
-			return $"{user}-{host}-" + $"{platform} @ {os}".GenerateUUID();
+			var (User, Host, Platform, OS) = Extensions.GetRuntimeArguments();
+			return $"{user?.Trim().ToLower() ?? User}-{host?.Trim().ToLower() ?? Host}-" + $"{platform?.Trim() ?? Platform} @ {os?.Trim() ?? OS}".GenerateUUID();
 		}
 
 		/// <summary>
@@ -95,13 +91,10 @@ namespace net.vieapps.Services
 		/// Gets the unique name of a business service
 		/// </summary>
 		/// <param name="name">The string that presents the name of a service</param>
-		/// <param name="user">The user on the host that running the service</param>
-		/// <param name="host">The host that running the service</param>
-		/// <param name="platform">The information (description) of the running platform (framework)</param>
-		/// <param name="os">The information of the operating system</param>
+		/// <param name="node">The string that presents the identity of a node</param>
 		/// <returns>The string that presents unique name of a business service at a host</returns>
-		public static string GetUniqueName(string name, string user = null, string host = null, string platform = null, string os = null)
-			=> $"{(name ?? "unknown").Trim().ToLower()}.{Extensions.GetNodeID(user, host, platform, os)}";
+		public static string GetUniqueName(string name, string node = null)
+			=> $"{(name ?? "unknown").Trim().ToLower()}.{(string.IsNullOrWhiteSpace(node) ? Extensions.GetNodeID() : node)}";
 
 		/// <summary>
 		/// Gets the unique name of a business service
@@ -110,7 +103,19 @@ namespace net.vieapps.Services
 		/// <param name="args">The running (starting) arguments</param>
 		/// <returns>The string that presents unique name of a service</returns>
 		public static string GetUniqueName(string name, IEnumerable<string> args)
-			=> $"{(name ?? "unknown").Trim().ToLower()}.{Extensions.GetNodeID(args)}";
+			=> Extensions.GetUniqueName(name, Extensions.GetNodeID(args));
+
+		/// <summary>
+		/// Gets the unique name of a business service
+		/// </summary>
+		/// <param name="name">The string that presents the name of a service</param>
+		/// <param name="user">The user on the host that running the service</param>
+		/// <param name="host">The host that running the service</param>
+		/// <param name="platform">The information (description) of the running platform (framework)</param>
+		/// <param name="os">The information of the operating system</param>
+		/// <returns>The string that presents unique name of a business service at a host</returns>
+		public static string GetUniqueName(string name, string user, string host, string platform, string os)
+			=> Extensions.GetUniqueName(name, Extensions.GetNodeID(user, host, platform, os));
 
 		/// <summary>
 		/// Gets the resolved URI with IP address and port

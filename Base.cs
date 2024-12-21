@@ -132,7 +132,7 @@ namespace net.vieapps.Services
 
 		public string ServiceURI => $"services.{(this.ServiceName ?? "unknown").Trim().ToLower()}";
 
-		public string ServiceUniqueName => $"{(this.ServiceName ?? "unknown").Trim().ToLower()}.{this.NodeID}";
+		public string ServiceUniqueName => Extensions.GetUniqueName(this.ServiceName, this.NodeID);
 
 		public string ServiceUniqueURI => $"services.{this.ServiceUniqueName}";
 

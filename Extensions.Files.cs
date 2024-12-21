@@ -250,7 +250,8 @@ namespace net.vieapps.Services
 
 			requestInfo.Header["x-filename"] = fileName;
 			long offset = 0;
-			var service = Router.GetUniqueService(requestInfo.GetParameter("NodeID") ?? requestInfo.GetParameter("x-node"));
+			var service = Router.GetUniqueService(requestInfo.GetParameter("NodeID") ?? requestInfo.GetParameter("x-node") ?? requestInfo.GetParameter("x-service-node"));
+
 			while (true)
 			{
 				requestInfo.Header["x-offset"] = $"{offset}";
