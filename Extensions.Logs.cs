@@ -40,7 +40,7 @@ namespace net.vieapps.Services
 					while (logs.TryDequeue(out var log))
 						try
 						{
-							var filePath = Path.Combine(Extensions.LogsPath, $"logs.services.{DateTime.Now:yyyyMMddHHmmss}.{UtilityService.NewUUID}.json");
+							var filePath = Path.Combine(Extensions.LogsPath, $"logs.services.{log.Info.Time:yyyyMMddHHmmssfff}.{UtilityService.NewUUID}.json");
 							await new JObject
 							{
 								{ "Time", log.Info.Time },
