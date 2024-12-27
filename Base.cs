@@ -671,7 +671,7 @@ namespace net.vieapps.Services
 			=> requestInfo.CallServiceAsync(cancellationToken, onStart, onSuccess, onError, this.GetTracker(requestInfo), this.JsonFormat);
 
 		/// <summary>
-		/// Gets the sessions of an user. 1st element is session identity, 2nd element is device identity, 3rd element is app info, 4th element is online status
+		/// Gets the sessions of an user
 		/// </summary>
 		/// <param name="requestInfo"></param>
 		/// <param name="userID"></param>
