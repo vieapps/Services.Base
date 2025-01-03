@@ -33,11 +33,35 @@ namespace net.vieapps.Services
 		/// Gets the parameter from the header
 		/// </summary>
 		/// <param name="name">The string that presents name of parameter want to get</param>
+		/// <param name="value"></param>
+		/// <returns></returns>
+		public static bool TryGetHeaderParameter(this RequestInfo requestInfo, string name, out string value)
+		{
+			value = null;
+			return requestInfo != null && !string.IsNullOrWhiteSpace(name) && requestInfo.Header != null && requestInfo.Header.TryGetValue(name, out value);
+		}
+
+		/// <summary>
+		/// Gets the parameter from the header
+		/// </summary>
+		/// <param name="name">The string that presents name of parameter want to get</param>
 		/// <returns></returns>
 		public static string GetHeaderParameter(this RequestInfo requestInfo, string name)
-			=> requestInfo != null && requestInfo.Header != null && !string.IsNullOrWhiteSpace(name)
-				? requestInfo.Header.TryGetValue(name, out var value) ? value : null
+			=> requestInfo != null
+				? requestInfo.TryGetHeaderParameter(name, out var value) ? value : null
 				: null;
+
+		/// <summary>
+		/// Gets the parameter from the query
+		/// </summary>
+		/// <param name="name">The string that presents name of parameter want to get</param>
+		/// <param name="value"></param>
+		/// <returns></returns>
+		public static bool TryGetQueryParameter(this RequestInfo requestInfo, string name, out string value)
+		{
+			value = null;
+			return requestInfo != null && !string.IsNullOrWhiteSpace(name) && requestInfo.Query != null && requestInfo.Query.TryGetValue(name, out value);
+		}
 
 		/// <summary>
 		/// Gets the parameter from the query
@@ -45,9 +69,20 @@ namespace net.vieapps.Services
 		/// <param name="name">The string that presents name of parameter want to get</param>
 		/// <returns></returns>
 		public static string GetQueryParameter(this RequestInfo requestInfo, string name)
-			=> requestInfo != null && requestInfo.Query != null && !string.IsNullOrWhiteSpace(name)
-				? requestInfo.Query.TryGetValue(name, out var value) ? value : null
+			=> requestInfo != null
+				? requestInfo.TryGetQueryParameter(name, out var value) ? value : null
 				: null;
+
+		/// <summary>
+		/// Gets the parameter with two steps: first from header, then second step is from query if header has no value
+		/// </summary>
+		/// <param name="value"></param>
+		/// <returns></returns>
+		public static bool TryGetParameter(this RequestInfo requestInfo, string name, out string value)
+		{
+			value = null;
+			return requestInfo != null && (requestInfo.TryGetHeaderParameter(name, out value) || requestInfo.TryGetQueryParameter(name, out value));
+		}
 
 		/// <summary>
 		/// Gets the parameter with two steps: first from header, then second step is from query if header has no value
@@ -55,7 +90,7 @@ namespace net.vieapps.Services
 		/// <param name="name">The string that presents name of parameter want to get</param>
 		/// <returns></returns>
 		public static string GetParameter(this RequestInfo requestInfo, string name)
-			=> requestInfo?.GetHeaderParameter(name) ?? requestInfo?.GetQueryParameter(name);
+			=> requestInfo != null ? requestInfo.TryGetParameter(name, out var value) ? value : null : null;
 
 		/// <summary>
 		/// Gets the identity of the device that sent by this request
@@ -138,7 +173,16 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <returns></returns>
 		public static JToken GetRequestJson(this RequestInfo requestInfo)
-			=> (requestInfo?.GetQueryParameter("x-request")?.Url64Decode() ?? "{}").ToJson();
+		{
+			try
+			{
+				return (requestInfo?.GetQueryParameter("x-request")?.Url64Decode() ?? "{}").ToJson();
+			}
+			catch
+			{
+				return new JObject();
+			}
+		}
 
 		/// <summary>
 		/// Gets the value of the 'x-request' parameter of the query (in Base64Url) and converts to ExpandoObject
@@ -153,7 +197,7 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo"></param>
 		/// <param name="transformer"></param>
 		/// <returns></returns>
-		public static string GetURI(this RequestInfo requestInfo, Func<string, string> transformer = null)
+		public static string GetURI(this RequestInfo requestInfo, bool includeEncodedRequest = false, Func<string, string> transformer = null)
 		{
 			var uri = $"/{requestInfo?.ServiceName ?? ""}".ToLower();
 			if (!string.IsNullOrWhiteSpace(requestInfo?.ObjectName))
@@ -165,8 +209,11 @@ namespace net.vieapps.Services
 					uri += $"/{objectIdentity.ToLower()}";
 					if (!objectIdentity.IsValidUUID())
 					{
-						if (requestInfo.Query != null && requestInfo.Query.TryGetValue("x-request", out var request))
-							uri += $"?x-request={request}";
+						if (requestInfo.TryGetQueryParameter("x-request", out var request))
+						{
+							if (includeEncodedRequest)
+								uri += $"?x-request={request}";
+						}
 						else
 						{
 							var objectID = requestInfo.GetObjectIdentity(true, true);
@@ -188,12 +235,13 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
 		public static Task<JToken> GetUserProfilesAsync(this RequestInfo requestInfo, IEnumerable<string> userIDs, bool fetchSessions = true, CancellationToken cancellationToken = default)
-			=> new RequestInfo(requestInfo.Session, "Users", "Profile", "GET")
+		{
+			var request = new RequestInfo(requestInfo.Session, "Users", "Profile", "GET")
 			{
 				Query = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 				{
 					{ "object-identity", "fetch" },
-					{ "x-request", new JObject { { "IDs", userIDs.ToJArray() } }.ToString(Newtonsoft.Json.Formatting.None).Url64Encode() }
+					{ "x-request", new JObject { { "IDs", userIDs.ToJArray() } }.ToString(Formatting.None).Url64Encode() }
 				},
 				Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 				{
@@ -201,7 +249,13 @@ namespace net.vieapps.Services
 					{ "x-fetch-sessions", fetchSessions.ToString().ToLower() }
 				},
 				CorrelationID = requestInfo.CorrelationID
-			}.CallServiceAsync(cancellationToken);
+			};
+			if (requestInfo.TryGetParameter("x-logs", out var debugLogs))
+				request.Header["x-logs"] = debugLogs;
+			if (requestInfo.TryGetParameter("x-force-cache", out var forceCache))
+				request.Header["x-force-cache"] = forceCache;
+			return request.CallServiceAsync(cancellationToken);
+		}
 
 		/// <summary>
 		/// Gets the sessions of an user. 1st element is session identity, 2nd element is device identity, 3rd element is app info, 4th element is online status

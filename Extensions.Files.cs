@@ -36,7 +36,7 @@ namespace net.vieapps.Services
 					},
 					Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 					{
-						["Signature"] = (requestInfo.GetHeaderParameter("x-app-token") ?? "").GetHMACSHA256(validationKey ?? CryptoService.DEFAULT_PASS_PHRASE),
+						["Signature"] = (requestInfo.GetParameter("x-app-token") ?? "").GetHMACSHA256(validationKey ?? CryptoService.DEFAULT_PASS_PHRASE),
 						["SessionID"] = requestInfo.Session.SessionID.GetHMACBLAKE256(validationKey ?? CryptoService.DEFAULT_PASS_PHRASE)
 					},
 					CorrelationID = requestInfo.CorrelationID
@@ -65,7 +65,7 @@ namespace net.vieapps.Services
 					},
 					Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 					{
-						["Signature"] = (requestInfo.GetHeaderParameter("x-app-token") ?? "").GetHMACSHA256(validationKey ?? CryptoService.DEFAULT_PASS_PHRASE),
+						["Signature"] = (requestInfo.GetParameter("x-app-token") ?? "").GetHMACSHA256(validationKey ?? CryptoService.DEFAULT_PASS_PHRASE),
 						["SessionID"] = requestInfo.Session.SessionID.GetHMACBLAKE256(validationKey ?? CryptoService.DEFAULT_PASS_PHRASE)
 					},
 					CorrelationID = requestInfo.CorrelationID
@@ -93,7 +93,7 @@ namespace net.vieapps.Services
 					},
 					Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 					{
-						["Signature"] = (requestInfo.GetHeaderParameter("x-app-token") ?? "").GetHMACSHA256(validationKey ?? CryptoService.DEFAULT_PASS_PHRASE),
+						["Signature"] = (requestInfo.GetParameter("x-app-token") ?? "").GetHMACSHA256(validationKey ?? CryptoService.DEFAULT_PASS_PHRASE),
 						["SessionID"] = requestInfo.Session.SessionID.GetHMACBLAKE256(validationKey ?? CryptoService.DEFAULT_PASS_PHRASE)
 					},
 					CorrelationID = requestInfo.CorrelationID
@@ -128,7 +128,7 @@ namespace net.vieapps.Services
 					},
 					Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 					{
-						["Signature"] = (requestInfo.GetHeaderParameter("x-app-token") ?? "").GetHMACSHA256(validationKey ?? CryptoService.DEFAULT_PASS_PHRASE),
+						["Signature"] = (requestInfo.GetParameter("x-app-token") ?? "").GetHMACSHA256(validationKey ?? CryptoService.DEFAULT_PASS_PHRASE),
 						["SessionID"] = requestInfo.Session.SessionID.GetHMACBLAKE256(validationKey ?? CryptoService.DEFAULT_PASS_PHRASE)
 					},
 					CorrelationID = requestInfo.CorrelationID
@@ -163,7 +163,7 @@ namespace net.vieapps.Services
 					},
 					Extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
 					{
-						["Signature"] = (requestInfo.GetHeaderParameter("x-app-token") ?? "").GetHMACSHA256(validationKey ?? CryptoService.DEFAULT_PASS_PHRASE),
+						["Signature"] = (requestInfo.GetParameter("x-app-token") ?? "").GetHMACSHA256(validationKey ?? CryptoService.DEFAULT_PASS_PHRASE),
 						["SessionID"] = requestInfo.Session.SessionID.GetHMACBLAKE256(validationKey ?? CryptoService.DEFAULT_PASS_PHRASE)
 					},
 					CorrelationID = requestInfo.CorrelationID
