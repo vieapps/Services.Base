@@ -76,6 +76,7 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the parameter with two steps: first from header, then second step is from query if header has no value
 		/// </summary>
+		/// <param name="name"></param>
 		/// <param name="value"></param>
 		/// <returns></returns>
 		public static bool TryGetParameter(this RequestInfo requestInfo, string name, out string value)
@@ -83,6 +84,15 @@ namespace net.vieapps.Services
 			value = null;
 			return requestInfo != null && (requestInfo.TryGetHeaderParameter(name, out value) || requestInfo.TryGetQueryParameter(name, out value));
 		}
+
+
+		/// <summary>
+		/// Checks the parameter is existed in header or query
+		/// </summary>
+		/// <param name="name"></param>
+		/// <returns></returns>
+		public static bool ContainsKey(this RequestInfo requestInfo, string name)
+			=> (requestInfo.Header != null && requestInfo.Header.ContainsKey(name)) || (requestInfo.Query != null && requestInfo.Query.ContainsKey(name));
 
 		/// <summary>
 		/// Gets the parameter with two steps: first from header, then second step is from query if header has no value
