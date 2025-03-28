@@ -38,7 +38,7 @@ namespace net.vieapps.Services
 			=> Task.FromException<JToken>(new NotImplementedException());
 
 		public virtual Task<JToken> ProcessWebHookMessageAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
-			=> Task.FromException<JToken>(new NotImplementedException());
+			=> Task.FromException<JToken>(!"POST".IsEquals(requestInfo.Verb) ? new MethodNotAllowedException(requestInfo.Verb) as Exception : new NotImplementedException());
 
 		/// <summary>
 		/// Processes the inter-communicate messages between the services' instances

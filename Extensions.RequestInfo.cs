@@ -354,12 +354,14 @@ namespace net.vieapps.Services
 		/// <param name="signKeyIsHex"></param>
 		/// <param name="signatureName"></param>
 		/// <param name="signatureAsHex"></param>
+		/// <param name="signaturePrefix"></param>
+		/// <param name="signatureSuffix"></param>
 		/// <param name="requiredQuery"></param>
 		/// <param name="requiredHeader"></param>
 		/// <param name="decryptionKey"></param>
 		/// <param name="decryptionIV"></param>
 		/// <returns></returns>
-		public static WebHookMessage ToWebHookMessage(this RequestInfo requestInfo, string secretToken, string secretTokenName, string signAlgorithm, string signKey, bool signKeyIsHex, string signatureName, bool signatureAsHex, IDictionary<string, string> requiredQuery, IDictionary<string, string> requiredHeader, byte[] decryptionKey, byte[] decryptionIV)
+		public static WebHookMessage ToWebHookMessage(this RequestInfo requestInfo, string secretToken, string secretTokenName, string signAlgorithm, string signKey, bool signKeyIsHex, string signatureName, bool signatureAsHex, string signaturePrefix, string signatureSuffix, IDictionary<string, string> requiredQuery, IDictionary<string, string> requiredHeader, byte[] decryptionKey, byte[] decryptionIV)
 			=> new WebHookMessage
 			{
 				EndpointURL = requestInfo.Session?.AppOrigin ?? requestInfo.GetHeaderParameter("Origin"),
@@ -367,7 +369,7 @@ namespace net.vieapps.Services
 				Query = requestInfo.Query,
 				Header = requestInfo.Header,
 				CorrelationID = requestInfo.CorrelationID
-			}.Validate(secretToken, secretTokenName, signAlgorithm, signKey, signKeyIsHex, signatureName, signatureAsHex, requiredQuery, requiredHeader, decryptionKey, decryptionIV);
+			}.Validate(secretToken, secretTokenName, signAlgorithm, signKey, signKeyIsHex, signatureName, signatureAsHex, signaturePrefix, signatureSuffix, requiredQuery, requiredHeader, decryptionKey, decryptionIV);
 
 		/// <summary>
 		/// Converts and validates this request information as a web-hook message
@@ -380,13 +382,15 @@ namespace net.vieapps.Services
 		/// <param name="signKeyIsHex"></param>
 		/// <param name="signatureName"></param>
 		/// <param name="signatureAsHex"></param>
+		/// <param name="signaturePrefix"></param>
+		/// <param name="signatureSuffix"></param>
 		/// <param name="requiredQuery"></param>
 		/// <param name="requiredHeader"></param>
 		/// <param name="decryptionKey"></param>
 		/// <param name="decryptionIV"></param>
 		/// <returns></returns>
-		public static WebHookMessage ToWebHookMessage(this RequestInfo requestInfo, string secretToken, string secretTokenName, string signAlgorithm, string signKey, bool signKeyIsHex, string signatureName, bool signatureAsHex, JObject requiredQuery = null, JObject requiredHeader = null, byte[] decryptionKey = null, byte[] decryptionIV = null)
-			=> requestInfo?.ToWebHookMessage(secretToken, secretTokenName, signAlgorithm, signKey, signKeyIsHex, signatureName, signatureAsHex, requiredQuery?.ToDictionary<string>(), requiredHeader?.ToDictionary<string>(), decryptionKey, decryptionIV);
+		public static WebHookMessage ToWebHookMessage(this RequestInfo requestInfo, string secretToken, string secretTokenName, string signAlgorithm, string signKey, bool signKeyIsHex, string signatureName, bool signatureAsHex, string signaturePrefix, string signatureSuffix, JObject requiredQuery = null, JObject requiredHeader = null, byte[] decryptionKey = null, byte[] decryptionIV = null)
+			=> requestInfo?.ToWebHookMessage(secretToken, secretTokenName, signAlgorithm, signKey, signKeyIsHex, signatureName, signatureAsHex, signaturePrefix, signatureSuffix, requiredQuery?.ToDictionary<string>(), requiredHeader?.ToDictionary<string>(), decryptionKey, decryptionIV);
 
 		static string GetValue(this Dictionary<string, string> dictionary, string name)
 			=> dictionary.TryGetValue(name, out var @string) ? @string : null;
@@ -413,7 +417,7 @@ namespace net.vieapps.Services
 			var encryptionKey = settings.EncryptionKey?.HexToBytes();
 			var encryptionIV = settings.EncryptionIV?.HexToBytes();
 
-			var message = requestInfo.ToWebHookMessage(secretToken, secretTokenName, settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, webhookQuery, webhookHeader, encryptionKey, encryptionIV);
+			var message = requestInfo.ToWebHookMessage(secretToken, secretTokenName, settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, settings.SignaturePrefix, settings.SignatureSuffix, webhookQuery, webhookHeader, encryptionKey, encryptionIV);
 			var messageJson = new JObject
 			{
 				["Header"] = message.Header.ToJObject(),
@@ -423,7 +427,7 @@ namespace net.vieapps.Services
 
 			var verb = "POST";
 			var debugLogs = "";
-			var writeLogs = requestInfo.Query.TryGetValue("x-logs", out var _);
+			var writeLogs = requestInfo.ContainsKey("x-logs");
 			var jsonFormat = writeLogs ? Formatting.Indented : Formatting.None;
 
 			if (message.Header.TryGetValue("x-webhook-pre-endpoint-url", out var preEndpointURL))
@@ -506,7 +510,7 @@ namespace net.vieapps.Services
 				Header = result?.Get<JObject>("Header")?.ToDictionary<string>(),
 				Query = result?.Get<JObject>("Query")?.ToDictionary<string>(),
 				Body = body.ToString(Formatting.None)
-			}.Normalize(settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, false, webhookQuery?.ToDictionary<string>(), webhookHeader?.ToDictionary<string>(), encryptionKey, encryptionIV);
+			}.Normalize(settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, false, settings.SignaturePrefix, settings.SignatureSuffix, webhookQuery?.ToDictionary<string>(), webhookHeader?.ToDictionary<string>(), encryptionKey, encryptionIV);
 			if (!string.IsNullOrWhiteSpace(secretToken))
 				message.Header[string.IsNullOrWhiteSpace(secretTokenName) ? "x-webhook-secret-token" : secretTokenName] = secretToken;
 
@@ -565,7 +569,7 @@ namespace net.vieapps.Services
 					Header = message.Header.GetDictionary("x-webhook-post-header") ?? message.Header,
 					Query = message.Header.GetDictionary("x-webhook-post-query") ?? message.Query,
 					Body = body.ToString(Formatting.None),
-				}.Normalize(settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, false, webhookQuery?.ToDictionary<string>(), webhookHeader?.ToDictionary<string>(), encryptionKey, encryptionIV);
+				}.Normalize(settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, false, settings.SignaturePrefix, settings.SignatureSuffix, webhookQuery?.ToDictionary<string>(), webhookHeader?.ToDictionary<string>(), encryptionKey, encryptionIV);
 				if (!string.IsNullOrWhiteSpace(secretToken))
 					message.Header[string.IsNullOrWhiteSpace(secretTokenName) ? "x-webhook-secret-token" : secretTokenName] = secretToken;
 
