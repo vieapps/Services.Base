@@ -339,7 +339,7 @@ namespace net.vieapps.Services
 
 		ConcurrentQueue<((DateTime Time, string CorrelationID, string DeveloperID, string AppID, string NodeID, string ServiceName, string ObjectName) Info, List<string> Logs, string Stack)> Logs { get; } = new ConcurrentQueue<((DateTime Time, string CorrelationID, string DeveloperID, string AppID, string NodeID, string ServiceName, string ObjectName) Info, List<string> Logs, string Stack)>();
 
-		string _isDebugResultsEnabled = null, _isDebugStacksEnabled = null, _isDebugAuthorizationsEnabled = null;
+		string _isDebugResultsEnabled = null, _isDebugStacksEnabled = null, _isDebugAuthorizationsEnabled = null, _isDebugLowAuthorizationsEnabled = null;
 
 		/// <summary>
 		/// Gets the state to write debug log (from app settings - parameter named 'vieapps:Logs:Debug')
@@ -357,9 +357,14 @@ namespace net.vieapps.Services
 		public bool IsDebugStacksEnabled => this.IsDebugLogEnabled || "true".IsEquals(this._isDebugStacksEnabled ?? (this._isDebugStacksEnabled = UtilityService.GetAppSetting("Logs:ShowStacks", "false")));
 
 		/// <summary>
-		/// Gets the state to write debug logs of authorization (from app settings - parameter named 'vieapps:Logs:ShowAuthorizations')
+		/// Gets the state to write debug logs of authorization (from app settings - parameter named 'vieapps:Logs:Authorizations')
 		/// </summary>
-		public bool IsDebugAuthorizationsEnabled => this.IsDebugLogEnabled || "true".IsEquals(this._isDebugAuthorizationsEnabled ?? (this._isDebugAuthorizationsEnabled = UtilityService.GetAppSetting("Logs:ShowAuthorizations", "false")));
+		public bool IsDebugAuthorizationsEnabled => this.IsDebugLogEnabled || "true".IsEquals(this._isDebugAuthorizationsEnabled ?? (this._isDebugAuthorizationsEnabled = UtilityService.GetAppSetting("Logs:Authorizations", "false")));
+
+		/// <summary>
+		/// Gets the state to write debug logs of low-level authorization (from app settings - parameter named 'vieapps:Logs:Authorizations:LowLevel')
+		/// </summary>
+		public bool IsDebugLowAuthorizationsEnabled => this.IsDebugLogEnabled || (this.IsDebugAuthorizationsEnabled && "true".IsEquals(this._isDebugLowAuthorizationsEnabled ?? (this._isDebugLowAuthorizationsEnabled = UtilityService.GetAppSetting("Logs:Authorizations:LowLevel", "false"))));
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -835,12 +840,12 @@ namespace net.vieapps.Services
 					if (!@is && !"Users".IsEquals(this.ServiceName))
 						@is = await user.IsSystemAdministratorAsync(correlationID, cancellationToken).ConfigureAwait(false);
 					if (this.IsDebugAuthorizationsEnabled)
-						await this.WriteLogsAsync(correlationID, $"Determines the user ({user.ID}) is system administrator => {@is}", null, this.ServiceName, "Authorization").ConfigureAwait(false);
+						await this.WriteLogsAsync(correlationID, $"Determines the user ({user.ID}) is system administrator => {@is}", null, this.ServiceName, "Authorizations").ConfigureAwait(false);
 					return @is;
 				}
 				catch (Exception ex)
 				{
-					await this.WriteLogsAsync(correlationID, $"Error occurred while determining the user ({user.ID}) is system administrator => {ex.Message}", ex, this.ServiceName, "Authorization", LogLevel.Error).ConfigureAwait(false);
+					await this.WriteLogsAsync(correlationID, $"Error occurred while determining the user ({user.ID}) is system administrator => {ex.Message}", ex, this.ServiceName, "Authorizations", LogLevel.Error).ConfigureAwait(false);
 				}
 			}
 			return false;
@@ -1026,7 +1031,7 @@ namespace net.vieapps.Services
 				await this.WriteLogsAsync(correlationID, $"Determines the user is administrator of service/object => {@is}" + "\r\n" +
 					$"Object: {objectName ?? "N/A"}{(string.IsNullOrWhiteSpace(objectID) ? "" : $"#{objectID} (Entity: {entityInfo ?? "N/A"})")}" + "\r\n" +
 					$"User: {user?.ID ?? "N/A"}" + "\r\n\t" + $"- Roles: {user?.Roles?.ToString(", ")}" + "\r\n\t" + $"- Privileges: {(user?.Privileges == null || user.Privileges.Count < 1 ? "None" : user.Privileges.ToJArray().ToString())}"
-				, null, this.ServiceName, "Authorization").ConfigureAwait(false);
+				, null, this.ServiceName, "Authorizations").ConfigureAwait(false);
 			return @is;
 		}
 
@@ -1071,7 +1076,7 @@ namespace net.vieapps.Services
 				await this.WriteLogsAsync(correlationID, $"Determines the user is moderator of service/object => {@is}" + "\r\n" +
 					$"Object: {objectName ?? "N/A"}{(string.IsNullOrWhiteSpace(objectID) ? "" : $"#{objectID} (Entity: {entityInfo ?? "N/A"})")}" + "\r\n" +
 					$"User: {user?.ID ?? "N/A"}" + "\r\n\t" + $"- Roles: {user?.Roles?.ToString(", ")}" + "\r\n\t" + $"- Privileges: {(user?.Privileges == null || user.Privileges.Count < 1 ? "None" : user.Privileges.ToJArray().ToString())}"
-				, null, this.ServiceName, "Authorization").ConfigureAwait(false);
+				, null, this.ServiceName, "Authorizations").ConfigureAwait(false);
 			return @is;
 		}
 
@@ -1116,7 +1121,7 @@ namespace net.vieapps.Services
 				await this.WriteLogsAsync(correlationID, $"Determines the user is editor of service/object => {@is}" + "\r\n" +
 					$"Object: {objectName ?? "N/A"}{(string.IsNullOrWhiteSpace(objectID) ? "" : $"#{objectID} (Entity: {entityInfo ?? "N/A"})")}" + "\r\n" +
 					$"User: {user?.ID ?? "N/A"}" + "\r\n\t" + $"- Roles: {user?.Roles?.ToString(", ")}" + "\r\n\t" + $"- Privileges: {(user?.Privileges == null || user.Privileges.Count < 1 ? "None" : user.Privileges.ToJArray().ToString())}"
-				, null, this.ServiceName, "Authorization").ConfigureAwait(false);
+				, null, this.ServiceName, "Authorizations").ConfigureAwait(false);
 			return @is;
 		}
 
@@ -1161,7 +1166,7 @@ namespace net.vieapps.Services
 				await this.WriteLogsAsync(correlationID, $"Determines the user is contributor of service/object => {@is}" + "\r\n" +
 					$"Object: {objectName ?? "N/A"}{(string.IsNullOrWhiteSpace(objectID) ? "" : $"#{objectID} (Entity: {entityInfo ?? "N/A"})")}" + "\r\n" +
 					$"User: {user?.ID ?? "N/A"}" + "\r\n\t" + $"- Roles: {user?.Roles?.ToString(", ")}" + "\r\n\t" + $"- Privileges: {(user?.Privileges == null || user.Privileges.Count < 1 ? "None" : user.Privileges.ToJArray().ToString())}"
-				, null, this.ServiceName, "Authorization").ConfigureAwait(false);
+				, null, this.ServiceName, "Authorizations").ConfigureAwait(false);
 			return @is;
 		}
 
@@ -1202,11 +1207,11 @@ namespace net.vieapps.Services
 		{
 			correlationID = correlationID ?? UtilityService.NewUUID;
 			var @is = await this.IsViewerAsync(user, objectName, await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false), correlationID, cancellationToken).ConfigureAwait(false);
-			if (this.IsDebugAuthorizationsEnabled)
+			if (this.IsDebugLowAuthorizationsEnabled)
 				await this.WriteLogsAsync(correlationID, $"Determines the user is viewer of service/object => {@is}" + "\r\n" +
 					$"Object: {objectName ?? "N/A"}{(string.IsNullOrWhiteSpace(objectID) ? "" : $"#{objectID} (Entity: {entityInfo ?? "N/A"})")}" + "\r\n" +
 					$"User: {user?.ID ?? "N/A"}" + "\r\n\t" + $"- Roles: {user?.Roles?.ToString(", ")}" + "\r\n\t" + $"- Privileges: {(user?.Privileges == null || user.Privileges.Count < 1 ? "None" : user.Privileges.ToJArray().ToString())}"
-				, null, this.ServiceName, "Authorization").ConfigureAwait(false);
+				, null, this.ServiceName, "Authorizations").ConfigureAwait(false);
 			return @is;
 		}
 
@@ -1247,11 +1252,11 @@ namespace net.vieapps.Services
 		{
 			correlationID = correlationID ?? UtilityService.NewUUID;
 			var @is = await this.IsDownloaderAsync(user, objectName, await this.GetBusinessObjectAsync(entityInfo, objectID, cancellationToken).ConfigureAwait(false), correlationID, cancellationToken).ConfigureAwait(false);
-			if (this.IsDebugAuthorizationsEnabled)
+			if (this.IsDebugLowAuthorizationsEnabled)
 				await this.WriteLogsAsync(correlationID, $"Determines the user is downloader of service/object => {@is}" + "\r\n" +
 					$"Object: {objectName ?? "N/A"}{(string.IsNullOrWhiteSpace(objectID) ? "" : $"#{objectID} (Entity: {entityInfo ?? "N/A"})")}" + "\r\n" +
 					$"User: {user?.ID ?? "N/A"}" + "\r\n\t" + $"- Roles: {user?.Roles?.ToString(", ")}" + "\r\n\t" + $"- Privileges: {(user?.Privileges == null || user.Privileges.Count < 1 ? "None" : user.Privileges.ToJArray().ToString())}"
-				, null, this.ServiceName, "Authorization").ConfigureAwait(false);
+				, null, this.ServiceName, "Authorizations").ConfigureAwait(false);
 			return @is;
 		}
 		#endregion
@@ -1296,7 +1301,7 @@ namespace net.vieapps.Services
 					$"Object: {objectName ?? "N/A"}{(string.IsNullOrWhiteSpace(objectID) ? "" : $"#{objectID}")}" + "\r\n" +
 					$"User: {user?.ID ?? "N/A"}" + "\r\n\t" + $"- Roles: {user?.Roles?.ToString(", ")}" + "\r\n\t" + $"- Privileges: {(user?.Privileges == null || user.Privileges.Count < 1 ? "None" : user.Privileges.ToJArray().ToString())}" + "\r\n" +
 					$"Privileges for determining: {(privileges ?? this.Privileges)?.ToJson().ToString() ?? "None"}"
-				, null, this.ServiceName, "Authorization").ConfigureAwait(false);
+				, null, this.ServiceName, "Authorizations").ConfigureAwait(false);
 
 			return @is;
 		}
