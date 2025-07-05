@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Reactive.Linq;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using net.vieapps.Components.Utility;
@@ -56,6 +57,30 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static (string User, string Host, string Platform, string OS) GetRuntimeArguments()
 			=> (Environment.UserName.Trim().ToLower(), Environment.MachineName.Trim().ToLower(), RuntimeInformation.FrameworkDescription.Trim(), Extensions.GetRuntimePlatform(false));
+
+		/// <summary>
+		/// Gets the name of the app's OS
+		/// </summary>
+		/// <param name="userAgent"></param>
+		/// <returns></returns>
+		public static string GetOSInfo(string userAgent)
+			=> userAgent.IsContains("iPhone") || userAgent.IsContains("iPad") || userAgent.IsContains("iPod")
+				? "iOS"
+				: userAgent.IsContains("Android")
+					? "Android"
+					: userAgent.IsContains("Windows Phone")
+						? "Windows Phone"
+						: userAgent.IsContains("BlackBerry") || userAgent.IsContains("BB10") || userAgent.IsContains("RIM Tablet OS")
+							? "BlackBerry" + (userAgent.IsContains("BB10") ? "10" : "OS")
+							: userAgent.IsContains("IEMobile") || userAgent.IsContains("Opera Mini") || userAgent.IsContains("MDP/")
+								? "Mobile OS"
+								: userAgent.IsContains("Windows")
+									? "Windows"
+									: userAgent.IsContains("Mac OS")
+										? "macOS"
+										: userAgent.IsContains("Linux")
+											? "Linux"
+											: "Generic OS";
 		#endregion
 
 		#region Get node identity, unique name & end-point
@@ -126,12 +151,14 @@ namespace net.vieapps.Services
 		{
 			var host = "";
 			if (!IPAddress.TryParse(uri.Host, out var address))
-			{
-				address = Dns.GetHostAddresses(uri.Host).FirstOrDefault(ip => ip.AddressFamily == AddressFamily.InterNetwork || ip.AddressFamily == AddressFamily.InterNetworkV6);
-				host = address == null
-					? $" => Could not resolve host \"{host}\""
-					: $" => {uri.Scheme}://{new IPEndPoint(address, uri.Port)}{uri.PathAndQuery}";
-			}
+				try
+				{
+					address = Dns.GetHostAddresses(uri.Host).FirstOrDefault(ip => ip.AddressFamily == AddressFamily.InterNetwork || ip.AddressFamily == AddressFamily.InterNetworkV6);
+					host = address == null
+						? $" => Could not resolve host \"{host}\""
+						: $" => {uri.Scheme}://{new IPEndPoint(address, uri.Port)}{uri.PathAndQuery}";
+				}
+				catch { }
 			return $"{uri}{host}";
 		}
 		#endregion
@@ -174,6 +201,81 @@ namespace net.vieapps.Services
 				}.Send();
 			return Task.CompletedTask;
 		}
+		#endregion
+
+		#region ReactiveX extensions
+		/// <summary>
+		/// Subscribes an element handler, an exception handler, and a completion handler to an observable sequence.
+		/// </summary>
+		/// <typeparam name="T">The type of the elements in the source sequence.</typeparam>
+		/// <param name="source">Observable sequence to subscribe to.</param>
+		/// <param name="onNext">Action to invoke for each element in the observable sequence.</param>
+		/// <returns><see cref="IDisposable"/> object used to unsubscribe from the observable sequence.</returns>
+		/// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="onNext"/> is <c>null</c>.</exception>
+		public static IDisposable Subscribe<T>(this IObservable<T> source, Func<T, Task> onNext)
+			=> source.Subscribe(data => onNext(data).Run());
+
+		/// <summary>
+		/// Subscribes an element handler, an exception handler, and a completion handler to an observable sequence.
+		/// </summary>
+		/// <typeparam name="T">The type of the elements in the source sequence.</typeparam>
+		/// <param name="source">Observable sequence to subscribe to.</param>
+		/// <param name="onNext">Action to invoke for each element in the observable sequence.</param>
+		/// <param name="onError">Action to invoke upon exceptional termination of the observable sequence.</param>
+		/// <returns><see cref="IDisposable"/> object used to unsubscribe from the observable sequence.</returns>
+		/// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="onNext"/> or <paramref name="onError"/> is <c>null</c>.</exception>
+		public static IDisposable Subscribe<T>(this IObservable<T> source, Func<T, Task> onNext, Action<Exception> onError)
+			=> source.Subscribe(data => onNext(data).Run(onError), onError);
+
+		/// <summary>
+		/// Subscribes an element handler, an exception handler, and a completion handler to an observable sequence.
+		/// </summary>
+		/// <typeparam name="T">The type of the elements in the source sequence.</typeparam>
+		/// <param name="source">Observable sequence to subscribe to.</param>
+		/// <param name="onNext">Action to invoke for each element in the observable sequence.</param>
+		/// <param name="onError">Action to invoke upon exceptional termination of the observable sequence.</param>
+		/// <returns><see cref="IDisposable"/> object used to unsubscribe from the observable sequence.</returns>
+		/// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="onNext"/> or <paramref name="onError"/> is <c>null</c>.</exception>
+		public static IDisposable Subscribe<T>(this IObservable<T> source, Func<T, Task> onNext, Func<Exception, Task> onError)
+			=> source.Subscribe(data => onNext(data).Run(onError), ex => onError(ex).Run());
+
+		/// <summary>
+		/// Subscribes an element handler, an exception handler, and a completion handler to an observable sequence.
+		/// </summary>
+		/// <typeparam name="T">The type of the elements in the source sequence.</typeparam>
+		/// <param name="source">Observable sequence to subscribe to.</param>
+		/// <param name="onNext">Action to invoke for each element in the observable sequence.</param>
+		/// <param name="onCompleted">Action to invoke upon graceful termination of the observable sequence.</param>
+		/// <returns><see cref="IDisposable"/> object used to unsubscribe from the observable sequence.</returns>
+		/// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="onNext"/> or <paramref name="onCompleted"/> is <c>null</c>.</exception>
+		public static IDisposable Subscribe<T>(this IObservable<T> source, Func<T, Task> onNext, Action onCompleted)
+			=> source.Subscribe(data => onNext(data).Run(), onCompleted);
+
+		/// <summary>
+		/// Subscribes an element handler, an exception handler, and a completion handler to an observable sequence.
+		/// </summary>
+		/// <typeparam name="T">The type of the elements in the source sequence.</typeparam>
+		/// <param name="source">Observable sequence to subscribe to.</param>
+		/// <param name="onNext">Action to invoke for each element in the observable sequence.</param>
+		/// <param name="onError">Action to invoke upon exceptional termination of the observable sequence.</param>
+		/// <param name="onCompleted">Action to invoke upon graceful termination of the observable sequence.</param>
+		/// <returns><see cref="IDisposable"/> object used to unsubscribe from the observable sequence.</returns>
+		/// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="onNext"/> or <paramref name="onError"/> or <paramref name="onCompleted"/> is <c>null</c>.</exception>
+		public static IDisposable Subscribe<T>(this IObservable<T> source, Func<T, Task> onNext, Action<Exception> onError, Action onCompleted)
+			=> source.Subscribe(data => onNext(data).Run(onError), onError, onCompleted);
+
+		/// <summary>
+		/// Subscribes an element handler, an exception handler, and a completion handler to an observable sequence.
+		/// </summary>
+		/// <typeparam name="T">The type of the elements in the source sequence.</typeparam>
+		/// <param name="source">Observable sequence to subscribe to.</param>
+		/// <param name="onNext">Action to invoke for each element in the observable sequence.</param>
+		/// <param name="onError">Action to invoke upon exceptional termination of the observable sequence.</param>
+		/// <param name="onCompleted">Action to invoke upon graceful termination of the observable sequence.</param>
+		/// <returns><see cref="IDisposable"/> object used to unsubscribe from the observable sequence.</returns>
+		/// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="onNext"/> or <paramref name="onError"/> or <paramref name="onCompleted"/> is <c>null</c>.</exception>
+		public static IDisposable Subscribe<T>(this IObservable<T> source, Func<T, Task> onNext, Func<Exception, Task> onError, Action onCompleted)
+			=> source.Subscribe(data => onNext(data).Run(onError), ex => onError(ex).Run(), onCompleted);
 		#endregion
 
 	}

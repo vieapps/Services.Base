@@ -1793,11 +1793,36 @@ namespace net.vieapps.Services
 			{
 				try
 				{
-					action?.Invoke();
+					action();
 				}
 				catch (Exception ex)
 				{
 					this.WriteLogs(UtilityService.NewUUID, $"Error occurred while invoking a timer action => {ex.Message}", ex, this.ServiceName, "Timers");
+				}
+			});
+			this.Timers.Add(timer);
+			return timer;
+		}
+
+		/// <summary>
+		/// Starts a timer (using ReactiveX)
+		/// </summary>
+		/// <param name="action">The action to run</param>
+		/// <param name="interval">The elapsed time for running the action (seconds)</param>
+		/// <param name="delay">Delay time (miliseconds) before running the action</param>
+		/// <returns></returns>
+		protected virtual IDisposable StartTimer(Func<Task> action, int interval, int delay = 0)
+		{
+			interval = interval < 1 ? 1 : interval;
+			var timer = Observable.Timer(TimeSpan.FromMilliseconds(delay > 0 ? delay : interval * 1000), TimeSpan.FromSeconds(interval)).Subscribe(async _ =>
+			{
+				try
+				{
+					await action().ConfigureAwait(false);
+				}
+				catch (Exception ex)
+				{
+					await this.WriteLogsAsync(UtilityService.NewUUID, $"Error occurred while invoking a timer action => {ex.Message}", ex, this.ServiceName, "Timers").ConfigureAwait(false);
 				}
 			});
 			this.Timers.Add(timer);
@@ -2272,42 +2297,18 @@ namespace net.vieapps.Services
 				this.Logger?.LogInformation($"The service was{(this.State == ServiceState.Disconnected ? " re-" : " ")}registered successful");
 
 				this.ServiceCommunicator?.Dispose();
-				this.ServiceCommunicator = Router.IncomingChannel.RealmProxy.Services
-					.GetSubject<CommunicateMessage>($"messages.services.{this.ServiceName.Trim().ToLower()}")
-					.Subscribe
-					(
-						async message =>
-						{
-							try
-							{
-								await (this.NodeID.IsEquals(message.ExcludedNodeID) ? Task.CompletedTask : this.ProcessInterCommunicateMessageAsync(message, this.CancellationToken)).ConfigureAwait(false);
-							}
-							catch (Exception ex)
-							{
-								await this.WriteLogsAsync(UtilityService.NewUUID, this.Logger, $"Error occurred while processing an inter-communicate message => {ex.Message}", ex, this.ServiceName, "Errors", LogLevel.Error).ConfigureAwait(false);
-							}
-						},
-						exception => this.Logger?.LogError($"Error occurred while fetching an inter-communicate message => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
-					);
+				this.ServiceCommunicator = Router.IncomingChannel.RealmProxy.Services.GetSubject<CommunicateMessage>($"messages.services.{this.ServiceName.Trim().ToLower()}").Subscribe
+				(
+					message => this.NodeID.IsEquals(message.ExcludedNodeID) ? Task.CompletedTask : this.ProcessInterCommunicateMessageAsync(message, this.CancellationToken),
+					exception => this.WriteLogsAsync(UtilityService.NewUUID, this.Logger, $"Error occurred while processing an inter-communicate message => {exception.Message}", exception, this.ServiceName, "Errors", LogLevel.Error)
+				);
 
 				this.GatewayCommunicator?.Dispose();
-				this.GatewayCommunicator = Router.IncomingChannel.RealmProxy.Services
-					.GetSubject<CommunicateMessage>("messages.services.apigateway")
-					.Subscribe
-					(
-						async message =>
-						{
-							try
-							{
-								await (this.NodeID.IsEquals(message.ExcludedNodeID) ? Task.CompletedTask : this.ProcessGatewayCommunicateMessageAsync(message, this.CancellationToken)).ConfigureAwait(false);
-							}
-							catch (Exception ex)
-							{
-								await this.WriteLogsAsync(UtilityService.NewUUID, this.Logger, $"Error occurred while processing an inter-communicate message of API Gateway => {ex.Message}", ex, this.ServiceName, "Errors", LogLevel.Error).ConfigureAwait(false);
-							}
-						},
-						exception => this.Logger?.LogError($"Error occurred while fetching an inter-communicate message of API Gateway => {exception.Message}", this.State == ServiceState.Connected ? exception : null)
-					);
+				this.GatewayCommunicator = Router.IncomingChannel.RealmProxy.Services.GetSubject<CommunicateMessage>("messages.services.apigateway").Subscribe
+				(
+					message => this.NodeID.IsEquals(message.ExcludedNodeID) ? Task.CompletedTask : this.ProcessGatewayCommunicateMessageAsync(message, this.CancellationToken),
+					exception => this.WriteLogsAsync(UtilityService.NewUUID, this.Logger, $"Error occurred while processing an inter-communicate message of API Gateway => {exception.Message}", exception, this.ServiceName, "Errors", LogLevel.Error)
+				);
 
 				this.Logger?.LogInformation($"The inter-communicate message updater was{(this.State == ServiceState.Disconnected ? " re-" : " ")}subscribed successful");
 				if (this.State == ServiceState.Disconnected)
@@ -2357,7 +2358,9 @@ namespace net.vieapps.Services
 			}
 			catch (Exception ex)
 			{
-				if (!(ex is WampException) || !ex.Message.IsContains("wamp.error.no_such_registration"))
+				if (ex is WampException && ex.Message.IsContains("wamp.error.no_such_registration"))
+					this.Logger?.LogError($"Error occurred while disposing the service's instance because no service is registered => {ex.Message}", ex);
+				else
 				{
 					this.Logger?.LogError($"Error occurred while disposing the service's instance => {ex.Message}", ex);
 					onError?.Invoke(ex);
@@ -2375,7 +2378,9 @@ namespace net.vieapps.Services
 			}
 			catch (Exception ex)
 			{
-				if (!(ex is WampException) || !ex.Message.IsContains("wamp.error.no_such_registration"))
+				if (ex is WampException && ex.Message.IsContains("wamp.error.no_such_registration"))
+					this.Logger?.LogError($"Error occurred while disposing the unique service's instance because no service is registered => {ex.Message}", ex);
+				else
 				{
 					this.Logger?.LogError($"Error occurred while disposing the unique service's instance => {ex.Message}", ex);
 					onError?.Invoke(ex);
@@ -2393,7 +2398,9 @@ namespace net.vieapps.Services
 			}
 			catch (Exception ex)
 			{
-				if (!(ex is WampException) || !ex.Message.IsContains("wamp.error.no_such_registration"))
+				if (ex is WampException && ex.Message.IsContains("wamp.error.no_such_registration"))
+					this.Logger?.LogError($"Error occurred while disposing the sync service's instance because no service is registered => {ex.Message}", ex);
+				else
 				{
 					this.Logger?.LogError($"Error occurred while disposing the sync service's instance => {ex.Message}", ex);
 					onError?.Invoke(ex);

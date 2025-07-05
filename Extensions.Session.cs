@@ -31,8 +31,12 @@ namespace net.vieapps.Services
 			try
 			{
 				var service = Router.GetService("IPLocations");
-				var response = await service.ProcessRequestAsync(new RequestInfo(session, "IPLocations") { CorrelationID = correlationID }, cancellationToken).ConfigureAwait(false);
-
+				var requestInfo = new RequestInfo(session, "IPLocations")
+				{
+					Header = new Dictionary<string, string> { ["x-requester"] = "vieapps-ngx-base" },
+					CorrelationID = correlationID
+				};
+				var response = await service.ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false);
 				var city = response.Get("City", "N/A");
 				var region = response.Get("Region", "N/A");
 				if (region.Equals(city) && !"N/A".IsEquals(city))
@@ -43,7 +47,7 @@ namespace net.vieapps.Services
 				{
 					if ("Unknown".IsEquals(Extensions.CurrentLocation))
 					{
-						response = await service.ProcessRequestAsync(new RequestInfo(session, "IPLocations", "Current") { CorrelationID = correlationID }, cancellationToken).ConfigureAwait(false);
+						response = await service.ProcessRequestAsync(new RequestInfo(requestInfo) { ObjectName = "Current" }, cancellationToken).ConfigureAwait(false);
 						city = response.Get("City", "N/A");
 						region = response.Get("Region", "N/A");
 						if (region.Equals(city) && !"N/A".IsEquals(city))
