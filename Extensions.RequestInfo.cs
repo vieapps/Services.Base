@@ -15,6 +15,8 @@ namespace net.vieapps.Services
 {
 	public static partial class Extensions
 	{
+
+		#region Body & Request
 		/// <summary>
 		/// Gets the request body in JSON
 		/// </summary>
@@ -29,6 +31,31 @@ namespace net.vieapps.Services
 		public static ExpandoObject GetBodyExpando(this RequestInfo requestInfo)
 			=> requestInfo?.BodyAsExpandoObject;
 
+		/// <summary>
+		/// Gets the value of the 'x-request' parameter of the query (in Base64Url) and converts to JSON
+		/// </summary>
+		/// <returns></returns>
+		public static JToken GetRequestJson(this RequestInfo requestInfo)
+		{
+			try
+			{
+				return (requestInfo?.GetQueryParameter("x-request")?.Url64Decode() ?? "{}").ToJson();
+			}
+			catch
+			{
+				return new JObject();
+			}
+		}
+
+		/// <summary>
+		/// Gets the value of the 'x-request' parameter of the query (in Base64Url) and converts to ExpandoObject
+		/// </summary>
+		/// <returns></returns>
+		public static ExpandoObject GetRequestExpando(this RequestInfo requestInfo)
+			=> requestInfo?.GetRequestJson()?.ToExpandoObject() ?? new ExpandoObject();
+		#endregion
+
+		#region Get parameters
 		/// <summary>
 		/// Gets the parameter from the header
 		/// </summary>
@@ -85,15 +112,6 @@ namespace net.vieapps.Services
 			return requestInfo != null && (requestInfo.TryGetHeaderParameter(name, out value) || requestInfo.TryGetQueryParameter(name, out value));
 		}
 
-
-		/// <summary>
-		/// Checks the parameter is existed in header or query
-		/// </summary>
-		/// <param name="name"></param>
-		/// <returns></returns>
-		public static bool ContainsKey(this RequestInfo requestInfo, string name)
-			=> (requestInfo.Header != null && requestInfo.Header.ContainsKey(name)) || (requestInfo.Query != null && requestInfo.Query.ContainsKey(name));
-
 		/// <summary>
 		/// Gets the parameter with two steps: first from header, then second step is from query if header has no value
 		/// </summary>
@@ -102,6 +120,16 @@ namespace net.vieapps.Services
 		public static string GetParameter(this RequestInfo requestInfo, string name)
 			=> requestInfo != null ? requestInfo.TryGetParameter(name, out var value) ? value : null : null;
 
+		/// <summary>
+		/// Checks the parameter is existed in header or query
+		/// </summary>
+		/// <param name="name"></param>
+		/// <returns></returns>
+		public static bool ContainsKey(this RequestInfo requestInfo, string name)
+			=> (requestInfo.Header != null && requestInfo.Header.ContainsKey(name)) || (requestInfo.Query != null && requestInfo.Query.ContainsKey(name));
+		#endregion
+
+		#region Identities
 		/// <summary>
 		/// Gets the identity of the device that sent by this request
 		/// </summary>
@@ -177,29 +205,7 @@ namespace net.vieapps.Services
 					? requestInfo.GetQueryParameter("id") ?? requestInfo.GetQueryParameter("object-id") ?? requestInfo.GetQueryParameter("x-object-id")
 					: null;
 		}
-
-		/// <summary>
-		/// Gets the value of the 'x-request' parameter of the query (in Base64Url) and converts to JSON
-		/// </summary>
-		/// <returns></returns>
-		public static JToken GetRequestJson(this RequestInfo requestInfo)
-		{
-			try
-			{
-				return (requestInfo?.GetQueryParameter("x-request")?.Url64Decode() ?? "{}").ToJson();
-			}
-			catch
-			{
-				return new JObject();
-			}
-		}
-
-		/// <summary>
-		/// Gets the value of the 'x-request' parameter of the query (in Base64Url) and converts to ExpandoObject
-		/// </summary>
-		/// <returns></returns>
-		public static ExpandoObject GetRequestExpando(this RequestInfo requestInfo)
-			=> requestInfo?.GetRequestJson()?.ToExpandoObject() ?? new ExpandoObject();
+		#endregion
 
 		/// <summary>
 		/// Gets the full URI
@@ -236,6 +242,7 @@ namespace net.vieapps.Services
 			return transformer != null ? transformer(uri) : uri;
 		}
 
+		#region User profiles/sessions
 		/// <summary>
 		/// Gets profile of collection of users
 		/// </summary>
@@ -286,7 +293,9 @@ namespace net.vieapps.Services
 			}.CallServiceAsync(cancellationToken).ConfigureAwait(false);			
 			return (result["Sessions"] as JArray).ToList(info => (info.Get<string>("SessionID"), info.Get<string>("DeviceID"), info.Get<string>("AppInfo"), info.Get<bool>("IsOnline")));
 		}
+		#endregion
 
+		#region Notifications/WebHooks		 
 		/// <summary>
 		/// Sends an app notification (using Notifications service)
 		/// </summary>
@@ -623,6 +632,95 @@ namespace net.vieapps.Services
 			preparer?.Invoke(requestInfo);
 			return requestInfo.GetService().ProcessWebHookMessageAsync(requestInfo, cancellationToken);
 		}
+		#endregion
+
+		#region Session states
+		/// <summary>
+		/// Sends session state
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <param name="systemIdentityJson"></param>
+		/// <param name="serviceName"></param>
+		/// <param name="serviceURI"></param>
+		/// <param name="online"></param>
+		/// <param name="trackStatistics"></param>
+		/// <param name="sendClientMessage"></param>
+		/// <param name="onCommunicateMessagePrepared"></param>
+		/// <param name="onUpdateMessagePrepared"></param>
+		/// <returns></returns>
+		public static async Task<RequestInfo> SendSessionStateAsync(this RequestInfo requestInfo, JObject systemIdentityJson, string serviceName, string serviceURI, bool online, bool trackStatistics, bool sendClientMessage, Action<CommunicateMessage> onCommunicateMessagePrepared = null, Action<UpdateMessage> onUpdateMessagePrepared = null)
+		{
+			var systemID = systemIdentityJson?.Get<string>("ID");
+			if (string.IsNullOrWhiteSpace(systemID) && requestInfo.ServiceName.IsStartsWith("Portals"))
+				try
+				{
+					var body = requestInfo.Verb.IsEquals("POST") || requestInfo.Verb.IsEquals("PUT") || requestInfo.Verb.IsEquals("PATCH") ? requestInfo.BodyAsJson : null;
+					systemID = body?.Get<string>("SystemID") ?? requestInfo.GetParameter("SystemID") ?? requestInfo.GetParameter("OrganizationID") ?? requestInfo.GetParameter("x-system-id");
+					if (string.IsNullOrWhiteSpace(systemID))
+					{
+						systemID = requestInfo.GetParameter("active-id");
+						if (string.IsNullOrWhiteSpace(systemID) && requestInfo.TryGetParameter("x-request", out var base64Request))
+						{
+							var request = base64Request.Url64Decode();
+							var start = request.PositionOf("\"SystemID\":{\"Equals\":\"");
+							if (start > 0)
+							{
+								start = request.PositionOf(":\"", start) + 2;
+								var end = request.PositionOf("\"", start);
+								systemID = request.Substring(start, end - start);
+							}
+						}
+					}
+				}
+				catch { }
+			await requestInfo.Session.SendSessionStateAsync((serviceName ?? requestInfo.ServiceName).ToLower(), serviceURI ?? $"{requestInfo.Verb} {requestInfo.GetURI()}", systemID, online, trackStatistics, sendClientMessage, onCommunicateMessagePrepared, onUpdateMessagePrepared).ConfigureAwait(false);
+			return requestInfo;
+		}
+
+		/// <summary>
+		/// Sends session state
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <param name="systemIdentityJson"></param>
+		/// <param name="serviceName"></param>
+		/// <param name="serviceURI"></param>
+		/// <param name="online"></param>
+		/// <param name="trackStatistics"></param>
+		/// <param name="sendClientMessage"></param>
+		/// <param name="onCommunicateMessagePrepared"></param>
+		/// <param name="onUpdateMessagePrepared"></param>
+		public static void SendSessionState(this RequestInfo requestInfo, JObject systemIdentityJson, string serviceName, string serviceURI, bool online, bool trackStatistics, bool sendClientMessage, Action<CommunicateMessage> onCommunicateMessagePrepared = null, Action<UpdateMessage> onUpdateMessagePrepared = null)
+			=> requestInfo.SendSessionStateAsync(systemIdentityJson, serviceName, serviceURI, online, trackStatistics, sendClientMessage, onCommunicateMessagePrepared, onUpdateMessagePrepared).Run();
+
+		/// <summary>
+		/// Sends session state
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <param name="systemIdentityJson"></param>
+		/// <param name="onCommunicateMessagePrepared"></param>
+		/// <param name="trackStatistics"></param>
+		/// <param name="sendClientMessage"></param>
+		public static void SendSessionState(this RequestInfo requestInfo, JObject systemIdentityJson, Action<CommunicateMessage> onCommunicateMessagePrepared, bool trackStatistics = true, bool sendClientMessage = false)
+			=> requestInfo.SendSessionState(systemIdentityJson, null, null, true, trackStatistics, sendClientMessage, onCommunicateMessagePrepared, null);
+
+		/// <summary>
+		/// Sends session state
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <param name="online"></param>
+		/// <param name="trackStatistics"></param>
+		/// <param name="sendClientMessage"></param>
+		public static void SendSessionState(this RequestInfo requestInfo, bool online, bool trackStatistics, bool sendClientMessage)
+			=> requestInfo.SendSessionState(null, null, null, online, trackStatistics, sendClientMessage);
+
+		/// <summary>
+		/// Sends session state
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <param name="sendClientMessage"></param>
+		public static void SendSessionState(this RequestInfo requestInfo, bool trackStatistics = true, bool sendClientMessage = false)
+			=> requestInfo.SendSessionState(true, trackStatistics, sendClientMessage);
+		#endregion
 
 	}
 }

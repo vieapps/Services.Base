@@ -2627,7 +2627,7 @@ namespace net.vieapps.Services
 			=> this.StopAsync(args, available, disconnect, next).Run(true);
 
 		public virtual void Stop(string[] args = null, Action<IService> next = null)
-			=> this.StopAsync(args, next).Run(true);
+			=> this.Stop(args, true, true, next);
 		#endregion
 
 		#region Dispose the service

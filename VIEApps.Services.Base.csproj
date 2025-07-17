@@ -8,9 +8,9 @@
 		<RootNamespace>net.vieapps.Services</RootNamespace>
 		<AssemblyName>VIEApps.Services.Base</AssemblyName>
 		<AssemblyTitle>VIEApps NGX Service Base</AssemblyTitle>
-		<AssemblyVersion>10.9.2506.2</AssemblyVersion>
-		<FileVersion>10.9.2506.2</FileVersion>
-		<Version>10.9.2506.2</Version>
+		<AssemblyVersion>10.9.2507.1</AssemblyVersion>
+		<FileVersion>10.9.2507.1</FileVersion>
+		<Version>10.9.2507.1</Version>
 		<InformationalVersion>10.9.$([System.DateTime]::Now.Year).$([System.DateTime]::Now.Month).$([System.DateTime]::Now.Day)@$(TargetFramework)#next.step</InformationalVersion>
 		<Title>VIEApps NGX Service Base</Title>
 		<Description>The base of all microservices in the VIEApps NGX</Description>
@@ -57,7 +57,7 @@
 		<PackageReference Include="JavaScriptEngineSwitcher.ChakraCore" Version="3.27.3" />
 		<PackageReference Include="JSPool" Version="4.0.0" />
 		<PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.2" />
-		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.6" />
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.7" />
 		<PackageReference Include="MySqlConnector" Version="2.4.0" />
 		<PackageReference Include="Serilog.Extensions.Logging.File" Version="3.0.0" />
 		<PackageReference Include="System.Data.SQLite" Version="1.0.119" />
@@ -67,9 +67,9 @@
 		<PackageReference Include="System.Text.Encoding.Extensions" Version="4.3.0" />
 		<PackageReference Include="System.Threading" Version="4.3.0" />
 		<PackageReference Include="System.Threading.Tasks" Version="4.3.0" />
-		<PackageReference Include="VIEApps.Components.Repository" Version="10.9.2506.2" />
-		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.9.2506.2" />
-		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.9.2506.2" />
+		<PackageReference Include="VIEApps.Components.Repository" Version="10.9.2507.1" />
+		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.9.2507.1" />
+		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.9.2507.1" />
 	</ItemGroup>
 
 </Project>
