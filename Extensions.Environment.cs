@@ -205,7 +205,7 @@ namespace net.vieapps.Services
 
 		#region ReactiveX extensions
 		/// <summary>
-		/// Subscribes an element handler, an exception handler, and a completion handler to an observable sequence.
+		/// Subscribes an element handler to an observable sequence.
 		/// </summary>
 		/// <typeparam name="T">The type of the elements in the source sequence.</typeparam>
 		/// <param name="source">Observable sequence to subscribe to.</param>
@@ -216,7 +216,7 @@ namespace net.vieapps.Services
 			=> source.Subscribe(data => onNext(data).Run());
 
 		/// <summary>
-		/// Subscribes an element handler, an exception handler, and a completion handler to an observable sequence.
+		/// Subscribes an element handler, and an exception handler to an observable sequence.
 		/// </summary>
 		/// <typeparam name="T">The type of the elements in the source sequence.</typeparam>
 		/// <param name="source">Observable sequence to subscribe to.</param>
@@ -228,7 +228,7 @@ namespace net.vieapps.Services
 			=> source.Subscribe(data => onNext(data).Run(onError), onError);
 
 		/// <summary>
-		/// Subscribes an element handler, an exception handler, and a completion handler to an observable sequence.
+		/// Subscribes an element handler, and an exception handler to an observable sequence.
 		/// </summary>
 		/// <typeparam name="T">The type of the elements in the source sequence.</typeparam>
 		/// <param name="source">Observable sequence to subscribe to.</param>
@@ -238,44 +238,6 @@ namespace net.vieapps.Services
 		/// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="onNext"/> or <paramref name="onError"/> is <c>null</c>.</exception>
 		public static IDisposable Subscribe<T>(this IObservable<T> source, Func<T, Task> onNext, Func<Exception, Task> onError)
 			=> source.Subscribe(data => onNext(data).Run(onError), ex => onError(ex).Run());
-
-		/// <summary>
-		/// Subscribes an element handler, an exception handler, and a completion handler to an observable sequence.
-		/// </summary>
-		/// <typeparam name="T">The type of the elements in the source sequence.</typeparam>
-		/// <param name="source">Observable sequence to subscribe to.</param>
-		/// <param name="onNext">Action to invoke for each element in the observable sequence.</param>
-		/// <param name="onCompleted">Action to invoke upon graceful termination of the observable sequence.</param>
-		/// <returns><see cref="IDisposable"/> object used to unsubscribe from the observable sequence.</returns>
-		/// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="onNext"/> or <paramref name="onCompleted"/> is <c>null</c>.</exception>
-		public static IDisposable Subscribe<T>(this IObservable<T> source, Func<T, Task> onNext, Action onCompleted)
-			=> source.Subscribe(data => onNext(data).Run(), onCompleted);
-
-		/// <summary>
-		/// Subscribes an element handler, an exception handler, and a completion handler to an observable sequence.
-		/// </summary>
-		/// <typeparam name="T">The type of the elements in the source sequence.</typeparam>
-		/// <param name="source">Observable sequence to subscribe to.</param>
-		/// <param name="onNext">Action to invoke for each element in the observable sequence.</param>
-		/// <param name="onError">Action to invoke upon exceptional termination of the observable sequence.</param>
-		/// <param name="onCompleted">Action to invoke upon graceful termination of the observable sequence.</param>
-		/// <returns><see cref="IDisposable"/> object used to unsubscribe from the observable sequence.</returns>
-		/// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="onNext"/> or <paramref name="onError"/> or <paramref name="onCompleted"/> is <c>null</c>.</exception>
-		public static IDisposable Subscribe<T>(this IObservable<T> source, Func<T, Task> onNext, Action<Exception> onError, Action onCompleted)
-			=> source.Subscribe(data => onNext(data).Run(onError), onError, onCompleted);
-
-		/// <summary>
-		/// Subscribes an element handler, an exception handler, and a completion handler to an observable sequence.
-		/// </summary>
-		/// <typeparam name="T">The type of the elements in the source sequence.</typeparam>
-		/// <param name="source">Observable sequence to subscribe to.</param>
-		/// <param name="onNext">Action to invoke for each element in the observable sequence.</param>
-		/// <param name="onError">Action to invoke upon exceptional termination of the observable sequence.</param>
-		/// <param name="onCompleted">Action to invoke upon graceful termination of the observable sequence.</param>
-		/// <returns><see cref="IDisposable"/> object used to unsubscribe from the observable sequence.</returns>
-		/// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="onNext"/> or <paramref name="onError"/> or <paramref name="onCompleted"/> is <c>null</c>.</exception>
-		public static IDisposable Subscribe<T>(this IObservable<T> source, Func<T, Task> onNext, Func<Exception, Task> onError, Action onCompleted)
-			=> source.Subscribe(data => onNext(data).Run(onError), ex => onError(ex).Run(), onCompleted);
 		#endregion
 
 	}
