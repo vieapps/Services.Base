@@ -29,6 +29,7 @@ namespace net.vieapps.Services
 		public static async Task<string> GetLocationAsync(this Session session, string correlationID = null, CancellationToken cancellationToken = default)
 		{
 			correlationID = correlationID ?? UtilityService.NewUUID;
+			var location = "Unknown";
 			try
 			{
 				var service = Router.GetService("IPLocations");
@@ -44,27 +45,21 @@ namespace net.vieapps.Services
 					region = "";
 				var country = response.Get("Country", "N/A");
 
-				if ("N/A".IsEquals(city) && "N/A".IsEquals(region) && "N/A".IsEquals(country))
+				if ("N/A".IsEquals(city) && "N/A".IsEquals(region) && "N/A".IsEquals(country) && "Unknown".IsEquals(Extensions.CurrentLocation))
 				{
-					if ("Unknown".IsEquals(Extensions.CurrentLocation))
-					{
-						response = await service.ProcessRequestAsync(new RequestInfo(requestInfo) { ObjectName = "Current" }, cancellationToken).ConfigureAwait(false);
-						city = response.Get("City", "N/A");
-						region = response.Get("Region", "N/A");
-						if (region.Equals(city) && !"N/A".IsEquals(city))
-							region = "";
-						country = response.Get("Country", "N/A");
-						Extensions.CurrentLocation = $"{city}, {region}, {country}".Replace(", ,", ",");
-					}
-					return Extensions.CurrentLocation;
+					response = await service.ProcessRequestAsync(new RequestInfo(requestInfo) { ObjectName = "Current" }, cancellationToken).ConfigureAwait(false);
+					city = response.Get("City", "N/A");
+					region = response.Get("Region", "N/A");
+					if (region.Equals(city) && !"N/A".IsEquals(city))
+						region = "";
+					country = response.Get("Country", "N/A");
+					location = Extensions.CurrentLocation = $"{city}, {region}, {country}".Replace(", ,", ",");
 				}
-
-				return $"{city}, {region}, {country}".Replace(", ,", ",");
+				else
+					location = $"{city}, {region}, {country}".Replace(", ,", ",");
 			}
-			catch
-			{
-				return "Unknown";
-			}
+			catch {}
+			return location;
 		}
 
 		/// <summary>
