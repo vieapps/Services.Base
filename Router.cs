@@ -525,8 +525,7 @@ namespace net.vieapps.Services
 				onStart?.Invoke(requestInfo);
 				tracker?.Invoke($"Start call service {requestInfo.Verb} {requestInfo.GetURI()} - {requestInfo.Session.AppName} ({requestInfo.Session.AppPlatform}) @ {requestInfo.Session.IP}", null);
 
-				var service = Router.GetService(requestInfo.ServiceName);
-				var json = service != null ? await service.ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false) : null;
+				var json = await Router.GetService(requestInfo.ServiceName).ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false);
 				onSuccess?.Invoke(requestInfo, json);
 
 				tracker?.Invoke("Call service successful" + "\r\n" + $"Request: {requestInfo.ToString(jsonFormat)}" + "\r\n" + $"Response: {json?.ToString(jsonFormat)}", null);
@@ -541,8 +540,7 @@ namespace net.vieapps.Services
 
 				try
 				{
-					var service = Router.GetService(requestInfo.ServiceName);
-					var json = service != null ? await service.ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false) : null;
+					var json = await Router.GetService(requestInfo.ServiceName).ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false);
 					onSuccess?.Invoke(requestInfo, json);
 
 					tracker?.Invoke("Re-call service successful" + "\r\n" + $"Request: {requestInfo.ToString(jsonFormat)}" + "\r\n" + $"Response: {json?.ToString(jsonFormat)}", null);
@@ -607,8 +605,7 @@ namespace net.vieapps.Services
 				onStart?.Invoke(requestInfo);
 				tracker?.Invoke($"Start call service [for synchronizing] {requestInfo.Verb} {requestInfo.GetURI()} - {requestInfo.Session.AppName} ({requestInfo.Session.AppPlatform}) @ {requestInfo.Session.IP}", null);
 
-				var service = Router.GetSyncableService(requestInfo.ServiceName);
-				var json = service != null ? await service.SyncAsync(requestInfo, cancellationToken).ConfigureAwait(false) : null;
+				var json = await Router.GetSyncableService(requestInfo.ServiceName).SyncAsync(requestInfo, cancellationToken).ConfigureAwait(false);
 				onSuccess?.Invoke(requestInfo, json);
 
 				tracker?.Invoke("Call service [for synchronizing] successful" + "\r\n" + $"Request: {requestInfo.ToString(jsonFormat)}" + "\r\n" + $"Response: {json?.ToString(jsonFormat)}", null);
@@ -623,8 +620,7 @@ namespace net.vieapps.Services
 
 				try
 				{
-					var service = Router.GetSyncableService(requestInfo.ServiceName);
-					var json = service != null ? await service.SyncAsync(requestInfo, cancellationToken).ConfigureAwait(false) : null;
+					var json = await Router.GetSyncableService(requestInfo.ServiceName).SyncAsync(requestInfo, cancellationToken).ConfigureAwait(false);
 					onSuccess?.Invoke(requestInfo, json);
 
 					tracker?.Invoke("Re-call service [for synchronizing] successful" + "\r\n" + $"Request: {requestInfo.ToString(jsonFormat)}" + "\r\n" + $"Response: {json?.ToString(jsonFormat)}", null);

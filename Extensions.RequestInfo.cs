@@ -673,7 +673,7 @@ namespace net.vieapps.Services
 					}
 				}
 				catch { }
-			await requestInfo.Session.SendSessionStateAsync((serviceName ?? requestInfo.ServiceName).ToLower(), serviceURI ?? $"{requestInfo.Verb} {requestInfo.GetURI()}", systemID, online, trackStatistics, sendClientMessage, onCommunicateMessagePrepared, onUpdateMessagePrepared).ConfigureAwait(false);
+			await requestInfo.Session.SendSessionStateAsync((serviceName ?? requestInfo.ServiceName).ToLower(), serviceURI ?? $"{requestInfo.Verb} {requestInfo.GetURI()}", systemID, online, trackStatistics, sendClientMessage, onCommunicateMessagePrepared, onUpdateMessagePrepared, requestInfo.CorrelationID).ConfigureAwait(false);
 			return requestInfo;
 		}
 
@@ -720,6 +720,22 @@ namespace net.vieapps.Services
 		/// <param name="sendClientMessage"></param>
 		public static void SendSessionState(this RequestInfo requestInfo, bool trackStatistics = true, bool sendClientMessage = false)
 			=> requestInfo.SendSessionState(true, trackStatistics, sendClientMessage);
+
+		/// <summary>
+		/// Sends tracking statistics
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		public static void TrackStatistics(this RequestInfo requestInfo)
+			=> new CommunicateMessage("Users")
+			{
+				Type = "Statistics#Track",
+				Data = new JObject
+				{
+					["SessionID"] = requestInfo.Session?.SessionID,
+					["UserID"] = requestInfo.Session?.User?.ID,
+					["CorrelationID"] = requestInfo.CorrelationID
+				}
+			}.Send();
 		#endregion
 
 	}

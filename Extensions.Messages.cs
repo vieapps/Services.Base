@@ -1,11 +1,11 @@
 ﻿#region Related components
 using System.Linq;
-using System.Collections.Generic;
-using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Reactive.Subjects;
 using System.Reactive.Linq;
+using System.Reactive.Subjects;
+using System.Collections.Generic;
+using System.Collections.Concurrent;
 using net.vieapps.Components.Utility;
 #endregion
 
@@ -116,7 +116,7 @@ namespace net.vieapps.Services
 		{
 			if (defer > 0)
 				await Task.Delay(defer, cancellationToken).ConfigureAwait(false);
-			if (messages != null && messages.Any())
+			if (messages != null && messages.Count != 0)
 				messages.Select(message => new UpdateMessage
 				{
 					Type = message.Type,
@@ -211,7 +211,7 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static void Send(this List<BaseMessage> messages, string serviceName)
 		{
-			if (messages != null && messages.Any())
+			if (messages != null && messages.Count != 0)
 			{
 				var subject = messages.First().GetCommunicatingSubject($"messages.services.{serviceName.Trim().ToLower()}");
 				messages.Select(message => new CommunicateMessage(serviceName, message)).ForEach(message =>

@@ -202,8 +202,9 @@ namespace net.vieapps.Services
 		/// <param name="sendClientMessage"></param>
 		/// <param name="onCommunicateMessagePrepared"></param>
 		/// <param name="onUpdateMessagePrepared"></param>
+		/// <param name="correlationID"></param>
 		/// <returns></returns>
-		public static async Task<Session> SendSessionStateAsync(this Session session, string serviceName, string serviceURI, string serviceSystemID, bool online, bool trackStatistics, bool sendClientMessage, Action<CommunicateMessage> onCommunicateMessagePrepared = null, Action<UpdateMessage> onUpdateMessagePrepared = null)
+		public static async Task<Session> SendSessionStateAsync(this Session session, string serviceName, string serviceURI, string serviceSystemID, bool online, bool trackStatistics, bool sendClientMessage, Action<CommunicateMessage> onCommunicateMessagePrepared = null, Action<UpdateMessage> onUpdateMessagePrepared = null, string correlationID = null)
 		{
 			var communicateMessage = new CommunicateMessage("Users")
 			{
@@ -225,6 +226,8 @@ namespace net.vieapps.Services
 					["URI"] = serviceURI,
 					["SystemID"] = string.IsNullOrWhiteSpace(serviceSystemID) ? null : serviceSystemID
 				};
+			if (!string.IsNullOrWhiteSpace(correlationID))
+				communicateMessage.Data["CorrelationID"] = correlationID;
 			onCommunicateMessagePrepared?.Invoke(communicateMessage);
 			communicateMessage.Send();
 
@@ -263,8 +266,9 @@ namespace net.vieapps.Services
 		/// <param name="sendClientMessage"></param>
 		/// <param name="onCommunicateMessagePrepared"></param>
 		/// <param name="onUpdateMessagePrepared"></param>
-		public static void SendSessionState(this Session session, string serviceName, string serviceURI, string serviceSystemID, bool online, bool trackStatistics, bool sendClientMessage, Action<CommunicateMessage> onCommunicateMessagePrepared = null, Action<UpdateMessage> onUpdateMessagePrepared = null)
-			=> session.SendSessionStateAsync(serviceName, serviceURI, serviceSystemID, online, trackStatistics, sendClientMessage, onCommunicateMessagePrepared, onUpdateMessagePrepared).Run();
+		/// <param name="correlationID"></param>
+		public static void SendSessionState(this Session session, string serviceName, string serviceURI, string serviceSystemID, bool online, bool trackStatistics, bool sendClientMessage, Action<CommunicateMessage> onCommunicateMessagePrepared = null, Action<UpdateMessage> onUpdateMessagePrepared = null, string correlationID = null)
+			=> session.SendSessionStateAsync(serviceName, serviceURI, serviceSystemID, online, trackStatistics, sendClientMessage, onCommunicateMessagePrepared, onUpdateMessagePrepared, correlationID).Run();
 
 		/// <summary>
 		/// Sends session state
@@ -277,8 +281,9 @@ namespace net.vieapps.Services
 		/// <param name="sendClientMessage"></param>
 		/// <param name="onCommunicateMessagePrepared"></param>
 		/// <param name="onUpdateMessagePrepared"></param>
-		public static void SendSessionState(this Session session, string serviceName, string serviceURI, bool online = true, bool trackStatistics = true, bool sendClientMessage = false, Action<CommunicateMessage> onCommunicateMessagePrepared = null, Action<UpdateMessage> onUpdateMessagePrepared = null)
-			=> session.SendSessionState(serviceName, serviceURI, null, online, trackStatistics, sendClientMessage, onCommunicateMessagePrepared, onUpdateMessagePrepared);
+		/// <param name="correlationID"></param>
+		public static void SendSessionState(this Session session, string serviceName, string serviceURI, bool online = true, bool trackStatistics = true, bool sendClientMessage = false, Action<CommunicateMessage> onCommunicateMessagePrepared = null, Action<UpdateMessage> onUpdateMessagePrepared = null, string correlationID = null)
+			=> session.SendSessionState(serviceName, serviceURI, null, online, trackStatistics, sendClientMessage, onCommunicateMessagePrepared, onUpdateMessagePrepared, correlationID);
 		#endregion
 
 	}
