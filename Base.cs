@@ -228,7 +228,7 @@ namespace net.vieapps.Services
 		/// <param name="message">The email message for sending</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected virtual Task SendEmailAsync(EmailMessage message, CancellationToken cancellationToken = default)
+		public virtual Task SendEmailAsync(EmailMessage message, CancellationToken cancellationToken = default)
 			=> this.MessagingService.SendEmailAsync(message, cancellationToken);
 
 		/// <summary>
@@ -248,7 +248,7 @@ namespace net.vieapps.Services
 		/// <param name="smtpPassword"></param>
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		protected virtual Task SendEmailAsync(string from, string replyTo, string to, string cc, string bcc, string subject, string body, string smtpServer, int smtpServerPort, bool smtpServerEnableSsl, string smtpUsername, string smtpPassword, CancellationToken cancellationToken = default)
+		public virtual Task SendEmailAsync(string from, string replyTo, string to, string cc, string bcc, string subject, string body, string smtpServer, int smtpServerPort, bool smtpServerEnableSsl, string smtpUsername, string smtpPassword, CancellationToken cancellationToken = default)
 			=> this.SendEmailAsync(new EmailMessage
 			{
 				From = from,
@@ -379,7 +379,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
-		protected virtual Task WriteLogsAsync(string correlationID, string developerID, string appID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+		public virtual Task WriteLogsAsync(string correlationID, string developerID, string appID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
 		{
 			// prepare
 			correlationID = correlationID ?? UtilityService.NewUUID;

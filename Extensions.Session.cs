@@ -23,10 +23,11 @@ namespace net.vieapps.Services
 		/// Gets the location of the session (IP-based)
 		/// </summary>
 		/// <param name="session"></param>
+		/// <param name="ipAddress"></param>
 		/// <param name="correlationID"></param>
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		public static async Task<string> GetLocationAsync(this Session session, string correlationID = null, CancellationToken cancellationToken = default)
+		public static async Task<string> GetLocationAsync(this Session session, string ipAddress, string correlationID, CancellationToken cancellationToken)
 		{
 			correlationID = correlationID ?? UtilityService.NewUUID;
 			var location = "Unknown";
@@ -38,6 +39,8 @@ namespace net.vieapps.Services
 					Header = new Dictionary<string, string> { ["x-requester"] = "vieapps-ngx-base" },
 					CorrelationID = correlationID
 				};
+				if (!string.IsNullOrWhiteSpace(ipAddress))
+					requestInfo.Query["IP"] = ipAddress;
 				var response = await service.ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false);
 				var city = response.Get("City", "N/A");
 				var region = response.Get("Region", "N/A");
@@ -63,6 +66,18 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
+		/// Gets the location of the session (IP-based)
+		/// </summary>
+		/// <param name="session"></param>
+		/// <param name="correlationID"></param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		public static Task<string> GetLocationAsync(this Session session, string correlationID = null, CancellationToken cancellationToken = default)
+			=> session == null
+				? Task.FromResult("Unknown")
+				: session.GetLocationAsync(null, correlationID, cancellationToken);
+
+		/// <summary>
 		/// Gets the location of the request (IP-based)
 		/// </summary>
 		/// <param name="requestInfo"></param>
@@ -71,7 +86,7 @@ namespace net.vieapps.Services
 		public static Task<string> GetLocationAsync(this RequestInfo requestInfo, CancellationToken cancellationToken = default)
 			=> requestInfo.Session == null
 				? Task.FromResult("Unknown")
-				: requestInfo.Session.GetLocationAsync(requestInfo.CorrelationID, cancellationToken);
+				: requestInfo.Session.GetLocationAsync(null, requestInfo.CorrelationID, cancellationToken);
 		#endregion
 
 		#region Get encryption keys

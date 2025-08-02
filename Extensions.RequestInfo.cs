@@ -3,11 +3,12 @@ using System;
 using System.Net;
 using System.Linq;
 using System.Dynamic;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using System.Threading;
+using System.Threading.Tasks;
+using System.Collections.Generic;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using net.vieapps.Components.Repository;
 using net.vieapps.Components.Utility;
 #endregion
 
@@ -295,7 +296,11 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
-		#region Notifications/WebHooks		 
+		#region Notifications
+		static HashSet<string> ExcludedInDetails { get; } = new[] { "Time", "Sender", "SenderID", "SenderName", "Recipients", "RecipientIDs", "RecipientID", "Action", "Event", "ServiceName", "ServiceName", "ObjectName", "SystemID", "RepositoryID", "RepositoryEntityID", "ObjectID", "Title", "ObjectTitle", "Status", "PreviousStatus", "Additionals" }.ToHashSet();
+
+		static HashSet<string> ExcludedInBody { get; } = new[] { "Time", "Sender", "SenderID", "SenderName", "Recipients", "RecipientIDs", "RecipientID", "Action", "Event", "ServiceName", "ServiceName", "ObjectName", "Title", "ObjectTitle", "Additionals" }.ToHashSet();
+
 		/// <summary>
 		/// Sends an app notification (using Notifications service)
 		/// </summary>
@@ -328,14 +333,12 @@ namespace net.vieapps.Services
 				{ "ObjectName", requestInfo.ObjectName },
 				{ "Title", detail.Get<string>("Title") ?? detail.Get<string>("ObjectTitle") },
 			};
-			var excluded = new[] { "Time", "Sender", "SenderID", "SenderName", "Recipients", "RecipientIDs", "RecipientID", "Action", "Event", "ServiceName", "ServiceName", "ObjectName", "SystemID", "RepositoryID", "RepositoryEntityID", "ObjectID", "Title", "ObjectTitle", "Status", "PreviousStatus", "Additionals" }.ToHashSet();
-			var excludedOfBody = new[] { "Time", "Sender", "SenderID", "SenderName", "Recipients", "RecipientIDs", "RecipientID", "Action", "Event", "ServiceName", "ServiceName", "ObjectName", "Title", "ObjectTitle", "Additionals" }.ToHashSet();
 			var additionals = new JObject();
 			detail.ForEach(kvp =>
 			{
-				if (!excluded.Contains(kvp.Key))
+				if (!ExcludedInDetails.Contains(kvp.Key))
 					additionals[kvp.Key] = kvp.Value;
-				else if (!excludedOfBody.Contains(kvp.Key))
+				else if (!ExcludedInBody.Contains(kvp.Key))
 					body[kvp.Key] = kvp.Value;
 			});
 			detail["Additionals"] = additionals;
@@ -343,13 +346,36 @@ namespace net.vieapps.Services
 			// send the notification
 			await new RequestInfo(requestInfo.Session, "Notifications", "Notification", "POST")
 			{
-				Body = body.ToString(Newtonsoft.Json.Formatting.None),
+				Body = body.ToString(Formatting.None),
 				Extra = new Dictionary<string, string>(requestInfo.Extra ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase)
 				{
 					{ "x-notifications-key", UtilityService.GetAppSetting("Keys:Notifications", "") }
 				},
 				CorrelationID = requestInfo.CorrelationID
 			}.CallServiceAsync(cancellationToken).ConfigureAwait(false);
+		}
+		#endregion
+
+		#region WebHooks
+		/// <summary>
+		/// Converts this web-hook message to request object
+		/// </summary>
+		/// <param name="message"></param>
+		/// <param name="request"></param>
+		/// <param name="onCompleted"></param>
+		/// <returns></returns>
+		public static RequestInfo ToRequestInfo(this WebHookMessage message, RequestInfo request = null, Action<RequestInfo> onCompleted = null)
+		{
+			var requestInfo = new RequestInfo(request)
+			{
+				Verb = "POST",
+				Body = message.Body ?? request?.Body,
+				Query = new Dictionary<string, string>(message.Query ?? request?.Query ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase),
+				Header = new Dictionary<string, string>(message.Header ?? request?.Header ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase),
+				CorrelationID = message.CorrelationID ?? request?.CorrelationID
+			};
+			onCompleted?.Invoke(requestInfo);
+			return requestInfo;
 		}
 
 		/// <summary>
@@ -369,16 +395,22 @@ namespace net.vieapps.Services
 		/// <param name="requiredHeader"></param>
 		/// <param name="decryptionKey"></param>
 		/// <param name="decryptionIV"></param>
+		/// <param name="doValidation"></param>
 		/// <returns></returns>
-		public static WebHookMessage ToWebHookMessage(this RequestInfo requestInfo, string secretToken, string secretTokenName, string signAlgorithm, string signKey, bool signKeyIsHex, string signatureName, bool signatureAsHex, string signaturePrefix, string signatureSuffix, IDictionary<string, string> requiredQuery, IDictionary<string, string> requiredHeader, byte[] decryptionKey, byte[] decryptionIV)
-			=> new WebHookMessage
+		public static WebHookMessage ToWebHookMessage(this RequestInfo requestInfo, string secretToken, string secretTokenName, string signAlgorithm, string signKey, bool signKeyIsHex, string signatureName, bool signatureAsHex, string signaturePrefix, string signatureSuffix, IDictionary<string, string> requiredQuery, IDictionary<string, string> requiredHeader, byte[] decryptionKey, byte[] decryptionIV, bool doValidation = true)
+		{
+			var message = new WebHookMessage
 			{
 				EndpointURL = requestInfo.Session?.AppOrigin ?? requestInfo.GetHeaderParameter("Origin"),
 				Body = requestInfo.Body,
 				Query = requestInfo.Query,
 				Header = requestInfo.Header,
 				CorrelationID = requestInfo.CorrelationID
-			}.Validate(secretToken, secretTokenName, signAlgorithm, signKey, signKeyIsHex, signatureName, signatureAsHex, signaturePrefix, signatureSuffix, requiredQuery, requiredHeader, decryptionKey, decryptionIV);
+			};
+			return doValidation
+				? message.Validate(secretToken, secretTokenName, signAlgorithm, signKey, signKeyIsHex, signatureName, signatureAsHex, signaturePrefix, signatureSuffix, requiredQuery, requiredHeader, decryptionKey, decryptionIV)
+				: message;
+		}
 
 		static string GetValue(this Dictionary<string, string> dictionary, string name)
 			=> dictionary.TryGetValue(name, out var @string) ? @string : null;
@@ -397,7 +429,7 @@ namespace net.vieapps.Services
 		/// <param name="writeLogsAsync"></param>
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		public static async Task<JToken> ForwardAsWebHookMessageAsync(this RequestInfo requestInfo, WebHookInfo settings, JToken paramsJson = null, string secretToken = null, string secretTokenName = "x-webhook-secret-token", Func<Exception, string, Task> writeLogsAsync = null, CancellationToken cancellationToken = default)
+		public static async Task<JToken> ForwardAsWebHookMessageAsync(this RequestInfo requestInfo, WebHookInfo settings, JToken paramsJson = null, string secretToken = null, string secretTokenName = null, Func<Exception, string, Task> writeLogsAsync = null, CancellationToken cancellationToken = default)
 		{
 			var signKey = settings.SignKey ?? requestInfo.GetAppID() ?? requestInfo.GetDeveloperID();
 			var webhookQuery = settings.QueryAsJson?.ToDictionary<string>();
@@ -431,9 +463,7 @@ namespace net.vieapps.Services
 					Header = message.Header.GetDictionary("x-webhook-pre-header"),
 					Query = message.Header.GetDictionary("x-webhook-pre-query"),
 					Body = message.Header.GetValue("x-webhook-pre-body") ?? "{}",
-				}.Normalize(settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, false, settings.SignaturePrefix, settings.SignatureSuffix, webhookQuery, webhookHeader, encryptionKey, encryptionIV);
-				if (!string.IsNullOrWhiteSpace(secretToken))
-					message.Header[string.IsNullOrWhiteSpace(secretTokenName) ? "x-webhook-secret-token" : secretTokenName] = secretToken;
+				}.Normalize(secretToken, secretTokenName, settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, false, settings.SignaturePrefix, settings.SignatureSuffix, webhookQuery, webhookHeader, encryptionKey, encryptionIV);
 
 				try
 				{
@@ -463,9 +493,12 @@ namespace net.vieapps.Services
 					["Status"] = status,
 					["Code"] = code,
 					["URL"] = message.EndpointURL,
-					["Header"] = message.Header.ToJObject(),
-					["Query"] = message.Query.ToJObject(),
-					["Body"] = message.Body.ToJson(),
+					["Request"] = new JObject
+					{
+						["Header"] = message.Header.ToJObject(),
+						["Query"] = message.Query.ToJObject(),
+						["Body"] = message.Body.ToJson()
+					},
 					["Response"] = response
 				};
 
@@ -476,7 +509,9 @@ namespace net.vieapps.Services
 			JToken result = null;
 			try
 			{
-				result = string.IsNullOrWhiteSpace(settings.PrepareBodyScript) ? messageJson : settings.PrepareBodyScript.JsEvaluate(messageJson, requestInfo.AsJson, paramsJson)?.ToString().ToJson();
+				result = string.IsNullOrWhiteSpace(settings.PrepareBodyScript)
+					? messageJson
+					: settings.PrepareBodyScript.JsEvaluate(messageJson, requestInfo.AsJson, paramsJson)?.ToString().ToJson();
 				if (writeLogs)
 					debugLogs += $"PREPARE STEP ------:\r\n\r\nPrepared message [{!string.IsNullOrWhiteSpace(settings.PrepareBodyScript)}]: {result}\r\n\r\n";
 			}
@@ -498,9 +533,7 @@ namespace net.vieapps.Services
 				Header = result?.Get<JObject>("Header")?.ToDictionary<string>(),
 				Query = result?.Get<JObject>("Query")?.ToDictionary<string>(),
 				Body = body.ToString(Formatting.None)
-			}.Normalize(settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, false, settings.SignaturePrefix, settings.SignatureSuffix, webhookQuery, webhookHeader, encryptionKey, encryptionIV);
-			if (!string.IsNullOrWhiteSpace(secretToken))
-				message.Header[string.IsNullOrWhiteSpace(secretTokenName) ? "x-webhook-secret-token" : secretTokenName] = secretToken;
+			}.Normalize(secretToken, secretTokenName, settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, false, settings.SignaturePrefix, settings.SignatureSuffix, webhookQuery, webhookHeader, encryptionKey, encryptionIV);
 
 			var responses = new JArray();
 			await endpointURLs.ForEachAsync(async endpointURL =>
@@ -538,6 +571,12 @@ namespace net.vieapps.Services
 					["Status"] = status,
 					["Code"] = code,
 					["URL"] = message.EndpointURL,
+					["Request"] = new JObject
+					{
+						["Header"] = message.Header.ToJObject(),
+						["Query"] = message.Query.ToJObject(),
+						["Body"] = message.Body.ToJson()
+					},
 					["Response"] = response
 				});
 
@@ -554,12 +593,10 @@ namespace net.vieapps.Services
 				message = new WebHookMessage
 				{
 					EndpointURL = postEndpointURL,
-					Header = message.Header.GetDictionary("x-webhook-post-header") ?? message.Header,
+					Header = message.Header.GetDictionary("x-webhook-post-header") ?? message.Header?.Copy("x-webhook-post-endpoint-url,x-webhook-post-verb,x-webhook-post-header,x-webhook-post-query".ToHashSet()),
 					Query = message.Header.GetDictionary("x-webhook-post-query") ?? message.Query,
 					Body = body.ToString(Formatting.None),
-				}.Normalize(settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, false, settings.SignaturePrefix, settings.SignatureSuffix, webhookQuery, webhookHeader, encryptionKey, encryptionIV);
-				if (!string.IsNullOrWhiteSpace(secretToken))
-					message.Header[string.IsNullOrWhiteSpace(secretTokenName) ? "x-webhook-secret-token" : secretTokenName] = secretToken;
+				}.Normalize(secretToken, secretTokenName, settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, false, settings.SignaturePrefix, settings.SignatureSuffix, webhookQuery, webhookHeader, encryptionKey, encryptionIV);
 
 				try
 				{
@@ -580,7 +617,7 @@ namespace net.vieapps.Services
 
 			if (writeLogs)
 				debugLogs = $"\r\n\r\nINIT STEP ------:\r\n\r\nMessage: {requestInfo.AsJson}\r\n\r\n" + debugLogs;
-			await (writeLogsAsync == null ? Task.CompletedTask : writeLogsAsync(null, $"Forward a web-hook message successful [{requestInfo.Header["x-webhook-uri"]}]{debugLogs}")).ConfigureAwait(false);
+			await (writeLogsAsync == null ? Task.CompletedTask : writeLogsAsync(null, $"Forward a web-hook message successful [{requestInfo.GetParameter("x-webhook-uri")}]{debugLogs}")).ConfigureAwait(false);
 
 			return result;
 		}
@@ -598,11 +635,11 @@ namespace net.vieapps.Services
 				return Task.FromException<JToken>(new MessageException("Invalid (end-point/body)"));
 
 			var path = new Uri(message.EndpointURL).PathAndQuery;
-			var pos = path.IndexOf("?");
+			var pos = path.PositionOf("?");
 			path = pos > 0 ? path.Left(pos) : path;
-			while (path.StartsWith("/"))
+			while (path.IsStartsWith("/"))
 				path = path.Right(path.Length - 1);
-			while (path.EndsWith("/"))
+			while (path.IsEndsWith("/"))
 				path = path.Left(path.Length - 1);
 			var pathSegments = path.ToArray("/");
 
