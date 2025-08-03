@@ -191,7 +191,7 @@ namespace net.vieapps.Services
 			return new Date().toJSON();
 		};
 		var __today = function() {
-			var date = new Date().toJSON();
+			var date = __now();
 			return date.substring(0, date.indexOf('T')).replace(/\-/g, '/');
 		};
 		var __generateURI = function(value, lowerCase) {
@@ -301,7 +301,29 @@ namespace net.vieapps.Services
 				+ $"var __object = {@object?.ToString(Formatting.None) ?? "{}"};"
 				+ Environment.NewLine
 				+ "__object.__evaluate = function (__request, __params) {"
-				+ Environment.NewLine
+				+ @"
+				var __format = function(template, params) {
+					if (!!!params) {
+						params = {};
+						Object.assign(params, __params || {});
+						Object.assign(params, __request.Query);
+						Object.assign(params, __request.Header);
+						Object.assign(params, __request.Body);
+					}
+					Object.keys(params).forEach(key => {
+						template = template.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), (params[key] || '').toString());
+					});
+					return template;
+				};
+				var __query = names => {
+					var parameters = names.map(name => {
+						var key = 'x-' + name;
+						var value = __request.Query[key];
+						return value === undefined ? undefined : key + (!!value ? `=${value}` : '');
+					}).filter(value => value !== undefined).join('&');
+					return !!parameters ? '&' + parameters : '';
+				};
+				".Replace("\t\t\t\t", "")
 				+ (string.IsNullOrWhiteSpace(expression) || expression.Equals(";") ? "return undefined;" : $"{(expression.IndexOf("return") < 0 ? "return " : "")}{expression}{(expression.EndsWith(";") ? "" : ";")}")
 				+ Environment.NewLine
 				+ "};"
