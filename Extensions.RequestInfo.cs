@@ -396,8 +396,9 @@ namespace net.vieapps.Services
 		/// <param name="decryptionKey"></param>
 		/// <param name="decryptionIV"></param>
 		/// <param name="doValidation"></param>
+		/// <param name="onCompleted"></param>
 		/// <returns></returns>
-		public static WebHookMessage ToWebHookMessage(this RequestInfo requestInfo, string secretToken, string secretTokenName, string signAlgorithm, string signKey, bool signKeyIsHex, string signatureName, bool signatureAsHex, string signaturePrefix, string signatureSuffix, IDictionary<string, string> requiredQuery, IDictionary<string, string> requiredHeader, byte[] decryptionKey, byte[] decryptionIV, bool doValidation = true)
+		public static WebHookMessage ToWebHookMessage(this RequestInfo requestInfo, string secretToken, string secretTokenName, string signAlgorithm, string signKey, bool signKeyIsHex, string signatureName, bool signatureAsHex, string signaturePrefix, string signatureSuffix, IDictionary<string, string> requiredQuery, IDictionary<string, string> requiredHeader, byte[] decryptionKey, byte[] decryptionIV, bool doValidation = true, Action<WebHookMessage> onCompleted = null)
 		{
 			var message = new WebHookMessage
 			{
@@ -407,6 +408,7 @@ namespace net.vieapps.Services
 				Header = requestInfo.Header,
 				CorrelationID = requestInfo.CorrelationID
 			};
+			onCompleted?.Invoke(message);
 			return doValidation
 				? message.Validate(secretToken, secretTokenName, signAlgorithm, signKey, signKeyIsHex, signatureName, signatureAsHex, signaturePrefix, signatureSuffix, requiredQuery, requiredHeader, decryptionKey, decryptionIV)
 				: message;
@@ -442,7 +444,8 @@ namespace net.vieapps.Services
 			{
 				["Header"] = message.Header.ToJObject(),
 				["Query"] = message.Query.ToJObject(),
-				["Body"] = requestInfo.BodyAsJson
+				["Body"] = requestInfo.BodyAsJson,
+				["CorrelationID"] = requestInfo.CorrelationID
 			};
 
 			var verb = "POST";
@@ -463,6 +466,7 @@ namespace net.vieapps.Services
 					Header = message.Header.GetDictionary("x-webhook-pre-header"),
 					Query = message.Header.GetDictionary("x-webhook-pre-query"),
 					Body = message.Header.GetValue("x-webhook-pre-body") ?? "{}",
+					CorrelationID = requestInfo.CorrelationID
 				}.Normalize(secretToken, secretTokenName, settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, false, settings.SignaturePrefix, settings.SignatureSuffix, webhookQuery, webhookHeader, encryptionKey, encryptionIV);
 
 				try
@@ -532,7 +536,8 @@ namespace net.vieapps.Services
 				EndpointURL = "https://apis.vieapps.net/webhooks",
 				Header = result?.Get<JObject>("Header")?.ToDictionary<string>(),
 				Query = result?.Get<JObject>("Query")?.ToDictionary<string>(),
-				Body = body.ToString(Formatting.None)
+				Body = body.ToString(Formatting.None),
+				CorrelationID = requestInfo.CorrelationID
 			}.Normalize(secretToken, secretTokenName, settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, false, settings.SignaturePrefix, settings.SignatureSuffix, webhookQuery, webhookHeader, encryptionKey, encryptionIV);
 
 			var responses = new JArray();
@@ -596,6 +601,7 @@ namespace net.vieapps.Services
 					Header = message.Header.GetDictionary("x-webhook-post-header") ?? message.Header?.Copy("x-webhook-post-endpoint-url,x-webhook-post-verb,x-webhook-post-header,x-webhook-post-query".ToHashSet()),
 					Query = message.Header.GetDictionary("x-webhook-post-query") ?? message.Query,
 					Body = body.ToString(Formatting.None),
+					CorrelationID = requestInfo.CorrelationID
 				}.Normalize(secretToken, secretTokenName, settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, false, settings.SignaturePrefix, settings.SignatureSuffix, webhookQuery, webhookHeader, encryptionKey, encryptionIV);
 
 				try
@@ -664,7 +670,7 @@ namespace net.vieapps.Services
 					requestInfo.Header["x-webhook-object"] = pathSegments[3].GetANSIUri(false, true).Replace("-", "").Replace("_", "");
 			}
 			if (pathSegments.Length > 4 && !string.IsNullOrWhiteSpace(pathSegments[4]))
-				requestInfo.Header["x-webhook-adapter"] = pathSegments[4].GetANSIUri().Replace("-", "").Replace("_", "");
+				requestInfo.Header["x-webhook-adapter"] = pathSegments[4].GetANSIUri().Replace("_", "");
 
 			preparer?.Invoke(requestInfo);
 			return requestInfo.GetService().ProcessWebHookMessageAsync(requestInfo, cancellationToken);

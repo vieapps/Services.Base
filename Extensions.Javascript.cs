@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using JSPool;
 using JavaScriptEngineSwitcher.Core;
 using JavaScriptEngineSwitcher.ChakraCore;
-using Serilog;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using net.vieapps.Components.Repository;
@@ -40,6 +39,8 @@ namespace net.vieapps.Services
 		static Func<string, bool, string> Func_GenerateURI => (name, lowerCase) => name.GetANSIUri(lowerCase);
 
 		static Func<string, string> Func_GenerateID => value => UtilityService.GenerateUUID(value);
+
+		static Func<string, string> Func_ToJSON => value => new RequestInfo { Body = value }.BodyAsJson.ToString(Formatting.None);
 
 		static Func<string, string> Func_ToHex => value => EncodingService.ToHex(value);
 
@@ -78,10 +79,10 @@ namespace net.vieapps.Services
 				var request = requestInfo.ToJson();
 				var callingTask = Router.GetService(service).ProcessRequestAsync(new RequestInfo
 				{
-					Session = new Session().CopyFrom(request.Get<JObject>("Session")),
-					ServiceName = request.Get<string>("ServiceName"),
+					Session = new Session(request.Get<JObject>("Session")),
+					ServiceName = request.Get<string>("ServiceName") ?? service,
 					ObjectName = request.Get<string>("ObjectName"),
-					Verb = request.Get<string>("Verb"),
+					Verb = request.Get<string>("Verb") ?? "GET",
 					Query = request.Get<JObject>("Query")?.ToDictionary(token => token.ToString()),
 					Header = request.Get<JObject>("Header")?.ToDictionary(token => token.ToString()),
 					Body = request.Get<JObject>("Body")?.ToString(Formatting.None),
@@ -200,19 +201,24 @@ namespace net.vieapps.Services
 		var __generateID = function(value) {
 			return __sf_GenerateID(value);
 		};
+		var __toQuery = function(params) {
+			return Object.keys(params).map(key => {
+				var value = params[key];
+				return value === undefined ? undefined : key + (!!value ? `=${value}` : '');
+			}).filter(value => value !== undefined).join('&');
+		};
+		var __toJSON = function(params) {
+			return JSON.parse(__sf_ToJSON(params));
+		};
 		var __toDateTime = function(value) {
 			if (value !== undefined) {
 				if (value instanceof Date || (typeof value === 'string' && value.trim() !== '')) {
 					var date = new Date(value);
 					return new DateTime(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), date.getMinutes(), date.getSeconds(), date.getMilliseconds());
 				}
-				else {
-					return typeof value === 'number' ? new DateTime(value) : new DateTime();
-				}
+				return typeof value === 'number' ? new DateTime(value) : new DateTime();
 			}
-			else {
-				return new DateTime();
-			}
+			return new DateTime();
 		};
 		var __toHex = function(value) {
 			return __sf_ToHex(value);
@@ -247,8 +253,8 @@ namespace net.vieapps.Services
 		var __writeLogs = function(correlationID, logs) {
 			__sf_WriteLogs(correlationID, logs);
 		};
-		var __callService = function(serviceName, requestInfo) {
-			return __sf_CallService(serviceName, requestInfo);
+		var __callService = function(service, requestInfo) {
+			return __sf_CallService(service, requestInfo);
 		};
 		var __sendCommunicateMessage = function(service, type, data, excludedNodeID) {
 			__sf_SendCommunicateMessage(service, type, data, excludedNodeID || '');
@@ -373,6 +379,7 @@ namespace net.vieapps.Services
 						["__sf_Now"] = Extensions.Func_Now,
 						["__sf_GenerateURI"] = Extensions.Func_GenerateURI,
 						["__sf_GenerateID"] = Extensions.Func_GenerateID,
+						["__sf_ToJSON"] = Extensions.Func_ToJSON,
 						["__sf_ToHex"] = Extensions.Func_ToHex,
 						["__sf_ToBase64"] = Extensions.Func_ToBase64,
 						["__sf_ToBase64Url"] = Extensions.Func_ToBase64Url,
