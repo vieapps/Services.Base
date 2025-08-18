@@ -4,12 +4,13 @@ using System.Linq;
 using System.Dynamic;
 using System.Collections.Generic;
 using JSPool;
-using JavaScriptEngineSwitcher.Core;
 using JavaScriptEngineSwitcher.ChakraCore;
+using JavaScriptEngineSwitcher.Core;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using net.vieapps.Components.Repository;
 using net.vieapps.Components.Utility;
+using System.Threading.Tasks;
 #endregion
 
 namespace net.vieapps.Services
@@ -56,7 +57,7 @@ namespace net.vieapps.Services
 
 		static Func<string, string> Func_DecodeBase64Url => value => EncodingService.Url64Decode(value);
 
-		static Func<string, string, string> Func_Hash => (value, algorithm) => CryptoService.GetHash(value, algorithm).GetString();
+		static Func<string, string, string> Func_Hash => (value, algorithm) => CryptoService.GetHash(value, algorithm).ToHex();
 
 		static Func<string, string, string, string> Func_Hmac => (value, key, algorithm) => CryptoService.GetHMAC(value, key, algorithm);
 
@@ -94,28 +95,67 @@ namespace net.vieapps.Services
 				{
 					["status"] = "OK",
 					["code"] = 200,
+					["message"] = "Success",
 					["response"] = callingTask.Result.ToString(Formatting.None)
 				}.ToString(Formatting.None);
 			}
 			catch (Exception ex)
 			{
-				return ex is RemoteServerException rse
-					? new JObject
-					{
-						["status"] = "Error",
-						["code"] = (int)rse.StatusCode,
-						["response"] = rse.Body,
-						["stack"] = rse.StackTrace
-					}.ToString(Formatting.None)
-					: new JObject
-					{
-						["status"] = "Error",
-						["code"] = 500,
-						["response"] = ex.Message,
-						["stack"] = ex.StackTrace
-					}.ToString(Formatting.None);
+				return ex.GetError(error =>
+				{
+					var first = error.Get<JArray>("errors").FirstOrDefault();
+					error["code"] = first.Get<int>("code");
+					error["message"] = first.Get<string>("message");
+				}).ToString(Formatting.None);
 			}
 		};
+
+		static JObject GetError(this Exception exception, Action<JObject> onCompleted = null)
+		{
+			var error = new JObject
+			{
+				["status"] = "Error",
+				["errors"] = new JArray(new JObject
+				{
+					["code"] = 500,
+					["message"] = exception.Message,
+					["stack"] = new JArray(exception.StackTrace)
+				})
+			};
+			if (exception is AggregateException aggregateException)
+			{
+				var errors = new JArray();
+				foreach (var innerException in aggregateException.InnerExceptions)
+				{
+					var code = 500;
+					var message = innerException.Message;
+					var stacks = new JArray();
+					if (innerException is RemoteServerException remoteserverException)
+					{
+						code = (int)remoteserverException.StatusCode;
+						var response = remoteserverException.Body?.ToJson();
+						message = response?.Get<string>("Message") ?? remoteserverException.Message;
+						response?.Get<JArray>("StackTrace").ToList<string>().Select(stack => stack.Replace("\r", "").ToList("\n")).SelectMany(stack => stack).ForEach(stack => stacks.Add(stack));
+						stacks.Add("(root)" + remoteserverException.StackTrace);
+					}
+					else
+						stacks.Add(innerException.StackTrace);
+					errors.Add(new JObject
+					{
+						["code"] = code,
+						["message"] = message,
+						["stack"] = stacks
+					});
+				}
+				error = new JObject
+				{
+					["status"] = "Error",
+					["errors"] = errors
+				};
+			}
+			onCompleted?.Invoke(error);
+			return error;
+		}
 
 		static Action<string, string, string, string> Func_SendCommunicateMessage => (service, type, data, excludedNodeID) =>
 		{
@@ -162,25 +202,26 @@ namespace net.vieapps.Services
 			).Run();
 		};
 
-		static Func<string, string, string, string, string> Func_SendHttp => (url, method, body, header) =>
+		static Func<string, string, string, string, bool, int, string> Func_SendHttp => (url, method, body, header, returnErrorDetailsIfGot, waitingSeconds) =>
 		{
-			System.Net.Http.HttpResponseMessage response = null;
 			try
 			{
+				if (waitingSeconds > 0)
+					Task.Delay(waitingSeconds * 1000, ServiceBase.ServiceComponent.CancellationToken).Wait();
 				var sendTask = new Uri(url).SendHttpRequestAsync(method ?? "GET", (header?.ToJson() as JObject)?.ToDictionary(token => token.ToString()), body, 90, ServiceBase.ServiceComponent.CancellationToken);
 				sendTask.Wait();
-				response = sendTask.Result;
-				var readTask = response.ReadAsStringAsync();
-				readTask.Wait();
-				return readTask.Result;
+				using (sendTask.Result)
+				{
+					if (sendTask.Exception != null)
+						throw sendTask.Exception;
+					var readTask = sendTask.Result.ReadAsStringAsync();
+					readTask.Wait();
+					return readTask.Result;
+				}
 			}
-			catch
+			catch (Exception exception)
 			{
-				return null;
-			}
-			finally
-			{
-				response?.Dispose();
+				return returnErrorDetailsIfGot ? exception.GetError().ToString(Formatting.None) : null;
 			}
 		};
 
@@ -194,6 +235,33 @@ namespace net.vieapps.Services
 		var __today = function() {
 			var date = __now();
 			return date.substring(0, date.indexOf('T')).replace(/\-/g, '/');
+		};
+		var __dateDiff = function(date, mode) {
+			var milliseconds = Math.abs(new Date().getTime() - date.getTime());
+			return 'days' === mode
+				? Math.round(milliseconds / (1000 * 60 * 60 * 24))
+				: 'hours' === mode
+					? Math.round(milliseconds / (1000 * 60 * 60))
+					: 'minutes' === mode
+						? Math.round(milliseconds / (1000 * 60))
+						: Math.round(milliseconds / 1000);
+		};
+		var __dateAdd = function(date, added, mode) {
+			var multiple = 'years' === mode
+				? 1000 * 60 * 60 * 30 * 12
+				: 'months' === mode
+					? 1000 * 60 * 60 * 30
+					: 'days' === mode
+						? 1000 * 60 * 60 * 24
+						: 'hours' === mode
+						 ? 1000 * 60 * 60
+						 : 'minutes' === mode
+							? 1000 * 60
+							: 'seconds' === mode
+								? 1000
+								: 1;
+			date.setMilliseconds(date.getMilliseconds() + (added * multiple));
+			return date;
 		};
 		var __generateURI = function(value, lowerCase) {
 			return __sf_GenerateURI(value, lowerCase !== undefined ? !!lowerCase : true);
@@ -265,14 +333,27 @@ namespace net.vieapps.Services
 		var __sendEmail = function(email, server) {
 			__sf_SendEmail(email, server);
 		};
-		var __sendHttp = function(url, method, body, header) {
-			return __sf_SendHttp(url, method, body, header);
+		var __sendHttp = function(url, method, body, header, throwErrorIfGot, waitingSeconds) {
+			var response = __sf_SendHttp(url, method, body, header, true === throwErrorIfGot, typeof waitingSeconds === 'number' ? waitingSeconds : 0);
+			if (!!response && response.indexOf('""status"":""Error""') > 0) {
+				throw new Error(response);
+			}
+			return response;
 		};
-		var __getHttp = function(url, header) {
-			return __sendHttp(url, 'GET', '', header || '{}');
+		var __getHttp = function(url, header, throwErrorIfGot, waitingSeconds) {
+			return __sendHttp(url, 'GET', '', header || '{}', throwErrorIfGot, waitingSeconds);
 		};
-		var __postHttp = function(url, body, header) {
-			return __sendHttp(url, 'POST', body || '', header || '{}');
+		var __postHttp = function(url, body, header, throwErrorIfGot, waitingSeconds) {
+			return __sendHttp(url, 'POST', body || '{}', header || '{}', throwErrorIfGot, waitingSeconds);
+		};
+		var __putHttp = function(url, body, header, throwErrorIfGot, waitingSeconds) {
+			return __sendHttp(url, 'PUT', body || '{}', header || '{}', throwErrorIfGot, waitingSeconds);
+		};
+		var __patchHttp = function(url, body, header, throwErrorIfGot, waitingSeconds) {
+			return __sendHttp(url, 'PATCH', body || '{}', header || '{}', throwErrorIfGot, waitingSeconds);
+		};
+		var __deleteHttp = function(url, header, throwErrorIfGot, waitingSeconds) {
+			return __sendHttp(url, 'DELETE', '', header || '{}', throwErrorIfGot, waitingSeconds);
 		};
 		".Replace("\t", "").Replace("\r", "").Replace("\n", " ");
 
@@ -308,23 +389,28 @@ namespace net.vieapps.Services
 				+ Environment.NewLine
 				+ "__object.__evaluate = function (__request, __params) {"
 				+ @"
-				var __format = function(template, params) {
+				var __format = function(template, params, all) {
+					var add = true === all;
 					if (!!!params) {
 						params = {};
+						add = true;
+					}
+					if (add) {
 						Object.assign(params, __params || {});
-						Object.assign(params, __request.Query);
-						Object.assign(params, __request.Header);
-						Object.assign(params, __request.Body);
+						Object.assign(params, __request.Query || {});
+						Object.assign(params, __request.Header || {});
+						Object.assign(params, __request.Body || {});
 					}
 					Object.keys(params).forEach(key => {
 						template = template.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), (params[key] || '').toString());
 					});
 					return template;
 				};
-				var __query = names => {
+				var __query = (names, query) => {
+					query = query || __request.Query;
 					var parameters = names.map(name => {
 						var key = 'x-' + name;
-						var value = __request.Query[key];
+						var value = query[key];
 						return value === undefined ? undefined : key + (!!value ? `=${value}` : '');
 					}).filter(value => value !== undefined).join('&');
 					return !!parameters ? '&' + parameters : '';

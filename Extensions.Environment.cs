@@ -64,7 +64,7 @@ namespace net.vieapps.Services
 		/// <param name="userAgent"></param>
 		/// <returns></returns>
 		public static string GetOSInfo(string userAgent)
-			=> userAgent.IsContains("iPhone") || userAgent.IsContains("iPad") || userAgent.IsContains("iPod")
+			=> userAgent.IsContains("iPhone") || userAgent.IsContains("iPad") || userAgent.IsContains("iPod") || userAgent.IsContains("iOS")
 				? "iOS"
 				: userAgent.IsContains("Android")
 					? "Android"
