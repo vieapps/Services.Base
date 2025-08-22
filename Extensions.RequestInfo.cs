@@ -398,7 +398,7 @@ namespace net.vieapps.Services
 		/// <param name="doValidation"></param>
 		/// <param name="onCompleted"></param>
 		/// <returns></returns>
-		public static WebHookMessage ToWebHookMessage(this RequestInfo requestInfo, string secretToken, string secretTokenName, string signAlgorithm, string signKey, bool signKeyIsHex, string signatureName, bool signatureAsHex, string signaturePrefix, string signatureSuffix, IDictionary<string, string> requiredQuery, IDictionary<string, string> requiredHeader, byte[] decryptionKey, byte[] decryptionIV, bool doValidation = true, Action<WebHookMessage> onCompleted = null)
+		public static WebHookMessage ToWebHookMessage(this RequestInfo requestInfo, string secretToken, string secretTokenName, string signAlgorithm, string signKey, bool signKeyIsHex, string signatureName, bool signatureAsHex, string signaturePrefix, string signatureSuffix, bool signWithTimestamp, string signWithTimestampName, string signWithTimestampConnect, IDictionary<string, string> requiredQuery, IDictionary<string, string> requiredHeader, byte[] decryptionKey, byte[] decryptionIV, bool doValidation = true, Action<WebHookMessage> onCompleted = null)
 		{
 			var message = new WebHookMessage
 			{
@@ -410,7 +410,7 @@ namespace net.vieapps.Services
 			};
 			onCompleted?.Invoke(message);
 			return doValidation
-				? message.Validate(secretToken, secretTokenName, signAlgorithm, signKey, signKeyIsHex, signatureName, signatureAsHex, signaturePrefix, signatureSuffix, requiredQuery, requiredHeader, decryptionKey, decryptionIV)
+				? message.Validate(secretToken, secretTokenName, signAlgorithm, signKey, signKeyIsHex, signatureName, signatureAsHex, signaturePrefix, signatureSuffix, signWithTimestamp, signWithTimestampName, signWithTimestampConnect, requiredQuery, requiredHeader, decryptionKey, decryptionIV)
 				: message;
 		}
 
@@ -439,7 +439,7 @@ namespace net.vieapps.Services
 			var encryptionKey = settings.EncryptionKey?.HexToBytes();
 			var encryptionIV = settings.EncryptionIV?.HexToBytes();
 
-			var message = requestInfo.ToWebHookMessage(secretToken, secretTokenName, settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, settings.SignaturePrefix, settings.SignatureSuffix, webhookQuery, webhookHeader, encryptionKey, encryptionIV);
+			var message = requestInfo.ToWebHookMessage(secretToken, secretTokenName, settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, settings.SignaturePrefix, settings.SignatureSuffix, settings.SignWithTimestamp, settings.SignWithTimestampName, settings.SignWithTimestampConnect, webhookQuery, webhookHeader, encryptionKey, encryptionIV);
 			var messageJson = new JObject
 			{
 				["Header"] = message.Header.ToJObject(),
@@ -467,7 +467,7 @@ namespace net.vieapps.Services
 					Query = message.Header.GetDictionary("x-webhook-pre-query"),
 					Body = message.Header.GetValue("x-webhook-pre-body") ?? "{}",
 					CorrelationID = requestInfo.CorrelationID
-				}.Normalize(secretToken, secretTokenName, settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, false, settings.SignaturePrefix, settings.SignatureSuffix, webhookQuery, webhookHeader, encryptionKey, encryptionIV);
+				}.Normalize(secretToken, secretTokenName, settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, false, settings.SignaturePrefix, settings.SignatureSuffix, settings.SignWithTimestamp, settings.SignWithTimestampName, settings.SignWithTimestampConnect, webhookQuery, webhookHeader, encryptionKey, encryptionIV);
 
 				try
 				{
@@ -538,7 +538,7 @@ namespace net.vieapps.Services
 				Query = result?.Get<JObject>("Query")?.ToDictionary<string>(),
 				Body = body.ToString(Formatting.None),
 				CorrelationID = requestInfo.CorrelationID
-			}.Normalize(secretToken, secretTokenName, settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, false, settings.SignaturePrefix, settings.SignatureSuffix, webhookQuery, webhookHeader, encryptionKey, encryptionIV);
+			}.Normalize(secretToken, secretTokenName, settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, false, settings.SignaturePrefix, settings.SignatureSuffix, settings.SignWithTimestamp, settings.SignWithTimestampName, settings.SignWithTimestampConnect, webhookQuery, webhookHeader, encryptionKey, encryptionIV);
 
 			var responses = new JArray();
 			await endpointURLs.ForEachAsync(async endpointURL =>
@@ -602,7 +602,7 @@ namespace net.vieapps.Services
 					Query = message.Header.GetDictionary("x-webhook-post-query") ?? message.Query,
 					Body = body.ToString(Formatting.None),
 					CorrelationID = requestInfo.CorrelationID
-				}.Normalize(secretToken, secretTokenName, settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, false, settings.SignaturePrefix, settings.SignatureSuffix, webhookQuery, webhookHeader, encryptionKey, encryptionIV);
+				}.Normalize(secretToken, secretTokenName, settings.SignAlgorithm, signKey, settings.SignKeyIsHex, settings.SignatureName, settings.SignatureAsHex, false, settings.SignaturePrefix, settings.SignatureSuffix, settings.SignWithTimestamp, settings.SignWithTimestampName, settings.SignWithTimestampConnect, webhookQuery, webhookHeader, encryptionKey, encryptionIV);
 
 				try
 				{

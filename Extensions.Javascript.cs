@@ -422,7 +422,7 @@ namespace net.vieapps.Services
 			var url = (request || {}).url || '';
 			var method = (request || {}).method || 'GET';
 			var body = (request || {}).body || {};
-			var headers = (request || {}).headers || (request || {}).header || {};
+			var headers = (request || {}).headers || {};
 			var response = __sf_SendHttp(url, method, JSON.stringify(body), JSON.stringify(headers), true, typeof waitingSeconds === 'number' ? waitingSeconds : 0);
 			if (!!response && response.indexOf('""status"":""Error""') > 0) {
 				if (typeof onError === 'function') {

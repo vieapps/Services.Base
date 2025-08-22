@@ -299,33 +299,34 @@ namespace net.vieapps.Services
 		/// <param name="message">The well-formed message to send</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected virtual Task SendWebHookAsync(WebHookMessage message, CancellationToken cancellationToken = default)
+		protected virtual Task SendWebHookAsync(WebHookMessage message, CancellationToken cancellationToken)
 			=> this.MessagingService.SendWebHookAsync(message, cancellationToken);
 
 		/// <summary>
 		/// Sends a web-hook message
 		/// </summary>
 		/// <param name="message">The message to send</param>
-		/// <param name="developerID">The identity of developer</param>
-		/// <param name="appID">The identity of app</param>
+		/// <param name="secretToken">The name of secret token (in header or query string), default is 'x-webhook-secret-token'</param>
+		/// <param name="secretTokenName">The identity of app</param>
 		/// <param name="signAlgorithm">The HMAC algorithm to sign with the body by a specified key (md5, sha1, sha256, sha384, sha512, ripemd/ripemd160, blake128, blake/blake256, blake384, blake512)</param>
 		/// <param name="signKey">The key that use to sign</param>
 		/// <param name="signKeyIsHex">true to use bytes of hex-string sign-key</param>
 		/// <param name="signatureName">The name of the signature parameter, default is combination of algorithm and the string 'Signature', ex: HmacSha256Signature</param>
 		/// <param name="signatureAsHex">true to use signature as hex, false to use as Base64</param>
 		/// <param name="signatureInQuery">true to place the signature in query string, false to place in header, default is false</param>
+		/// <param name="signaturePrefix">The additional prefix of the signature</param>
+		/// <param name="signatureSuffix">The additional suffix of the signature</param>
+		/// <param name="signWithTimestamp">true to sign with Unix timestamp (place before raw body)</param>
+		/// <param name="signWithTimestampName">The name of the timestamp parameter, default is 'x-webhook-timestamp'</param>
+		/// <param name="signWithTimestampConnect">The value to connect between timestamp and raw body, default is dot (.)</param>
 		/// <param name="additionalQuery">The additional query string</param>
 		/// <param name="additionalHeader">The additional header</param>
 		/// <param name="encryptionKey">The AES key for encrypting message's body</param>
 		/// <param name="encryptionIV">The AES initialize vector for encrypting message's body</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		protected virtual Task SendWebHookAsync(WebHookMessage message, string developerID, string appID, string signAlgorithm = "SHA256", string signKey = null, bool signKeyIsHex = false, string signatureName = null, bool signatureAsHex = true, bool signatureInQuery = false, Dictionary<string, string> additionalQuery = null, Dictionary<string, string> additionalHeader = null, byte[] encryptionKey = null, byte[] encryptionIV = null, CancellationToken cancellationToken = default)
-			=> this.SendWebHookAsync(message?.Normalize(signAlgorithm, signKey ?? appID, signKeyIsHex, signatureName, signatureAsHex, signatureInQuery, additionalQuery, new Dictionary<string, string>(additionalHeader ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase)
-			{
-				{ "DeveloperID", developerID },
-				{ "AppID", appID }
-			}, encryptionKey, encryptionIV), cancellationToken);
+		protected virtual Task SendWebHookAsync(WebHookMessage message, string secretToken = null, string secretTokenName = null, string signAlgorithm = "SHA256", string signKey = null, bool signKeyIsHex = false, string signatureName = null, bool signatureAsHex = true, bool signatureInQuery = false, string signaturePrefix = null, string signatureSuffix = null, bool signWithTimestamp = false, string signWithTimestampName = null, string signWithTimestampConnect = null, Dictionary<string, string> additionalQuery = null, Dictionary<string, string> additionalHeader = null, byte[] encryptionKey = null, byte[] encryptionIV = null, CancellationToken cancellationToken = default)
+			=> this.SendWebHookAsync(message?.Normalize(secretToken, secretTokenName, signAlgorithm, signKey, signKeyIsHex, signatureName, signatureAsHex, signatureInQuery, signaturePrefix, signatureSuffix, signWithTimestamp, signWithTimestampName, signWithTimestampConnect, additionalQuery, additionalHeader, encryptionKey, encryptionIV), cancellationToken);
 		#endregion
 
 		#region Loggings
