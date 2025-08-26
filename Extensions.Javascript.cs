@@ -40,7 +40,7 @@ namespace net.vieapps.Services
 
 		static Func<string, string> Func_GenerateID => value => UtilityService.GenerateUUID(value);
 
-		static Func<string, string> Func_ToJSON => value => new RequestInfo { Body = value }.BodyAsJson.ToString(Formatting.None);
+		static Func<string, string> Func_ToJSON => value => (value ?? "{}").ToJSON().ToString(Formatting.None);
 
 		static Func<string, string> Func_ToHex => value => EncodingService.ToHex(value);
 
@@ -385,7 +385,7 @@ namespace net.vieapps.Services
 			__sf_WriteLogs(correlationID, logs);
 		};
 		var __callService = function(service, requestInfo) {
-			return __sf_CallService(service, requestInfo);
+			return __sf_CallService(service, typeof requestInfo === 'string' ? requestInfo : JSON.stringify(requestInfo));
 		};
 		var __sendCommunicateMessage = function(service, type, data, excludedNodeID) {
 			__sf_SendCommunicateMessage(service, type, data, excludedNodeID || '');
@@ -394,29 +394,29 @@ namespace net.vieapps.Services
 			__sf_SendUpdateMessage(type, data, deviceID || '*', excludedDeviceID || '');
 		};
 		var __sendEmail = function(email, server) {
-			__sf_SendEmail(email, server);
+			__sf_SendEmail(typeof email === 'string' ? email : JSON.stringify(email), typeof server === 'string' ? server : JSON.stringify(server));
 		};
-		var __sendHttp = function(url, method, body, headers, throwErrorIfGot, waitingSeconds) {
-			var response = __sf_SendHttp(url, method, body, headers, true === throwErrorIfGot, typeof waitingSeconds === 'number' ? waitingSeconds : 0);
+		var __sendHttp = function(url, method, body, headers, throwErrorIfGot = false, waitingSeconds = 0) {
+			var response = __sf_SendHttp(url, method, typeof body === 'string' ? body : JSON.stringify(body), typeof headers === 'string' ? headers : JSON.stringify(headers), typeof throwErrorIfGot === 'boolean' && true === throwErrorIfGot, typeof waitingSeconds === 'number' ? waitingSeconds : 0);
 			if (!!response && response.indexOf('""status"":""Error""') > 0) {
 				throw new Error(response);
 			}
 			return response;
 		};
-		var __getHttp = function(url, headers, throwErrorIfGot, waitingSeconds) {
-			return __sendHttp(url, 'GET', '', headers || '{}', throwErrorIfGot, waitingSeconds);
+		var __getHttp = function(url, headers, throwErrorIfGot = false, waitingSeconds = 0) {
+			return __sendHttp(url, 'GET', '', headers, throwErrorIfGot, waitingSeconds);
 		};
-		var __postHttp = function(url, body, headers, throwErrorIfGot, waitingSeconds) {
-			return __sendHttp(url, 'POST', body || '{}', headers || '{}', throwErrorIfGot, waitingSeconds);
+		var __postHttp = function(url, body, headers, throwErrorIfGot = false, waitingSeconds = 0) {
+			return __sendHttp(url, 'POST', body, headers, throwErrorIfGot, waitingSeconds);
 		};
-		var __putHttp = function(url, body, headers, throwErrorIfGot, waitingSeconds) {
-			return __sendHttp(url, 'PUT', body || '{}', headers || '{}', throwErrorIfGot, waitingSeconds);
+		var __putHttp = function(url, body, headers, throwErrorIfGot = false, waitingSeconds = 0) {
+			return __sendHttp(url, 'PUT', body, headers, throwErrorIfGot, waitingSeconds);
 		};
-		var __patchHttp = function(url, body, headers, throwErrorIfGot, waitingSeconds) {
-			return __sendHttp(url, 'PATCH', body || '{}', headers || '{}', throwErrorIfGot, waitingSeconds);
+		var __patchHttp = function(url, body, headers, throwErrorIfGot = false, waitingSeconds = 0) {
+			return __sendHttp(url, 'PATCH', body, headers, throwErrorIfGot, waitingSeconds);
 		};
-		var __deleteHttp = function(url, headers, throwErrorIfGot, waitingSeconds) {
-			return __sendHttp(url, 'DELETE', '', headers || '{}', throwErrorIfGot, waitingSeconds);
+		var __deleteHttp = function(url, headers, throwErrorIfGot = false, waitingSeconds = 0) {
+			return __sendHttp(url, 'DELETE', '', headers, throwErrorIfGot, waitingSeconds);
 		};
 		var __fetch = function(request, onSuccess, onError) {
 			var url = (request || {}).url || '';
@@ -433,7 +433,15 @@ namespace net.vieapps.Services
 				onSuccess(JSON.parse(response));
 			}
 		};
-		".Replace("\t", "").Replace("\r", "").Replace("\n", " ");
+		var __http = {
+			get: (url, headers, throwErrorIfGot = false, waitingSeconds = 0) => JSON.parse(__getHttp(url, headers, throwErrorIfGot, waitingSeconds)),
+			post: (url, body, headers, throwErrorIfGot = false, waitingSeconds = 0) => JSON.parse(__postHttp(url, body, headers, throwErrorIfGot, waitingSeconds)),
+			put: (url, body, headers, throwErrorIfGot = false, waitingSeconds = 0) => JSON.parse(__putHttp(url, body, headers, throwErrorIfGot, waitingSeconds)),
+			patch: (url, body, headersthrowErrorIfGot = false, waitingSeconds = 0) => JSON.parse(__patchHttp(url, body, headers, throwErrorIfGot, waitingSeconds)),
+			delete: (url, headers, throwErrorIfGot = false, waitingSeconds = 0) => JSON.parse(__deleteHttp(url, headers, throwErrorIfGot, waitingSeconds)),
+			fetch: (request, onSuccess, onError) => __fetch(request, onSuccess, onError)
+		};
+		".Replace("\t", "");
 
 		/// <summary>
 		/// Casts the returning value of an Javascript expression
@@ -466,36 +474,35 @@ namespace net.vieapps.Services
 				+ Environment.NewLine
 				+ (string.IsNullOrWhiteSpace(jsFunctions) ? "" : jsFunctions + Environment.NewLine)
 				+ $"var __object = {@object?.ToString(Formatting.None) ?? "{}"};"
-				+ Environment.NewLine
-				+ "__object.__evaluate = function(__request, __params) {"
 				+ @"
-				var __format = function(template, params, all) {
-					var add = true === all;
-					if (!!!params) {
-						params = {};
-						add = true;
-					}
-					if (add) {
-						Object.assign(params, __params || {});
-						Object.assign(params, __request.Query || {});
-						Object.assign(params, __request.Header || {});
-						Object.assign(params, __request.Body || {});
-					}
-					Object.keys(params).forEach(key => {
-						template = template.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), (params[key] || '').toString());
-					});
-					return template;
-				};
-				var __query = (names, query) => {
-					query = query || __request.Query;
-					var parameters = names.map(name => {
-						var key = 'x-' + name;
-						var value = query[key];
-						return value === undefined ? undefined : key + (!!value ? `=${value}` : '');
-					}).filter(value => value !== undefined).join('&');
-					return !!parameters ? '&' + parameters : '';
-				};
-				".Replace("\t\t\t\t", "")
+				__object.__evaluate = function(__request, __params) {
+					var __format = function(template, params, all) {
+						var add = typeof all === 'boolean' && true === all;
+						if (!!!params) {
+							params = {};
+							add = true;
+						}
+						if (add) {
+							Object.assign(params, __params || {});
+							Object.assign(params, __request.Query || {});
+							Object.assign(params, __request.Header || {});
+							Object.assign(params, __request.Body || {});
+						}
+						Object.keys(params).forEach(key => {
+							template = template.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), (params[key] || '').toString());
+						});
+						return template;
+					};
+					var __query = (names, query) => {
+						query = query || __request.Query;
+						var parameters = names.map(name => {
+							var key = 'x-' + name;
+							var value = query[key];
+							return value === undefined ? undefined : key + (!!value ? `=${value}` : '');
+						}).filter(value => value !== undefined).join('&');
+						return !!parameters ? '&' + parameters : '';
+					};
+				".Replace("\t", "")
 				+ (string.IsNullOrWhiteSpace(expression) || expression.Equals(";") ? "return undefined;" : $"{(expression.IndexOf("return") < 0 ? "return " : "")}{expression}{(expression.EndsWith(";") ? "" : ";")}")
 				+ Environment.NewLine
 				+ "};"
@@ -576,10 +583,21 @@ namespace net.vieapps.Services
 			if (!string.IsNullOrWhiteSpace(expression))
 				using (var jsEngine = Extensions.JsEnginePool.GetEngine())
 				{
-					Extensions.GetEmbedObjects(embedObjects).Where(kvp => !string.IsNullOrWhiteSpace(kvp.Key) && kvp.Value != null).ForEach(kvp => jsEngine.EmbedHostObject(kvp.Key, kvp.Value));
-					Extensions.GetEmbedTypes(embedTypes).Where(kvp => !string.IsNullOrWhiteSpace(kvp.Key) && kvp.Value != null).ForEach(kvp => jsEngine.EmbedHostType(kvp.Key, kvp.Value));
-					var jsValue = jsEngine.Evaluate(expression.GetJsExpression(@object, requestInfo, @params, jsFunctions));
-					return jsValue is Undefined ? null : jsValue;
+					var jsExpression = string.Empty;
+					try
+					{
+						Extensions.GetEmbedObjects(embedObjects).Where(kvp => !string.IsNullOrWhiteSpace(kvp.Key) && kvp.Value != null).ForEach(kvp => jsEngine.EmbedHostObject(kvp.Key, kvp.Value));
+						Extensions.GetEmbedTypes(embedTypes).Where(kvp => !string.IsNullOrWhiteSpace(kvp.Key) && kvp.Value != null).ForEach(kvp => jsEngine.EmbedHostType(kvp.Key, kvp.Value));
+						jsExpression = expression.GetJsExpression(@object, requestInfo, @params, jsFunctions);
+						var jsValue = jsEngine.Evaluate(jsExpression);
+						return jsValue is Undefined ? null : jsValue;
+					}
+					catch (Exception ex)
+					{
+						if (ex is JsRuntimeException)
+							throw new ServiceOperationException($"Error occurred while running JS code => {ex.Message}\n\nSource:\n{jsExpression}", ex);
+						throw;
+					}
 				}
 			return null;
 		}

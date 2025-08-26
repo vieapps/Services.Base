@@ -404,8 +404,8 @@ namespace net.vieapps.Services
 			{
 				EndpointURL = requestInfo.Session?.AppOrigin ?? requestInfo.GetHeaderParameter("Origin"),
 				Body = requestInfo.Body,
-				Query = requestInfo.Query,
-				Header = requestInfo.Header,
+				Query = new Dictionary<string, string>(requestInfo.Query ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase),
+				Header = new Dictionary<string, string>(requestInfo.Header ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase),
 				CorrelationID = requestInfo.CorrelationID
 			};
 			onCompleted?.Invoke(message);
@@ -426,12 +426,15 @@ namespace net.vieapps.Services
 		/// <param name="requestInfo"></param>
 		/// <param name="settings"></param>
 		/// <param name="paramsJson"></param>
+		/// <param name="jsFunctions"></param>
+		/// <param name="embedObjects"></param>
+		/// <param name="embedTypes"></param>
 		/// <param name="secretToken"></param>
 		/// <param name="secretTokenName"></param>
 		/// <param name="writeLogsAsync"></param>
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		public static async Task<JToken> ForwardAsWebHookMessageAsync(this RequestInfo requestInfo, WebHookInfo settings, JToken paramsJson = null, string secretToken = null, string secretTokenName = null, Func<Exception, string, Task> writeLogsAsync = null, CancellationToken cancellationToken = default)
+		public static async Task<JToken> ForwardAsWebHookMessageAsync(this RequestInfo requestInfo, WebHookInfo settings, JToken paramsJson, string jsFunctions, IDictionary<string, object> embedObjects, IDictionary<string, Type> embedTypes, string secretToken = null, string secretTokenName = null, Func<Exception, string, Task> writeLogsAsync = null, CancellationToken cancellationToken = default)
 		{
 			var signKey = settings.SignKey ?? requestInfo.GetAppID() ?? requestInfo.GetDeveloperID();
 			var webhookQuery = settings.QueryAsJson?.ToDictionary<string>();
@@ -515,7 +518,7 @@ namespace net.vieapps.Services
 			{
 				result = string.IsNullOrWhiteSpace(settings.PrepareBodyScript)
 					? messageJson
-					: settings.PrepareBodyScript.JsEvaluate(messageJson, requestInfo.AsJson, paramsJson)?.ToString().ToJson();
+					: settings.PrepareBodyScript.JsEvaluate(messageJson, requestInfo.AsJson, paramsJson, jsFunctions, embedObjects, embedTypes)?.ToString().ToJson();
 				if (writeLogs)
 					debugLogs += $"PREPARE STEP ------:\r\n\r\nPrepared message [{!string.IsNullOrWhiteSpace(settings.PrepareBodyScript)}]: {result}\r\n\r\n";
 			}
@@ -629,13 +632,27 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
+		/// Forwards a request as a web-hook message
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <param name="settings"></param>
+		/// <param name="paramsJson"></param>
+		/// <param name="secretToken"></param>
+		/// <param name="secretTokenName"></param>
+		/// <param name="writeLogsAsync"></param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		public static Task<JToken> ForwardAsWebHookMessageAsync(this RequestInfo requestInfo, WebHookInfo settings, JToken paramsJson = null, string secretToken = null, string secretTokenName = null, Func<Exception, string, Task> writeLogsAsync = null, CancellationToken cancellationToken = default)
+			=> requestInfo.ForwardAsWebHookMessageAsync(settings, paramsJson, null, null, null, secretToken, secretTokenName, writeLogsAsync, cancellationToken);
+
+		/// <summary>
 		/// Sends a web-hook message as call the destination service
 		/// </summary>
 		/// <param name="message"></param>
 		/// <param name="cancellationToken"></param>
-		/// <param name="preparer"></param>
+		/// <param name="onPrepared"></param>
 		/// <returns></returns>
-		public static Task<JToken> SendAsCallServiceAsync(this WebHookMessage message, CancellationToken cancellationToken = default, Action<RequestInfo> preparer = null)
+		public static Task<JToken> SendAsCallServiceAsync(this WebHookMessage message, CancellationToken cancellationToken = default, Action<RequestInfo> onPrepared = null)
 		{
 			if (string.IsNullOrWhiteSpace(message.EndpointURL) || string.IsNullOrWhiteSpace(message.Body))
 				return Task.FromException<JToken>(new MessageException("Invalid (end-point/body)"));
@@ -649,30 +666,24 @@ namespace net.vieapps.Services
 				path = path.Left(path.Length - 1);
 			var pathSegments = path.ToArray("/");
 
-			var requestInfo = new RequestInfo
+			var requestInfo = message.ToRequestInfo(null, request =>
 			{
-				ServiceName = pathSegments.Length > 1 && !string.IsNullOrWhiteSpace(pathSegments[1]) ? pathSegments[1].GetANSIUri(false, true).GetCapitalizedFirstLetter() : "",
-				ObjectName = "",
-				Verb = "POST",
-				Query = message.Query,
-				Header = message.Header,
-				Body = message.Body,
-				CorrelationID = message.CorrelationID
-			};
-			requestInfo.Header["x-webhook-service"] = requestInfo.ServiceName;
-			if (pathSegments.Length > 2 && !string.IsNullOrWhiteSpace(pathSegments[2]))
-				requestInfo.Header["x-webhook-system"] = pathSegments[2].GetANSIUri();
-			if (pathSegments.Length > 3 && !string.IsNullOrWhiteSpace(pathSegments[3]))
-			{
-				if (pathSegments[3].GetANSIUri().IsValidUUID())
-					requestInfo.Header["x-webhook-entity"] = pathSegments[3].GetANSIUri();
-				else
-					requestInfo.Header["x-webhook-object"] = pathSegments[3].GetANSIUri(false, true).Replace("-", "").Replace("_", "");
-			}
-			if (pathSegments.Length > 4 && !string.IsNullOrWhiteSpace(pathSegments[4]))
-				requestInfo.Header["x-webhook-adapter"] = pathSegments[4].GetANSIUri().Replace("_", "");
+				request.ServiceName = pathSegments.Length > 1 && !string.IsNullOrWhiteSpace(pathSegments[1]) ? pathSegments[1].GetANSIUri(false, true).GetCapitalizedFirstLetter() : "";
+				request.Header["x-webhook-service"] = request.ServiceName;
+				if (pathSegments.Length > 2 && !string.IsNullOrWhiteSpace(pathSegments[2]))
+					request.Header["x-webhook-system"] = pathSegments[2].GetANSIUri();
+				if (pathSegments.Length > 3 && !string.IsNullOrWhiteSpace(pathSegments[3]))
+				{
+					if (pathSegments[3].GetANSIUri().IsValidUUID())
+						request.Header["x-webhook-entity"] = pathSegments[3].GetANSIUri();
+					else
+						request.Header["x-webhook-object"] = pathSegments[3].GetANSIUri(false, true).Replace("-", "").Replace("_", "");
+				}
+				if (pathSegments.Length > 4 && !string.IsNullOrWhiteSpace(pathSegments[4]))
+					request.Header["x-webhook-adapter"] = pathSegments[4].GetANSIUri().Replace("_", "");
+				onPrepared?.Invoke(request);
+			});
 
-			preparer?.Invoke(requestInfo);
 			return requestInfo.GetService().ProcessWebHookMessageAsync(requestInfo, cancellationToken);
 		}
 		#endregion
