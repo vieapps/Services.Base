@@ -467,7 +467,7 @@ namespace net.vieapps.Services
 
 			if (!Router.Services.TryGetValue(name, out var service))
 			{
-				service = Router.OutgoingChannel?.RealmProxy.Services.GetCalleeProxy<IService>(ProxyInterceptor.Create(name));
+				service = Router.OutgoingChannel?.GetService<IService>(ProxyInterceptor.Create(name));
 				if (service != null)
 					Router.Services.TryAdd(name, service);
 			}
@@ -497,7 +497,7 @@ namespace net.vieapps.Services
 
 			if (!Router.UniqueServices.TryGetValue(name, out var service))
 			{
-				service = Router.OutgoingChannel?.RealmProxy.Services.GetCalleeProxy<IUniqueService>(ProxyInterceptor.Create(name));
+				service = Router.OutgoingChannel?.GetService<IUniqueService>(ProxyInterceptor.Create(name));
 				if (service != null)
 					Router.UniqueServices.TryAdd(name, service);
 			}
@@ -577,7 +577,7 @@ namespace net.vieapps.Services
 
 			if (!Router.SyncableServices.TryGetValue(name, out var service))
 			{
-				service = Router.OutgoingChannel?.RealmProxy.Services.GetCalleeProxy<ISyncableService>(ProxyInterceptor.Create(name));
+				service = Router.OutgoingChannel?.GetService<ISyncableService>(ProxyInterceptor.Create(name));
 				if (service != null)
 					Router.SyncableServices.TryAdd(name, service);
 			}

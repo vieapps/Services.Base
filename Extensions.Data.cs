@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using net.vieapps.Components.Caching;
 using net.vieapps.Components.Utility;
 using net.vieapps.Components.Repository;
 #endregion
@@ -779,7 +780,60 @@ namespace net.vieapps.Services
 			=> Extensions.GetPagination(pagination.Item1, pagination.Item2, pagination.Item3, pagination.Item4);
 		#endregion
 
-		#region Cache keys
+		#region Caching
+		/// <summary>
+		/// Assigns a hanlder to 'ProcessL1CacheRequestAsync' of a caching component
+		/// </summary>
+		/// <param name="channel"></param>
+		/// <param name="cache"></param>
+		/// <param name="serviceName"></param>
+		/// <param name="nodeID"></param>
+		/// <returns></returns>
+		public static IDisposable AssignProcessL1CacheRequest(this WampSharp.V2.IWampChannel channel, Cache cache, string serviceName, string nodeID = null)
+			=> channel.Subscribe<CommunicateMessage>
+			(
+				$"messages.services.{serviceName.ToLower()}.cache",
+				message => !string.IsNullOrWhiteSpace(message.ExcludedNodeID) && message.ExcludedNodeID.IsEquals(nodeID) ? Task.CompletedTask : cache.ProcessL1CacheRequestAsync(message.Data.Get<string>("Key"), message.Data.Get<string>("Reason"))
+			);
+
+		/// <summary>
+		/// Assigns a hanlder to 'ProcessL1CacheRequestAsync' of a caching component
+		/// </summary>
+		/// <param name="channel"></param>
+		/// <param name="cache"></param>
+		/// <param name="service"></param>
+		/// <param name="suffix"></param>
+		/// <param name="nodeID"></param>
+		/// <returns></returns>
+		public static IDisposable AssignProcessL1CacheRequest(this WampSharp.V2.IWampChannel channel, Cache cache, ServiceBase service, string suffix = null, string nodeID = null)
+			=> channel.AssignProcessL1CacheRequest(cache, $"{service.ServiceName}{suffix ?? ""}", nodeID ?? service.NodeID);
+
+		/// <summary>
+		/// Assigns 'SendL1CacheRequest' handler of this caching component
+		/// </summary>
+		/// <param name="cache"></param>
+		/// <param name="serviceName"></param>
+		/// <param name="nodeID"></param>
+		public static void AssignSendL1CacheRequest(this Cache cache, string serviceName, string nodeID)
+			=> cache.SendL1CacheRequest = (key, reason) => new CommunicateMessage($"{serviceName}.cache")
+			{
+				ExcludedNodeID = nodeID,
+				Data = new JObject
+				{
+					["Key"] = key,
+					["Reason"] = reason
+				}
+			}.Send();
+
+		/// <summary>
+		/// Assigns 'SendL1CacheRequest' handler of this caching component
+		/// </summary>
+		/// <param name="cache"></param>
+		/// <param name="service"></param>
+		/// <param name="suffix"></param>
+		public static void AssignSendL1CacheRequest(this Cache cache, ServiceBase service, string suffix = null)
+			=> cache.AssignSendL1CacheRequest($"{service.ServiceName}{suffix ?? ""}", service.NodeID);
+
 		/// <summary>
 		/// Gets the caching key
 		/// </summary>

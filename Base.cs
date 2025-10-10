@@ -2268,11 +2268,11 @@ namespace net.vieapps.Services
 		#region Register/Unregister the service
 		public virtual async Task RegisterServiceAsync(IEnumerable<string> args, Action<IService> onSuccess = null, Action<Exception> onError = null)
 		{
-			async Task registerCalleesAsync()
+			async Task registerAsync()
 			{
-				this.ServiceInstance = await Router.IncomingChannel.RealmProxy.Services.RegisterCallee<IService>(() => this, RegistrationInterceptor.Create(this.ServiceName)).ConfigureAwait(false);
-				this.ServiceUniqueInstance = await Router.IncomingChannel.RealmProxy.Services.RegisterCallee<IUniqueService>(() => this, RegistrationInterceptor.Create(this.ServiceUniqueName, WampInvokePolicy.Single)).ConfigureAwait(false);
-				this.ServiceSyncInstance = await Router.IncomingChannel.RealmProxy.Services.RegisterCallee<ISyncableService>(() => this, RegistrationInterceptor.Create(this.ServiceName)).ConfigureAwait(false);
+				this.ServiceInstance = await Router.IncomingChannel.RegisterAsync<IService>(() => this, RegistrationInterceptor.Create(this.ServiceName)).ConfigureAwait(false);
+				this.ServiceUniqueInstance = await Router.IncomingChannel.RegisterAsync<IUniqueService>(() => this, RegistrationInterceptor.Create(this.ServiceUniqueName, WampInvokePolicy.Single)).ConfigureAwait(false);
+				this.ServiceSyncInstance = await Router.IncomingChannel.RegisterAsync<ISyncableService>(() => this, RegistrationInterceptor.Create(this.ServiceName)).ConfigureAwait(false);
 			}
 
 			this.PrepareNodeID(args);
@@ -2281,14 +2281,14 @@ namespace net.vieapps.Services
 			{
 				try
 				{
-					await registerCalleesAsync().ConfigureAwait(false);
+					await registerAsync().ConfigureAwait(false);
 				}
 				catch
 				{
 					await Task.Delay(UtilityService.GetRandomNumber(234, 567)).ConfigureAwait(false);
 					try
 					{
-						await registerCalleesAsync().ConfigureAwait(false);
+						await registerAsync().ConfigureAwait(false);
 					}
 					catch (Exception)
 					{
@@ -2298,15 +2298,15 @@ namespace net.vieapps.Services
 				this.Logger?.LogInformation($"The service was{(this.State == ServiceState.Disconnected ? " re-" : " ")}registered successful");
 
 				this.ServiceCommunicator?.Dispose();
-				this.ServiceCommunicator = Router.IncomingChannel.RealmProxy.Services.GetSubject<CommunicateMessage>($"messages.services.{this.ServiceName.Trim().ToLower()}").Subscribe
-				(
+				this.ServiceCommunicator = Router.IncomingChannel.Subscribe<CommunicateMessage>(
+					$"messages.services.{this.ServiceName.Trim().ToLower()}",
 					message => this.NodeID.IsEquals(message.ExcludedNodeID) ? Task.CompletedTask : this.ProcessInterCommunicateMessageAsync(message, this.CancellationToken),
 					exception => this.WriteLogsAsync(UtilityService.NewUUID, this.Logger, $"Error occurred while processing an inter-communicate message => {exception.Message}", exception, this.ServiceName, "Errors", LogLevel.Error)
 				);
 
 				this.GatewayCommunicator?.Dispose();
-				this.GatewayCommunicator = Router.IncomingChannel.RealmProxy.Services.GetSubject<CommunicateMessage>("messages.services.apigateway").Subscribe
-				(
+				this.GatewayCommunicator = Router.IncomingChannel.Subscribe<CommunicateMessage>(
+					"messages.services.apigateway",
 					message => this.NodeID.IsEquals(message.ExcludedNodeID) ? Task.CompletedTask : this.ProcessGatewayCommunicateMessageAsync(message, this.CancellationToken),
 					exception => this.WriteLogsAsync(UtilityService.NewUUID, this.Logger, $"Error occurred while processing an inter-communicate message of API Gateway => {exception.Message}", exception, this.ServiceName, "Errors", LogLevel.Error)
 				);
@@ -2338,6 +2338,17 @@ namespace net.vieapps.Services
 					this.Logger?.LogError($"Error occurred while sending info to API Gateway => {ex.Message}", ex);
 					onError?.Invoke(ex);
 				}
+
+			// fire cancellation token
+			try
+			{
+				this.CancellationTokenSource.Cancel();
+			}
+			catch (Exception ex)
+			{
+				this.Logger?.LogError($"Error occurred while firing cancellation token => {ex.Message}", ex);
+				onError?.Invoke(ex);
+			}
 
 			// dispose all communicators
 			try
@@ -2425,7 +2436,7 @@ namespace net.vieapps.Services
 		{
 			try
 			{
-				this.MessagingService = Router.OutgoingChannel.RealmProxy.Services.GetCalleeProxy<IMessagingService>(ProxyInterceptor.Create());
+				this.MessagingService = Router.OutgoingChannel.GetService<IMessagingService>(ProxyInterceptor.Create());
 				this.Logger?.LogDebug($"The helper services are{(this.State == ServiceState.Disconnected ? " re-" : " ")}initialized");
 				onSuccess?.Invoke(this);
 			}
@@ -2581,7 +2592,11 @@ namespace net.vieapps.Services
 				{
 					this.StopTimers();
 					if (!this.Disposed)
-						this.CancellationTokenSource.Cancel();
+						try
+						{
+							this.CancellationTokenSource.Cancel();
+						}
+						catch { }
 				}
 				catch (Exception ex)
 				{
