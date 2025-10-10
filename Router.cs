@@ -91,19 +91,13 @@ namespace net.vieapps.Services
 			Action<object, WampConnectionErrorEventArgs> onConnectionError = null
 		)
 		{
-			// asisgn event handlers
 			if (onConnectionEstablished != null)
 				wampChannel.RealmProxy.Monitor.ConnectionEstablished += new EventHandler<WampSessionCreatedEventArgs>(onConnectionEstablished);
-
 			if (onConnectionBroken != null)
 				wampChannel.RealmProxy.Monitor.ConnectionBroken += new EventHandler<WampSessionCloseEventArgs>(onConnectionBroken);
-
 			if (onConnectionError != null)
 				wampChannel.RealmProxy.Monitor.ConnectionError += new EventHandler<WampConnectionErrorEventArgs>(onConnectionError);
-
-			// open the channel
 			await wampChannel.Open().WithCancellationToken(cancellationToken).ConfigureAwait(false);
-			
 			return wampChannel;
 		}
 
@@ -148,7 +142,6 @@ namespace net.vieapps.Services
 					tracker?.Invoke($"{(string.IsNullOrWhiteSpace(prefix) ? "" : $"[{prefix}] => ")}Canceled", ex is OperationCanceledException ? null : ex);
 					return;
 				}
-
 				try
 				{
 					tracker?.Invoke($"{(string.IsNullOrWhiteSpace(prefix) ? "" : $"[{prefix}] => ")}Reconnecting", null);

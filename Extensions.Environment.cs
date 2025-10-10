@@ -318,8 +318,8 @@ namespace net.vieapps.Services
 		/// <param name="interceptor">An object which allows registration customization.</param>
 		/// <returns>A task that is completed when all methods are registered - its result is a
 		/// <see cref="IAsyncDisposable"/>- disposing it will unregister the instance.</returns>
-		public static Task<IAsyncDisposable> RegisterAsync<T>(this IWampChannel channel, Func<T> instanceProvider, ICalleeRegistrationInterceptor interceptor) where T : class
-			=> channel == null ? Task.FromResult<IAsyncDisposable>(null) : channel.RealmProxy.Services.RegisterCallee(instanceProvider, interceptor);
+		public static Task<IAsyncDisposable> RegisterAsync<T>(this IWampChannel wampChannel, Func<T> instanceProvider, ICalleeRegistrationInterceptor interceptor) where T : class
+			=> wampChannel == null ? Task.FromResult<IAsyncDisposable>(null) : wampChannel.RealmProxy.Services.RegisterCallee(instanceProvider, interceptor);
 
 		/// <summary>
 		/// Gets a service from a WAMP channel.
@@ -327,78 +327,78 @@ namespace net.vieapps.Services
 		/// <param name="interceptor">An object which allows call customization.</param>
 		/// <typeparam name="T"></typeparam>
 		/// <returns>The proxy to the callee.</returns>
-		public static T GetService<T>(this IWampChannel channel, ICalleeProxyInterceptor interceptor) where T : class
-			=> channel?.RealmProxy.Services.GetCalleeProxy<T>(interceptor);
+		public static T GetService<T>(this IWampChannel wampChannel, ICalleeProxyInterceptor interceptor) where T : class
+			=> wampChannel?.RealmProxy.Services.GetCalleeProxy<T>(interceptor);
 
 		/// <summary>
 		/// Subscribes an element handler to a WAMP channel's topic.
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
-		/// <param name="channel">The WAMP channel for subscribing.</param>
+		/// <param name="wampChannel">The WAMP channel for subscribing.</param>
 		/// <param name="topicURI">URI of a topic.</param>
 		/// <param name="onNext">Action to invoke for each element in the observable sequence.</param>
 		/// <param name="delay">The times (miliseconds) for delaying.</param>
 		/// <param name="throttle">The times (miliseconds) for throttling.</param>
 		/// <returns><see cref="IDisposable"/> object used to unsubscribe from the observable sequence.</returns>
-		/// <exception cref="ArgumentNullException"><paramref name="channel"/> or <paramref name="onNext"/> is <c>null</c>.</exception>
-		public static IDisposable Subscribe<T>(this IWampChannel channel, string topicURI, Action<T> onNext, int delay = 0, int throttle = 0)
-			=> channel?.RealmProxy.Services.GetSubject<T>(topicURI).Subscribe(onNext, delay, throttle);
+		/// <exception cref="ArgumentNullException"><paramref name="wampChannel"/> or <paramref name="onNext"/> is <c>null</c>.</exception>
+		public static IDisposable Subscribe<T>(this IWampChannel wampChannel, string topicURI, Action<T> onNext, int delay = 0, int throttle = 0)
+			=> wampChannel?.RealmProxy.Services.GetSubject<T>(topicURI).Subscribe(onNext, delay, throttle);
 
 		/// <summary>
 		/// Subscribes an element handler to a WAMP channel's topic.
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
-		/// <param name="channel">The WAMP channel for subscribing.</param>
+		/// <param name="wampChannel">The WAMP channel for subscribing.</param>
 		/// <param name="topicURI">URI of a topic.</param>
 		/// <param name="onNext">Action to invoke for each element in the observable sequence.</param>
 		/// <param name="delay">The times (miliseconds) for delaying.</param>
 		/// <param name="throttle">The times (miliseconds) for throttling.</param>
 		/// <returns><see cref="IDisposable"/> object used to unsubscribe from the observable sequence.</returns>
-		/// <exception cref="ArgumentNullException"><paramref name="channel"/> or <paramref name="onNext"/> or <paramref name="onError"/> is <c>null</c>.</exception>
-		public static IDisposable Subscribe<T>(this IWampChannel channel, string topicURI, Action<T> onNext, Action<Exception> onError, int delay = 0, int throttle = 0)
-			=> channel?.RealmProxy.Services.GetSubject<T>(topicURI).Subscribe(onNext, onError, delay, throttle);
+		/// <exception cref="ArgumentNullException"><paramref name="wampChannel"/> or <paramref name="onNext"/> or <paramref name="onError"/> is <c>null</c>.</exception>
+		public static IDisposable Subscribe<T>(this IWampChannel wampChannel, string topicURI, Action<T> onNext, Action<Exception> onError, int delay = 0, int throttle = 0)
+			=> wampChannel?.RealmProxy.Services.GetSubject<T>(topicURI).Subscribe(onNext, onError, delay, throttle);
 
 		/// <summary>
 		/// Subscribes an element handler to a WAMP channel's topic.
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
-		/// <param name="channel">The WAMP channel for subscribing.</param>
+		/// <param name="wampChannel">The WAMP channel for subscribing.</param>
 		/// <param name="topicURI">URI of a topic.</param>
 		/// <param name="onNext">Action to invoke for each element in the observable sequence.</param>
 		/// <param name="delay">The times (miliseconds) for delaying.</param>
 		/// <param name="throttle">The times (miliseconds) for throttling.</param>
 		/// <returns><see cref="IDisposable"/> object used to unsubscribe from the observable sequence.</returns>
-		/// <exception cref="ArgumentNullException"><paramref name="channel"/> or <paramref name="onNext"/> is <c>null</c>.</exception>
-		public static IDisposable Subscribe<T>(this IWampChannel channel, string topicURI, Func<T, Task> onNext, int delay = 0, int throttle = 0)
-			=> channel?.RealmProxy.Services.GetSubject<T>(topicURI).Subscribe(onNext, delay, throttle);
+		/// <exception cref="ArgumentNullException"><paramref name="wampChannel"/> or <paramref name="onNext"/> is <c>null</c>.</exception>
+		public static IDisposable Subscribe<T>(this IWampChannel wampChannel, string topicURI, Func<T, Task> onNext, int delay = 0, int throttle = 0)
+			=> wampChannel?.RealmProxy.Services.GetSubject<T>(topicURI).Subscribe(onNext, delay, throttle);
 
 		/// <summary>
 		/// Subscribes an element handler to a WAMP channel's topic.
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
-		/// <param name="channel">The WAMP channel for subscribing.</param>
+		/// <param name="wampChannel">The WAMP channel for subscribing.</param>
 		/// <param name="topicURI">URI of a topic.</param>
 		/// <param name="onNext">Action to invoke for each element in the observable sequence.</param>
 		/// <param name="delay">The times (miliseconds) for delaying.</param>
 		/// <param name="throttle">The times (miliseconds) for throttling.</param>
 		/// <returns><see cref="IDisposable"/> object used to unsubscribe from the observable sequence.</returns>
-		/// <exception cref="ArgumentNullException"><paramref name="channel"/> or <paramref name="onNext"/> or <paramref name="onError"/> is <c>null</c>.</exception>
-		public static IDisposable Subscribe<T>(this IWampChannel channel, string topicURI, Func<T, Task> onNext, Action<Exception> onError, int delay = 0, int throttle = 0)
-			=> channel?.RealmProxy.Services.GetSubject<T>(topicURI).Subscribe(onNext, onError, delay, throttle);
+		/// <exception cref="ArgumentNullException"><paramref name="wampChannel"/> or <paramref name="onNext"/> or <paramref name="onError"/> is <c>null</c>.</exception>
+		public static IDisposable Subscribe<T>(this IWampChannel wampChannel, string topicURI, Func<T, Task> onNext, Action<Exception> onError, int delay = 0, int throttle = 0)
+			=> wampChannel?.RealmProxy.Services.GetSubject<T>(topicURI).Subscribe(onNext, onError, delay, throttle);
 
 		/// <summary>
 		/// Subscribes an element handler to a WAMP channel's topic.
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
-		/// <param name="channel">The WAMP channel for subscribing.</param>
+		/// <param name="wampChannel">The WAMP channel for subscribing.</param>
 		/// <param name="topicURI">URI of a topic.</param>
 		/// <param name="onNext">Action to invoke for each element in the observable sequence.</param>
 		/// <param name="delay">The times (miliseconds) for delaying.</param>
 		/// <param name="throttle">The times (miliseconds) for throttling.</param>
 		/// <returns><see cref="IDisposable"/> object used to unsubscribe from the observable sequence.</returns>
-		/// <exception cref="ArgumentNullException"><paramref name="channel"/> or <paramref name="onNext"/> or <paramref name="onError"/> is <c>null</c>.</exception>
-		public static IDisposable Subscribe<T>(this IWampChannel channel, string topicURI, Func<T, Task> onNext, Func<Exception, Task> onError, int delay = 0, int throttle = 0)
-			=> channel?.RealmProxy.Services.GetSubject<T>(topicURI).Subscribe(onNext, onError, delay, throttle);
+		/// <exception cref="ArgumentNullException"><paramref name="wampChannel"/> or <paramref name="onNext"/> or <paramref name="onError"/> is <c>null</c>.</exception>
+		public static IDisposable Subscribe<T>(this IWampChannel wampChannel, string topicURI, Func<T, Task> onNext, Func<Exception, Task> onError, int delay = 0, int throttle = 0)
+			=> wampChannel?.RealmProxy.Services.GetSubject<T>(topicURI).Subscribe(onNext, onError, delay, throttle);
 		#endregion
 
 	}
