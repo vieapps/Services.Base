@@ -30,7 +30,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken"></param>
 		/// <param name="logger"></param>
 		/// <returns></returns>
-		public static async Task WriteLogsAsync(this ConcurrentQueue<((DateTime Time, string CorrelationID, string DeveloperID, string AppID, string NodeID, string ServiceName, string ObjectName) Info, List<string> Logs, string Stack)> logs, CancellationToken cancellationToken = default, ILogger logger = null)
+		public static async Task WriteLogsAsync(this ConcurrentQueue<((DateTime Time, string CorrelationID, string DeveloperID, string AppID, string NodeID, string ServiceName, string ObjectName) Info, List<string> Logs, string Stack)> logs, ILogger logger = null, CancellationToken cancellationToken = default)
 		{
 			if (!Extensions.Writting)
 				try

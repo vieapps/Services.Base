@@ -27,27 +27,27 @@ namespace net.vieapps.Services
 
 		#region Properties
 		/// <summary>
-		/// Gets the incoming channel of the API Gateway Router
+		/// Gets the API Gateway incoming channel
 		/// </summary>
 		public static IWampChannel IncomingChannel { get; internal set; }
 
 		/// <summary>
-		/// Gets the session's identity of the incoming channel of the API Gateway Router
+		/// Gets the session's identity of the API Gateway incoming channel
 		/// </summary>
 		public static long IncomingChannelSessionID { get; internal set; } = 0;
 
 		/// <summary>
-		/// Gets the outgoing channel of the API Gateway Router
+		/// Gets the API Gateway outgoing channel
 		/// </summary>
 		public static IWampChannel OutgoingChannel { get; internal set; }
 
 		/// <summary>
-		/// Gets the session's identity of the outgoing channel of the API Gateway Router
+		/// Gets the session's identity of the API Gateway outgoing channel
 		/// </summary>
 		public static long OutgoingChannelSessionID { get; internal set; } = 0;
 
 		/// <summary>
-		/// Gets the state that determines that the API Gateway Router channels are closed by the system
+		/// Gets the state that determines that the API Gateways' channels are closed by the system
 		/// </summary>
 		public static bool ChannelsAreClosedBySystem { get; internal set; } = false;
 
@@ -117,7 +117,9 @@ namespace net.vieapps.Services
 		)
 		{
 			var (address, realm, useJsonChannel) = Router.GetRouterInfo();
-			var wampChannel = useJsonChannel ? new DefaultWampChannelFactory().CreateJsonChannel(address, realm) : new DefaultWampChannelFactory().CreateMsgpackChannel(address, realm);
+			var wampChannel = useJsonChannel
+				? new DefaultWampChannelFactory().CreateJsonChannel(address, realm)
+				: new DefaultWampChannelFactory().CreateMsgpackChannel(address, realm);
 			return wampChannel.OpenAsync(cancellationToken, onConnectionEstablished, onConnectionBroken, onConnectionError);
 		}
 

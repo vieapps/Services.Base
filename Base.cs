@@ -410,7 +410,7 @@ namespace net.vieapps.Services
 
 			// update queue & write to centerlized logs
 			this.Logs.Enqueue(((DateTime.Now, correlationID, developerID, appID, this.NodeID ?? Extensions.GetNodeID(), serviceName ?? this.ServiceName ?? "APIGateway", objectName), logs, exception?.GetStack(false)));
-			return this.Logs.WriteLogsAsync(this.CancellationToken, this.Logger);
+			return this.Logs.WriteLogsAsync(this.Logger);
 		}
 
 		/// <summary>
@@ -2098,101 +2098,107 @@ namespace net.vieapps.Services
 		)
 		{
 			this.PrepareNodeID(args);
-			this.Logger?.LogInformation($"Attempting to connect to API Gateway Router [{new Uri(Router.GetRouterStrInfo()).GetResolvedURI()}]");
+			this.WriteLogs(UtilityService.NewUUID, $"Attempting to connect to API Gateway Router [{new Uri(Router.GetRouterStrInfo()).GetResolvedURI()}]");
 			return Router.ConnectAsync
 			(
 				(sender, arguments) =>
 				{
+					var correlationID = UtilityService.NewUUID;
 					try
 					{
-						Router.IncomingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Incoming ({this.ServiceURI})", this.Logger).Run();
-						this.Logger?.LogInformation($"The incoming channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
+						Router.IncomingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Incoming (URI: {this.ServiceURI} - NodeID: {this.NodeID})", this.Logger).Run();
+						this.WriteLogs(correlationID, $"The API Gateway incoming channel was established - Session ID: {arguments.SessionId}");
 						if (this.State == ServiceState.Initializing)
 							this.State = ServiceState.Ready;
 						onIncomingConnectionEstablished?.Invoke(sender, arguments);
 					}
 					catch (Exception ex)
 					{
-						this.Logger?.LogError($"IncomingEstablished => {ex.Message}", ex);
+						this.WriteLogs(correlationID, $"Error occurred while preparing when the incoming connection was established => {ex.Message}", ex);
 					}
 				},
 				(sender, arguments) =>
 				{
+					var correlationID = UtilityService.NewUUID;
 					try
 					{
 						if (this.State == ServiceState.Connected)
 							this.State = ServiceState.Disconnected;
 						if (Router.ChannelsAreClosedBySystem || (arguments.CloseType.Equals(SessionCloseType.Goodbye) && "wamp.close.normal".IsEquals(arguments.Reason)))
-							this.Logger?.LogDebug($"The incoming channel to API Gateway Router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+							this.WriteLogs(correlationID, $"The API Gateway incoming channel was closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
 						else if (Router.IncomingChannel != null)
 						{
-							this.Logger?.LogDebug($"The incoming channel to API Gateway Router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+							this.WriteLogs(correlationID, $"The API Gateway incoming channel was broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
 							Router.IncomingChannel.ReOpen(this.CancellationToken, (msg, ex) => this.Logger?.LogDebug(msg, ex), "Incoming");
 						}
 						onIncomingConnectionBroken?.Invoke(sender, arguments);
 					}
 					catch (Exception ex)
 					{
-						this.Logger?.LogError($"IncomingBroken => {ex.Message}", ex);
+						this.WriteLogs(correlationID, $"Error occurred while preparing when the incoming connection was broken => {ex.Message}", ex);
 					}
 				},
 				(sender, arguments) =>
 				{
+					var correlationID = UtilityService.NewUUID;
 					try
 					{
-						this.Logger?.LogError($"Got an unexpected error of the incoming channel to API Gateway Router => {arguments.Exception.Message}", arguments.Exception);
+						this.WriteLogs(correlationID, $"Got an unexpected error of the API Gateway incoming channel => {arguments.Exception.Message}", arguments.Exception);
 						onIncomingConnectionError?.Invoke(sender, arguments);
 					}
 					catch (Exception ex)
 					{
-						this.Logger?.LogError($"IncomingError => {ex.Message}", ex);
+						this.WriteLogs(correlationID, $"Error occurred while processing an exception when the incoming connection was got an unexpected error => {ex.Message}", ex);
 					}
 				},
 				(sender, arguments) =>
 				{
+					var correlationID = UtilityService.NewUUID;
 					try
 					{
-						Router.OutgoingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Outgoing ({this.ServiceURI})", this.Logger).Run();
-						this.Logger?.LogInformation($"The outgoing channel to API Gateway Router is established - Session ID: {arguments.SessionId}");
+						Router.OutgoingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Outgoing (URI: {this.ServiceURI} - NodeID: {this.NodeID})", this.Logger).Run();
+						this.WriteLogs(correlationID, $"The API Gateway outgoing channel was established - Session ID: {arguments.SessionId}");
 						onOutgoingConnectionEstablished?.Invoke(sender, arguments);
 					}
 					catch (Exception ex)
 					{
-						this.Logger?.LogError($"OutgoingEstablished => {ex.Message}", ex);
+						this.WriteLogs(correlationID, $"Error occurred while preparing when the outgoing connection was established => {ex.Message}", ex);
 					}
 				},
 				(sender, arguments) =>
 				{
+					var correlationID = UtilityService.NewUUID;
 					try
 					{
 						if (Router.ChannelsAreClosedBySystem || (arguments.CloseType.Equals(SessionCloseType.Goodbye) && "wamp.close.normal".IsEquals(arguments.Reason)))
-							this.Logger?.LogDebug($"The outgoing channel to API Gateway Router is closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+							this.Logger?.LogDebug($"The API Gateway outgoing channel was closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
 						else if (Router.OutgoingChannel != null)
 						{
-							this.Logger?.LogDebug($"The outgoing channel to API Gateway Router is broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+							this.Logger?.LogDebug($"The API Gateway outgoing channel was broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
 							Router.OutgoingChannel.ReOpen(this.CancellationToken, (msg, ex) => this.Logger?.LogDebug(msg, ex), "Outgoing");
 						}
 						onOutgoingConnectionBroken?.Invoke(sender, arguments);
 					}
 					catch (Exception ex)
 					{
-						this.Logger?.LogError($"OutgoingBroken => {ex.Message}", ex);
+						this.WriteLogs(correlationID, $"Error occurred while preparing when the outgoing connection was broken => {ex.Message}", ex);
 					}
 				},
 				(sender, arguments) =>
 				{
+					var correlationID = UtilityService.NewUUID;
 					try
 					{
-						this.Logger?.LogError($"Got an unexpected error of the outgoing channel to API Gateway Router => {arguments.Exception.Message}", arguments.Exception);
+						this.WriteLogs(correlationID, $"Got an unexpected error of the API Gateway outgoing channel => {arguments.Exception.Message}", arguments.Exception);
 						onOutgoingConnectionError?.Invoke(sender, arguments);
 					}
 					catch (Exception ex)
 					{
-						this.Logger?.LogError($"OutgoingError => {ex.Message}", ex);
+						this.WriteLogs(correlationID, $"Error occurred while processing an exception when the outgoing connection was got an unexpected error => {ex.Message}", ex);
 					}
 				},
 				this.CancellationToken,
-				exception => this.Logger?.LogError($"Error occurred while connecting to API Gateway Router => {exception.Message}", exception)
+				exception => this.WriteLogs(UtilityService.NewUUID, $"Error occurred while connecting to API Gateway Router => {exception.Message}", exception)
 			);
 		}
 
@@ -2203,9 +2209,7 @@ namespace net.vieapps.Services
 		{
 			try
 			{
-				if (this.IsDebugLogEnabled)
-					this.Logger?.LogDebug("Initializing the repository");
-
+				this.WriteLogs(UtilityService.NewUUID, "Initializing the repository");
 				RepositoryStarter.Initialize
 				(
 					new[] { this.GetType().Assembly }.Concat(this.GetType().Assembly.GetReferencedAssemblies()
@@ -2240,7 +2244,7 @@ namespace net.vieapps.Services
 			}
 			catch (Exception ex)
 			{
-				this.Logger?.LogError($"Error occurred while initializing the repository => {ex.Message}", ex);
+				this.WriteLogs(UtilityService.NewUUID, $"Error occurred while initializing the repository => {ex.Message}", ex);
 			}
 		}
 		#endregion
@@ -2255,6 +2259,7 @@ namespace net.vieapps.Services
 				this.ServiceSyncInstance = await Router.IncomingChannel.RegisterAsync<ISyncableService>(() => this, RegistrationInterceptor.Create(this.ServiceName)).ConfigureAwait(false);
 			}
 
+			var correlationID = UtilityService.NewUUID;
 			this.PrepareNodeID(args);
 
 			try
@@ -2275,38 +2280,42 @@ namespace net.vieapps.Services
 						throw;
 					}
 				}
-				this.Logger?.LogInformation($"The service was{(this.State == ServiceState.Disconnected ? " re-" : " ")}registered successful");
+				this.WriteLogs(correlationID, $"The service was{(this.State == ServiceState.Disconnected ? " re-" : " ")}registered successful");
 
 				this.ServiceCommunicator?.Dispose();
-				this.ServiceCommunicator = Router.IncomingChannel.Subscribe<CommunicateMessage>(
+				this.ServiceCommunicator = Router.IncomingChannel.Subscribe<CommunicateMessage>
+				(
 					$"messages.services.{this.ServiceName.Trim().ToLower()}",
 					message => this.NodeID.IsEquals(message.ExcludedNodeID) ? Task.CompletedTask : this.ProcessInterCommunicateMessageAsync(message, this.CancellationToken),
-					exception => this.WriteLogsAsync(UtilityService.NewUUID, this.Logger, $"Error occurred while processing an inter-communicate message => {exception.Message}", exception, this.ServiceName, "Errors", LogLevel.Error)
+					exception => this.WriteLogsAsync(UtilityService.NewUUID, this.Logger, $"Error occurred while processing an inter-communicate message of {this.ServiceName} service => {exception.Message}", exception, this.ServiceName, "Errors", LogLevel.Error)
 				);
 
 				this.GatewayCommunicator?.Dispose();
-				this.GatewayCommunicator = Router.IncomingChannel.Subscribe<CommunicateMessage>(
+				this.GatewayCommunicator = Router.IncomingChannel.Subscribe<CommunicateMessage>
+				(
 					"messages.services.apigateway",
 					message => this.NodeID.IsEquals(message.ExcludedNodeID) ? Task.CompletedTask : this.ProcessGatewayCommunicateMessageAsync(message, this.CancellationToken),
-					exception => this.WriteLogsAsync(UtilityService.NewUUID, this.Logger, $"Error occurred while processing an inter-communicate message of API Gateway => {exception.Message}", exception, this.ServiceName, "Errors", LogLevel.Error)
+					exception => this.WriteLogsAsync(UtilityService.NewUUID, this.Logger, $"Error occurred while processing an inter-communicate message of {this.ServiceName} service to API Gateway => {exception.Message}", exception, this.ServiceName, "Errors", LogLevel.Error)
 				);
 
-				this.Logger?.LogInformation($"The inter-communicate message updater was{(this.State == ServiceState.Disconnected ? " re-" : " ")}subscribed successful");
+				this.WriteLogs(correlationID, $"The inter-communicate message updater was{(this.State == ServiceState.Disconnected ? " re-" : " ")}subscribed successful");
 				if (this.State == ServiceState.Disconnected)
-					this.Logger?.LogInformation("The service was re-started successful");
+					this.WriteLogs(correlationID, "The service was re-started successful");
 				this.State = ServiceState.Connected;
 
 				onSuccess?.Invoke(this);
 			}
 			catch (Exception ex)
 			{
-				this.Logger?.LogError($"Cannot{(this.State == ServiceState.Disconnected ? " re-" : " ")}register the service => {ex.Message}", ex);
+				this.WriteLogs(correlationID, $"Cannot{(this.State == ServiceState.Disconnected ? " re-" : " ")}register the service => {ex.Message}", ex);
 				onError?.Invoke(ex);
 			}
 		}
 
 		public virtual async Task UnregisterServiceAsync(IEnumerable<string> args, bool available = true, Action<IService> onSuccess = null, Action<Exception> onError = null)
 		{
+			var correlationID = UtilityService.NewUUID;
+
 			// send information to API Gateway
 			if (this.ServiceInstance != null)
 				try
@@ -2315,7 +2324,7 @@ namespace net.vieapps.Services
 				}
 				catch (Exception ex)
 				{
-					this.Logger?.LogError($"Error occurred while sending info to API Gateway => {ex.Message}", ex);
+					this.WriteLogs(correlationID, $"Error occurred while sending info to API Gateway => {ex.Message}", ex);
 					onError?.Invoke(ex);
 				}
 
@@ -2326,7 +2335,7 @@ namespace net.vieapps.Services
 			}
 			catch (Exception ex)
 			{
-				this.Logger?.LogError($"Error occurred while firing cancellation token => {ex.Message}", ex);
+				this.WriteLogs(correlationID, $"Error occurred while firing cancellation token => {ex.Message}", ex);
 				onError?.Invoke(ex);
 			}
 
@@ -2338,7 +2347,7 @@ namespace net.vieapps.Services
 			}
 			catch (Exception ex)
 			{
-				this.Logger?.LogError($"Error occurred while disposing the services' communicators => {ex.Message}", ex);
+				this.WriteLogs(correlationID, $"Error occurred while disposing the services' communicators => {ex.Message}", ex);
 				onError?.Invoke(ex);
 			}
 
@@ -2351,10 +2360,10 @@ namespace net.vieapps.Services
 			catch (Exception ex)
 			{
 				if (ex is WampException && ex.Message.IsContains("wamp.error.no_such_registration"))
-					this.Logger?.LogError($"Error occurred while disposing the service's instance because no service is registered => {ex.Message}", ex);
+					this.WriteLogs(correlationID, $"Error occurred while disposing the service's instance because no service is registered => {ex.Message}", ex);
 				else
 				{
-					this.Logger?.LogError($"Error occurred while disposing the service's instance => {ex.Message}", ex);
+					this.WriteLogs(correlationID, $"Error occurred while disposing the service's instance => {ex.Message}", ex);
 					onError?.Invoke(ex);
 				}
 			}
@@ -2371,10 +2380,10 @@ namespace net.vieapps.Services
 			catch (Exception ex)
 			{
 				if (ex is WampException && ex.Message.IsContains("wamp.error.no_such_registration"))
-					this.Logger?.LogError($"Error occurred while disposing the unique service's instance because no service is registered => {ex.Message}", ex);
+					this.WriteLogs(correlationID, $"Error occurred while disposing the unique service's instance because no service is registered => {ex.Message}", ex);
 				else
 				{
-					this.Logger?.LogError($"Error occurred while disposing the unique service's instance => {ex.Message}", ex);
+					this.WriteLogs(correlationID, $"Error occurred while disposing the unique service's instance => {ex.Message}", ex);
 					onError?.Invoke(ex);
 				}
 			}
@@ -2391,10 +2400,10 @@ namespace net.vieapps.Services
 			catch (Exception ex)
 			{
 				if (ex is WampException && ex.Message.IsContains("wamp.error.no_such_registration"))
-					this.Logger?.LogError($"Error occurred while disposing the sync service's instance because no service is registered => {ex.Message}", ex);
+					this.WriteLogs(correlationID, $"Error occurred while disposing the sync service's instance because no service is registered => {ex.Message}", ex);
 				else
 				{
-					this.Logger?.LogError($"Error occurred while disposing the sync service's instance => {ex.Message}", ex);
+					this.WriteLogs(correlationID, $"Error occurred while disposing the sync service's instance => {ex.Message}", ex);
 					onError?.Invoke(ex);
 				}
 			}
@@ -2414,15 +2423,16 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		protected virtual Task InitializeHelperServicesAsync(Action<IService> onSuccess = null, Action<Exception> onError = null)
 		{
+			var correlationID = UtilityService.NewUUID;
 			try
 			{
 				this.MessagingService = Router.OutgoingChannel.GetService<IMessagingService>(ProxyInterceptor.Create());
-				this.Logger?.LogDebug($"The helper services are{(this.State == ServiceState.Disconnected ? " re-" : " ")}initialized");
+				this.WriteLogs(correlationID, $"The helper services are{(this.State == ServiceState.Disconnected ? " re-" : " ")}initialized");
 				onSuccess?.Invoke(this);
 			}
 			catch (Exception ex)
 			{
-				this.Logger?.LogError($"Error occurred while{(this.State == ServiceState.Disconnected ? " re-" : " ")}initializing the helper services", ex);
+				this.WriteLogs(correlationID, $"Error occurred while{(this.State == ServiceState.Disconnected ? " re-" : " ")}initializing the helper services", ex);
 				onError?.Invoke(ex);
 			}
 			return Task.CompletedTask;
@@ -2459,18 +2469,8 @@ namespace net.vieapps.Services
 				args,
 				async (sender, arguments) =>
 				{
-					// register the service
 					await this.RegisterServiceAsync(args, onRegisterSuccess, onRegisterError).ConfigureAwait(false);
-
-					// handling the established event
-					try
-					{
-						onIncomingConnectionEstablished?.Invoke(sender, arguments);
-					}
-					catch (Exception ex)
-					{
-						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onIncomingConnectionEstablished)}\" => {ex.Message}", ex);
-					}
+					onIncomingConnectionEstablished?.Invoke(sender, arguments);
 				},
 				onIncomingConnectionBroken,
 				onIncomingConnectionError,
@@ -2491,7 +2491,7 @@ namespace net.vieapps.Services
 							}
 							catch (Exception ex)
 							{
-								this.Logger?.LogError($"Error occurred while sending a sync request to API Gateway => {ex.Message}", ex);
+								await this.WriteLogsAsync(UtilityService.NewUUID, $"Error occurred while sending a sync request to API Gateway => {ex.Message}", ex).ConfigureAwait(false);
 							}
 						}, (Int32.TryParse(UtilityService.GetAppSetting("TimerInterval:Sync", "7"), out var syncInterval) && syncInterval > 0 ? syncInterval : 7) * 60);
 
@@ -2502,18 +2502,11 @@ namespace net.vieapps.Services
 					}
 					catch (Exception ex)
 					{
-						this.Logger?.LogError($"Error occurred while sending info to API Gateway => {ex.Message}", ex);
+						this.WriteLogs(UtilityService.NewUUID, $"Error occurred while sending info to API Gateway => {ex.Message}", ex);
 					}
 
 					// handling the established event
-					try
-					{
-						onOutgoingConnectionEstablished?.Invoke(sender, arguments);
-					}
-					catch (Exception ex)
-					{
-						this.Logger?.LogError($"Error occurred while invoking \"{nameof(onOutgoingConnectionEstablished)}\" => {ex.Message}", ex);
-					}
+					onOutgoingConnectionEstablished?.Invoke(sender, arguments);
 				},
 				onOutgoingConnectionBroken,
 				onOutgoingConnectionError
@@ -2521,15 +2514,10 @@ namespace net.vieapps.Services
 
 		public virtual Task StartAsync(string[] args = null, bool initializeRepository = true, Action<IService> next = null)
 		{
-			// show privileges
 			if (this.IsDebugLogEnabled)
-				this.Logger?.LogDebug($"Default working privileges\r\n{this.Privileges?.ToJson()}");
-
-			// initialize repository
+				this.WriteLogs(UtilityService.NewUUID, $"Default working privileges\r\n{this.Privileges?.ToJson()}");
 			if (initializeRepository)
 				this.InitializeRepository();
-
-			// start the service (means register the service with API Gateway and do other actions)
 			return this.StartAsync(args, next);
 		}
 
@@ -2552,6 +2540,8 @@ namespace net.vieapps.Services
 		/// <param name="next">The next action to run when the service was stopped</param>
 		protected virtual async Task StopAsync(string[] args, bool available, bool disconnect, Action<IService> next = null)
 		{
+			var correlationID = UtilityService.NewUUID;
+
 			// stop the service
 			if (!this.Stopped)
 			{
@@ -2564,7 +2554,7 @@ namespace net.vieapps.Services
 				}
 				catch (Exception ex)
 				{
-					this.Logger?.LogDebug($"Error occurred while unregistering up the service => {ex.Message}", ex);
+					this.WriteLogs(correlationID, $"Error occurred while unregistering up the service => {ex.Message}", ex);
 				}
 
 				// clean up
@@ -2580,7 +2570,7 @@ namespace net.vieapps.Services
 				}
 				catch (Exception ex)
 				{
-					this.Logger?.LogDebug($"Error occurred while cleaning up the service => {ex.Message}", ex);
+					this.WriteLogs(correlationID, $"Error occurred while cleaning up the service => {ex.Message}", ex);
 				}
 
 				// disconnect from API Gateway Router
@@ -2590,11 +2580,11 @@ namespace net.vieapps.Services
 				}
 				catch (Exception ex)
 				{
-					this.Logger?.LogDebug($"Error occurred while disconnecting the service => {ex.Message}", ex);
+					this.WriteLogs(correlationID, $"Error occurred while disconnecting the service => {ex.Message}", ex);
 				}
 				finally
 				{
-					this.Logger?.LogDebug("The service was stopped");
+					this.WriteLogs(correlationID, "The service was stopped");
 				}
 			}
 
@@ -2605,7 +2595,7 @@ namespace net.vieapps.Services
 			}
 			catch (Exception ex)
 			{
-				this.Logger?.LogError($"Error occurred while invoking the next action when stop the service => {ex.Message}", ex);
+				this.WriteLogs(correlationID, $"Error occurred while invoking the next action when stop the service => {ex.Message}", ex);
 			}
 		}
 
@@ -2637,29 +2627,27 @@ namespace net.vieapps.Services
 			GC.SuppressFinalize(this);
 			return new ValueTask(this.Disposed ? Task.CompletedTask : this.StopAsync(args, available, disconnect, _ =>
 			{
-				// clean up
 				this.Disposed = true;
+				var correlationID = UtilityService.NewUUID;
 				try
 				{
 					this.CancellationTokenSource.Dispose();
 				}
 				catch (Exception ex)
 				{
-					this.Logger?.LogDebug($"Error occurred while disposing the service => {ex.Message}", ex);
+					this.WriteLogs(correlationID, $"Error occurred while disposing the service => {ex.Message}", ex);
 				}
 				finally
 				{
 					this.Logger?.LogDebug("The service was disposed");
 				}
-
-				// run the next action
 				try
 				{
 					next?.Invoke(this);
 				}
 				catch (Exception ex)
 				{
-					this.Logger?.LogError($"Error occurred while invoking the next action when dispose the service => {ex.Message}", ex);
+					this.WriteLogs(correlationID, $"Error occurred while invoking the next action when dispose the service => {ex.Message}", ex);
 				}
 			}));
 		}

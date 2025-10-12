@@ -793,7 +793,15 @@ namespace net.vieapps.Services
 			=> channel.Subscribe<CommunicateMessage>
 			(
 				$"messages.services.{serviceName.ToLower()}.cache",
-				message => !string.IsNullOrWhiteSpace(message.ExcludedNodeID) && message.ExcludedNodeID.IsEquals(nodeID) ? Task.CompletedTask : cache.ProcessL1CacheRequestAsync(message.Data.Get<string>("Key"), message.Data.Get<string>("Reason"))
+				async message =>
+				{
+					if (string.IsNullOrWhiteSpace(message.ExcludedNodeID) || !message.ExcludedNodeID.IsEquals(nodeID))
+						try
+						{
+							await cache.ProcessL1CacheRequestAsync(message.Data.Get<string>("Key"), message.Data.Get<string>("Reason")).ConfigureAwait(false);
+						}
+						catch { }
+				}
 			);
 
 		/// <summary>
