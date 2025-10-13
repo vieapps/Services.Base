@@ -136,6 +136,10 @@ namespace net.vieapps.Services
 
 		public string ServiceUniqueURI => $"services.{this.ServiceUniqueName}";
 
+		public string ServiceSyncName => $"{this.ServiceName}.sync";
+
+		public string ServiceSyncURI => $"services.{this.ServiceSyncName}";
+
 		/// <summary>
 		/// Gets or sets the single instance of current playing service component
 		/// </summary>
@@ -1834,17 +1838,26 @@ namespace net.vieapps.Services
 		/// Stops a timer (and remove from the collection)
 		/// </summary>
 		/// <param name="timer"></param>
-		protected virtual void StopTimer(IDisposable timer)
+		/// <param name="onDisposed"></param>
+		protected virtual void StopTimer(IDisposable timer, Action<IDisposable> onDisposed = null)
 		{
 			timer.Dispose();
 			this.Timers.Remove(timer);
+			onDisposed?.Invoke(timer);
 		}
 
 		/// <summary>
 		/// Stops all timers
 		/// </summary>
 		protected virtual void StopTimers()
-			=> this.Timers.ForEach(timer => timer.Dispose());
+			=> this.Timers.ForEach(timer =>
+			{
+				try
+				{
+					timer?.Dispose();
+				}
+				catch { }
+			});
 		#endregion
 
 		#region Caching keys & Runtime exceptions
@@ -1925,9 +1938,8 @@ namespace net.vieapps.Services
 			});
 		#endregion
 
-		#region Sync
 		/// <summary>
-		/// Builds the RequestInfo
+		/// Builds the request info
 		/// </summary>
 		/// <param name="sessionID"></param>
 		/// <returns></returns>
@@ -1939,6 +1951,7 @@ namespace net.vieapps.Services
 				ipAddresses = Dns.GetHostAddresses(Dns.GetHostName()).ToList();
 			}
 			catch { }
+			sessionID = sessionID ?? UtilityService.NewUUID;
 			var requestInfo = new RequestInfo
 			{
 				Session = new Session
@@ -1963,6 +1976,10 @@ namespace net.vieapps.Services
 			return requestInfo;
 		}
 
+		protected RequestInfo BuildRequestInfo(Action<RequestInfo> onCompleted = null)
+			=> this.BuildRequestInfo(null, null, null, null, onCompleted);
+
+		#region Sync
 		/// <summary>
 		/// Builds the RequestInfo to send a synchronize request
 		/// </summary>
@@ -2256,7 +2273,7 @@ namespace net.vieapps.Services
 			{
 				this.ServiceInstance = await Router.IncomingChannel.RegisterAsync<IService>(() => this, RegistrationInterceptor.Create(this.ServiceName)).ConfigureAwait(false);
 				this.ServiceUniqueInstance = await Router.IncomingChannel.RegisterAsync<IUniqueService>(() => this, RegistrationInterceptor.Create(this.ServiceUniqueName, WampInvokePolicy.Single)).ConfigureAwait(false);
-				this.ServiceSyncInstance = await Router.IncomingChannel.RegisterAsync<ISyncableService>(() => this, RegistrationInterceptor.Create(this.ServiceName)).ConfigureAwait(false);
+				this.ServiceSyncInstance = await Router.IncomingChannel.RegisterAsync<ISyncableService>(() => this, RegistrationInterceptor.Create(this.ServiceSyncName)).ConfigureAwait(false);
 			}
 
 			var correlationID = UtilityService.NewUUID;
@@ -2327,17 +2344,6 @@ namespace net.vieapps.Services
 					this.WriteLogs(correlationID, $"Error occurred while sending info to API Gateway => {ex.Message}", ex);
 					onError?.Invoke(ex);
 				}
-
-			// fire cancellation token
-			try
-			{
-				this.CancellationTokenSource.Cancel();
-			}
-			catch (Exception ex)
-			{
-				this.WriteLogs(correlationID, $"Error occurred while firing cancellation token => {ex.Message}", ex);
-				onError?.Invoke(ex);
-			}
 
 			// dispose all communicators
 			try
@@ -2557,21 +2563,23 @@ namespace net.vieapps.Services
 					this.WriteLogs(correlationID, $"Error occurred while unregistering up the service => {ex.Message}", ex);
 				}
 
-				// clean up
+				// stop all timers
 				try
 				{
 					this.StopTimers();
-					if (!this.Disposed)
-						try
-						{
-							this.CancellationTokenSource.Cancel();
-						}
-						catch { }
 				}
 				catch (Exception ex)
 				{
-					this.WriteLogs(correlationID, $"Error occurred while cleaning up the service => {ex.Message}", ex);
+					this.WriteLogs(correlationID, $"Error occurred while stopping all timers => {ex.Message}", ex);
 				}
+
+				// cancel all processes
+				if (!this.Disposed)
+					try
+					{
+						this.CancellationTokenSource.Cancel();
+					}
+					catch { }
 
 				// disconnect from API Gateway Router
 				try

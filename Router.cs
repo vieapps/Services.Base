@@ -572,7 +572,7 @@ namespace net.vieapps.Services
 
 			if (!Router.SyncableServices.TryGetValue(name, out var service))
 			{
-				service = Router.OutgoingChannel?.GetService<ISyncableService>(ProxyInterceptor.Create(name));
+				service = Router.OutgoingChannel?.GetService<ISyncableService>(ProxyInterceptor.Create($"{name}.sync"));
 				if (service != null)
 					Router.SyncableServices.TryAdd(name, service);
 			}

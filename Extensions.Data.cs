@@ -784,13 +784,13 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Assigns a hanlder to 'ProcessL1CacheRequestAsync' of a caching component
 		/// </summary>
-		/// <param name="channel"></param>
+		/// <param name="wampChannel"></param>
 		/// <param name="cache"></param>
 		/// <param name="serviceName"></param>
 		/// <param name="nodeID"></param>
 		/// <returns></returns>
-		public static IDisposable AssignProcessL1CacheRequest(this WampSharp.V2.IWampChannel channel, Cache cache, string serviceName, string nodeID = null)
-			=> channel.Subscribe<CommunicateMessage>
+		public static IDisposable AssignProcessL1CacheRequest(this WampSharp.V2.IWampChannel wampChannel, Cache cache, string serviceName, string nodeID = null)
+			=> wampChannel.Subscribe<CommunicateMessage>
 			(
 				$"messages.services.{serviceName.ToLower()}.cache",
 				async message =>
