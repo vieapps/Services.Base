@@ -68,7 +68,7 @@ namespace net.vieapps.Services
 			JObject innerJson = null;
 
 			// unavailable
-			if (wampException.ErrorUri.Equals("wamp.error.no_such_procedure") || wampException.ErrorUri.Equals("wamp.error.no_such_registration") || wampException.ErrorUri.Equals("wamp.error.callee_unregistered"))
+			if (wampException.ErrorUri.Equals(WampErrors.NoSuchProcedure) || wampException.ErrorUri.Equals(WampErrors.NoSuchRegistration) || wampException.ErrorUri.Equals(WampErrors.CalleeUnregistered))
 			{
 				if (wampException.Arguments != null && wampException.Arguments.Length > 0 && wampException.Arguments[0] != null && wampException.Arguments[0] is JValue msg)
 				{
@@ -85,7 +85,7 @@ namespace net.vieapps.Services
 			}
 
 			// cannot serialize
-			else if (wampException.ErrorUri.Equals("wamp.error.invalid_argument"))
+			else if (wampException.ErrorUri.Equals(WampErrors.InvalidArgument))
 			{
 				message = "Cannot serialize or deserialize one of arguments, all arguments must be instance of a serializable class - interfaces are not be deserialized";
 				if (wampException.Arguments != null && wampException.Arguments.Length > 0 && wampException.Arguments[0] != null && wampException.Arguments[0] is JValue msg)
@@ -118,8 +118,7 @@ namespace net.vieapps.Services
 						{
 							var infoVal = info.Value != null && info.Value is JValue jval ? jval : null;
 							if (infoVal != null && infoVal.Value != null)
-								stack += (stack.Equals("") ? "" : "\r\n" + $"----- Inner ({info.Key}) --------------------" + "\r\n")
-									+ infoVal.Value.ToString();
+								stack += (stack.Equals("") ? "" : "\r\n" + $"----- Inner ({info.Key}) --------------------" + "\r\n")	+ infoVal.Value.ToString();
 						}
 					else if (infoValue != null)
 						stack = wampException.StackTrace;
@@ -140,11 +139,19 @@ namespace net.vieapps.Services
 				}
 			}
 
-			// unknown
+			// all others
 			else
 			{
-				message = wampException.Message;
-				type = wampException.GetTypeName(true);
+				if (wampException.ErrorUri.Equals(WampErrors.Canceled))
+				{
+					message = "Operation Canceled";
+					type = "OperationCanceledException";
+				}
+				else
+				{
+					message = wampException.Message;
+					type = wampException.GetTypeName(true);
+				}
 				stack = wampException.StackTrace;
 			}
 
