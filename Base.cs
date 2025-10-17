@@ -413,7 +413,7 @@ namespace net.vieapps.Services
 			}
 
 			// update queue & write to centerlized logs
-			this.Logs.Enqueue(((DateTime.Now, correlationID, developerID, appID, this.NodeID ?? Extensions.GetNodeID(), serviceName ?? this.ServiceName ?? "APIGateway", objectName), logs, exception?.GetStack(false)));
+			this.Logs.Enqueue(((DateTime.Now, correlationID, developerID, appID, this.NodeID ?? Extensions.GetNodeID(), serviceName ?? this.ServiceName ?? "APIGateway", objectName ?? ""), logs, exception?.GetStack(false)));
 			return this.Logs.WriteLogsAsync(this.Logger);
 		}
 
@@ -1938,10 +1938,15 @@ namespace net.vieapps.Services
 			});
 		#endregion
 
+		#region Builds the request info
 		/// <summary>
 		/// Builds the request info
 		/// </summary>
 		/// <param name="sessionID"></param>
+		/// <param name="deviceID"></param>
+		/// <param name="appName"></param>
+		/// <param name="appAgent"></param>
+		/// <param name="onCompleted"></param>
 		/// <returns></returns>
 		protected RequestInfo BuildRequestInfo(string sessionID, string deviceID = null, string appName = null, string appAgent = null, Action<RequestInfo> onCompleted = null)
 		{
@@ -1976,8 +1981,14 @@ namespace net.vieapps.Services
 			return requestInfo;
 		}
 
+		/// <summary>
+		/// Builds the request info
+		/// </summary>
+		/// <param name="onCompleted"></param>
+		/// <returns></returns>
 		protected RequestInfo BuildRequestInfo(Action<RequestInfo> onCompleted = null)
 			=> this.BuildRequestInfo(null, null, null, null, onCompleted);
+		#endregion
 
 		#region Sync
 		/// <summary>

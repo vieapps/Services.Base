@@ -52,7 +52,7 @@ namespace net.vieapps.Services
 								{ "ObjectName", log.Info.ObjectName },
 								{ "Logs", log.Logs?.Join("\r\n") ?? "" },
 								{ "Stack", log.Stack }
-							}.ToString(Formatting.Indented).ToBytes().SaveAsTextAsync(filePath, cancellationToken).ConfigureAwait(false);
+							}.SaveAsTextAsync(filePath, cancellationToken).ConfigureAwait(false);
 						}
 						catch { }
 				}
