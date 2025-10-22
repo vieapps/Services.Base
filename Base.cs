@@ -2134,7 +2134,7 @@ namespace net.vieapps.Services
 					var correlationID = UtilityService.NewUUID;
 					try
 					{
-						Router.IncomingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Incoming (URI: {this.ServiceURI} - NodeID: {this.NodeID})", this.Logger).Run();
+						Router.IncomingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Incoming: {this.ServiceURI} @ {this.NodeID}", this.Logger).Run();
 						this.WriteLogs(correlationID, $"The API Gateway incoming channel was established - Session ID: {arguments.SessionId}");
 						if (this.State == ServiceState.Initializing)
 							this.State = ServiceState.Ready;
@@ -2184,7 +2184,7 @@ namespace net.vieapps.Services
 					var correlationID = UtilityService.NewUUID;
 					try
 					{
-						Router.OutgoingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Outgoing (URI: {this.ServiceURI} - NodeID: {this.NodeID})", this.Logger).Run();
+						Router.OutgoingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Outgoing: {this.ServiceURI} @ {this.NodeID}", this.Logger).Run();
 						this.WriteLogs(correlationID, $"The API Gateway outgoing channel was established - Session ID: {arguments.SessionId}");
 						onOutgoingConnectionEstablished?.Invoke(sender, arguments);
 					}
