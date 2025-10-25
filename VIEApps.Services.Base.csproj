@@ -45,28 +45,9 @@
 		<None Visible="false" Include="Icon.png" Pack="true" PackagePath="\" />
 	</ItemGroup>
 
-	<ItemGroup Condition="'$(TargetFramework)' != 'netstandard2.0'">
-		<PackageReference Include="Npgsql" Version="9.0.4" />
-	</ItemGroup>
-
-	<ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
-		<PackageReference Include="Npgsql" Version="8.0.4" />
-	</ItemGroup>
-
 	<ItemGroup>
 		<PackageReference Include="JavaScriptEngineSwitcher.ChakraCore" Version="3.27.3" />
 		<PackageReference Include="JSPool" Version="4.0.0" />
-		<PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.2" />
-		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.10" />
-		<PackageReference Include="MySqlConnector" Version="2.4.0" />
-		<PackageReference Include="Serilog.Extensions.Logging.File" Version="3.0.0" />
-		<PackageReference Include="System.Data.SQLite" Version="2.0.2" />
-		<PackageReference Include="System.IO.FileSystem" Version="4.3.0" />
-		<PackageReference Include="System.IO.FileSystem.Primitives" Version="4.3.0" />
-		<PackageReference Include="System.Runtime.InteropServices" Version="4.3.0" />
-		<PackageReference Include="System.Text.Encoding.Extensions" Version="4.3.0" />
-		<PackageReference Include="System.Threading" Version="4.3.0" />
-		<PackageReference Include="System.Threading.Tasks" Version="4.3.0" />
 		<PackageReference Include="VIEApps.Components.Repository" Version="10.9.2510.2" />
 		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.9.2510.2" />
 		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.9.2510.2" />
