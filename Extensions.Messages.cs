@@ -51,7 +51,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="messages"></param>
 		/// <returns></returns>
-		public static void Send(this IEnumerable<UpdateMessage> messages)
+		public static void Send(this IEnumerable<UpdateMessage> messages, bool parallelExecutions = false, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
 		{
 			if (messages != null && messages.Any())
 			{
@@ -63,7 +63,7 @@ namespace net.vieapps.Services
 						subject?.OnNext(message);
 					}
 					catch { }
-				});
+				}, parallelExecutions, maxDegreeOfParallelism, cancellationToken);
 			}
 		}
 
@@ -88,7 +88,7 @@ namespace net.vieapps.Services
 		/// <param name="deviceID"></param>
 		/// <param name="excludedDeviceID"></param>
 		/// <returns></returns>
-		public static void Send(this List<BaseMessage> messages, string deviceID, string excludedDeviceID)
+		public static void Send(this List<BaseMessage> messages, string deviceID, string excludedDeviceID, bool parallelExecutions = false, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
 		{
 			try
 			{
@@ -98,7 +98,7 @@ namespace net.vieapps.Services
 					Data = message.Data,
 					DeviceID = deviceID,
 					ExcludedDeviceID = excludedDeviceID
-				})?.Send();
+				}).Send(parallelExecutions, maxDegreeOfParallelism, cancellationToken);
 			}
 			catch { }
 		}
@@ -173,7 +173,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="messages"></param>
 		/// <returns></returns>
-		public static void Send(this IEnumerable<CommunicateMessage> messages)
+		public static void Send(this IEnumerable<CommunicateMessage> messages, bool parallelExecutions = false, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
 		{
 			if (messages != null && messages.Any())
 			{
@@ -185,7 +185,7 @@ namespace net.vieapps.Services
 						subject?.OnNext(message);
 					}
 					catch { }
-				});
+				}, parallelExecutions, maxDegreeOfParallelism, cancellationToken);
 			}
 		}
 
@@ -209,7 +209,7 @@ namespace net.vieapps.Services
 		/// <param name="messages"></param>
 		/// <param name="serviceName"></param>
 		/// <returns></returns>
-		public static void Send(this List<BaseMessage> messages, string serviceName)
+		public static void Send(this List<BaseMessage> messages, string serviceName, bool parallelExecutions = false, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
 		{
 			if (messages != null && messages.Count != 0)
 			{
@@ -221,7 +221,7 @@ namespace net.vieapps.Services
 						subject?.OnNext(message);
 					}
 					catch { }
-				});
+				}, parallelExecutions, maxDegreeOfParallelism, cancellationToken);
 			}
 		}
 

@@ -790,7 +790,7 @@ namespace net.vieapps.Services
 		/// <param name="nodeID"></param>
 		/// <returns></returns>
 		public static IDisposable AssignProcessL1CacheRequest(this WampSharp.V2.IWampChannel wampChannel, Cache cache, string serviceName, string nodeID = null)
-			=> wampChannel.Subscribe<CommunicateMessage>
+			=> wampChannel?.Subscribe<CommunicateMessage>
 			(
 				$"messages.services.{serviceName.ToLower()}.cache",
 				async message =>
@@ -801,20 +801,21 @@ namespace net.vieapps.Services
 							await cache.ProcessL1CacheRequestAsync(message.Data.Get<string>("Key"), message.Data.Get<string>("Reason")).ConfigureAwait(false);
 						}
 						catch { }
-				}
+				},
+				_ => { }
 			);
 
 		/// <summary>
 		/// Assigns a hanlder to 'ProcessL1CacheRequestAsync' of a caching component
 		/// </summary>
-		/// <param name="channel"></param>
+		/// <param name="wampChannel"></param>
 		/// <param name="cache"></param>
 		/// <param name="service"></param>
 		/// <param name="suffix"></param>
 		/// <param name="nodeID"></param>
 		/// <returns></returns>
-		public static IDisposable AssignProcessL1CacheRequest(this WampSharp.V2.IWampChannel channel, Cache cache, ServiceBase service, string suffix = null, string nodeID = null)
-			=> channel.AssignProcessL1CacheRequest(cache, $"{service.ServiceName}{suffix ?? ""}", nodeID ?? service.NodeID);
+		public static IDisposable AssignProcessL1CacheRequest(this WampSharp.V2.IWampChannel wampChannel, Cache cache, ServiceBase service, string suffix = null, string nodeID = null)
+			=> wampChannel?.AssignProcessL1CacheRequest(cache, $"{service.ServiceName}{suffix ?? ""}", nodeID ?? service.NodeID);
 
 		/// <summary>
 		/// Assigns 'SendL1CacheRequest' handler of this caching component
