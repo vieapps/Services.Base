@@ -890,9 +890,9 @@ namespace net.vieapps.Services
 		public static string GetCacheKey<T>(IFilterBy<T> filter, SortBy<T> sort, int pageSize = 0, int pageNumber = 0, bool addPageNumberHolder = false, string suffix = null) where T : class
 			=> Extensions.GetCacheKey<T>($"{(filter != null ? $"#f:{filter.GenerateUUID()}" : "")}{(sort != null ? $"#s:{sort.GenerateUUID()}" : "")}", pageSize, pageNumber, addPageNumberHolder, suffix);
 
-		static List<string> KeyPatterns => "total,json,xml".ToList();
+		static List<string> KeyPatterns { get; } = "total,json,xml".ToList();
 
-		static List<string> RelatedKeyPatterns => "thumbnails,attachments,others,newers,olders".ToList();
+		static List<string> RelatedKeyPatterns { get; } = "thumbnails,attachments,others,newers,olders".ToList();
 
 		/// <summary>
 		/// Gets the related caching key for working with collection of objects
