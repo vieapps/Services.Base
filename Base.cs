@@ -414,7 +414,7 @@ namespace net.vieapps.Services
 
 			// update queue & write to centerlized logs
 			this.Logs.Enqueue(((DateTime.Now, correlationID, developerID, appID, this.NodeID ?? Extensions.GetNodeID(), serviceName ?? this.ServiceName ?? "APIGateway", objectName ?? ""), logs, exception?.GetStack(false)));
-			return this.Logs.WriteLogsAsync(this.Logger);
+			return this.Logs.WriteLogsAsync(this.Logger, this.CancellationToken);
 		}
 
 		/// <summary>
@@ -2134,7 +2134,7 @@ namespace net.vieapps.Services
 					var correlationID = UtilityService.NewUUID;
 					try
 					{
-						Router.IncomingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Incoming: {this.ServiceURI} @ {this.NodeID}", this.Logger).Run();
+						Router.IncomingChannel.Update(arguments.SessionId, this.ServiceName, $"Incoming: {this.ServiceURI} @ {this.NodeID}", this.Logger);
 						this.WriteLogs(correlationID, $"The API Gateway incoming channel was established - Session ID: {arguments.SessionId}");
 						if (this.State == ServiceState.Initializing)
 							this.State = ServiceState.Ready;
@@ -2184,7 +2184,7 @@ namespace net.vieapps.Services
 					var correlationID = UtilityService.NewUUID;
 					try
 					{
-						Router.OutgoingChannel.UpdateAsync(arguments.SessionId, this.ServiceName, $"Outgoing: {this.ServiceURI} @ {this.NodeID}", this.Logger).Run();
+						Router.OutgoingChannel.Update(arguments.SessionId, this.ServiceName, $"Outgoing: {this.ServiceURI} @ {this.NodeID}", this.Logger);
 						this.WriteLogs(correlationID, $"The API Gateway outgoing channel was established - Session ID: {arguments.SessionId}");
 						onOutgoingConnectionEstablished?.Invoke(sender, arguments);
 					}

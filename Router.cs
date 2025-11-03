@@ -133,30 +133,30 @@ namespace net.vieapps.Services
 		/// <param name="awatingTimes"></param>
 		public static void ReOpen(this IWampChannel wampChannel, CancellationToken cancellationToken = default, Action<string, Exception> tracker = null, string prefix = null, int awatingTimes = 0)
 		{
-			using (var reconnector = new WampChannelReconnector(wampChannel, async () =>
-			{
-				try
-				{
-					await Task.Delay(awatingTimes > 0 ? awatingTimes : UtilityService.GetRandomNumber(1234, 2345), cancellationToken).ConfigureAwait(false);
-				}
-				catch (Exception ex)
-				{
-					tracker?.Invoke($"{(string.IsNullOrWhiteSpace(prefix) ? "" : $"[{prefix}] => ")}Canceled", ex is OperationCanceledException ? null : ex);
-					return;
-				}
-				try
-				{
-					tracker?.Invoke($"{(string.IsNullOrWhiteSpace(prefix) ? "" : $"[{prefix}] => ")}Reconnecting", null);
-					await wampChannel.OpenAsync(cancellationToken).ConfigureAwait(false);
-					tracker?.Invoke($"{(string.IsNullOrWhiteSpace(prefix) ? "" : $"[{prefix}] => ")}Reconnected", null);
-				}
-				catch (Exception ex)
-				{
-					tracker?.Invoke($"{(string.IsNullOrWhiteSpace(prefix) ? "" : $"[{prefix}] => ")}Reconnect error: {ex.Message}", ex is System.Net.WebSockets.WebSocketException || ex is ArgumentException || ex is OperationCanceledException ? null : ex);
-				}
-			}))
-			{
+			using (var reconnector = new WampChannelReconnector(wampChannel, () => wampChannel.ReOpenAsync(tracker, prefix, awatingTimes, cancellationToken)))
 				reconnector.Start();
+		}
+
+		static async Task ReOpenAsync(this IWampChannel wampChannel, Action<string, Exception> tracker, string prefix, int awatingTimes, CancellationToken cancellationToken)
+		{
+			try
+			{
+				await Task.Delay(awatingTimes > 0 ? awatingTimes : UtilityService.GetRandomNumber(1234, 2345), cancellationToken).ConfigureAwait(false);
+			}
+			catch (Exception ex)
+			{
+				tracker?.Invoke($"{(string.IsNullOrWhiteSpace(prefix) ? "" : $"[{prefix}] => ")}Canceled", ex is OperationCanceledException ? null : ex);
+				return;
+			}
+			try
+			{
+				tracker?.Invoke($"{(string.IsNullOrWhiteSpace(prefix) ? "" : $"[{prefix}] => ")}Reconnecting", null);
+				await wampChannel.OpenAsync(cancellationToken).ConfigureAwait(false);
+				tracker?.Invoke($"{(string.IsNullOrWhiteSpace(prefix) ? "" : $"[{prefix}] => ")}Reconnected", null);
+			}
+			catch (Exception ex)
+			{
+				tracker?.Invoke($"{(string.IsNullOrWhiteSpace(prefix) ? "" : $"[{prefix}] => ")}Reconnect error: {ex.Message}", ex is System.Net.WebSockets.WebSocketException || ex is ArgumentException || ex is OperationCanceledException ? null : ex);
 			}
 		}
 
@@ -286,14 +286,16 @@ namespace net.vieapps.Services
 					{
 						logger?.LogError($"Cannot connect to statistic websocket => {exception.Message}", exception);
 						Router.StatisticsWebSocketState = "closed";
-						Task.Run(async () =>
-						{
-							await Task.Delay(UtilityService.GetRandomNumber(456, 789)).ConfigureAwait(false);
-							Router.ConnectStatisticsWebSocket(logger);
-						}).ConfigureAwait(false);
+						Router.ConnectStatisticsWebSocketAsync(logger).Run();
 					}
 				);
 			}
+		}
+
+		static async Task ConnectStatisticsWebSocketAsync(ILogger logger = null)
+		{
+			await Task.Delay(UtilityService.GetRandomNumber(456, 789)).ConfigureAwait(false);
+			Router.ConnectStatisticsWebSocket(logger);
 		}
 
 		/// <summary>
