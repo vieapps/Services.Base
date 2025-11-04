@@ -802,7 +802,7 @@ namespace net.vieapps.Services
 						}
 						catch { }
 				},
-				_ => { }
+				UtilityService.DefaultExHandler
 			);
 
 		/// <summary>

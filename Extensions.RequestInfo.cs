@@ -780,16 +780,7 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="requestInfo"></param>
 		public static void TrackStatistics(this RequestInfo requestInfo)
-			=> new CommunicateMessage("Users")
-			{
-				Type = "Statistics#Track",
-				Data = new JObject
-				{
-					["SessionID"] = requestInfo.Session?.SessionID,
-					["UserID"] = requestInfo.Session?.User?.ID,
-					["CorrelationID"] = requestInfo.CorrelationID
-				}
-			}.Send();
+			=> requestInfo.Session?.TrackStatistics(requestInfo.CorrelationID);
 		#endregion
 
 	}

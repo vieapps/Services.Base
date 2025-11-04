@@ -299,6 +299,22 @@ namespace net.vieapps.Services
 		/// <param name="correlationID"></param>
 		public static void SendSessionState(this Session session, string serviceName, string serviceURI, bool online = true, bool trackStatistics = true, bool sendClientMessage = false, Action<CommunicateMessage> onCommunicateMessagePrepared = null, Action<UpdateMessage> onUpdateMessagePrepared = null, string correlationID = null)
 			=> session.SendSessionState(serviceName, serviceURI, null, online, trackStatistics, sendClientMessage, onCommunicateMessagePrepared, onUpdateMessagePrepared, correlationID);
+
+		/// <summary>
+		/// Sends tracking statistics
+		/// </summary>
+		/// <param name="session"></param>
+		public static void TrackStatistics(this Session session, string correlationID)
+			=> new CommunicateMessage("Users")
+			{
+				Type = "Statistics#Track",
+				Data = new JObject
+				{
+					["SessionID"] = session?.SessionID,
+					["UserID"] = session?.User?.ID,
+					["CorrelationID"] = correlationID
+				}
+			}.Send();
 		#endregion
 
 	}
