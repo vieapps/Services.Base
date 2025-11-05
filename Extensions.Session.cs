@@ -283,7 +283,7 @@ namespace net.vieapps.Services
 		/// <param name="onUpdateMessagePrepared"></param>
 		/// <param name="correlationID"></param>
 		public static void SendSessionState(this Session session, string serviceName, string serviceURI, string serviceSystemID, bool online, bool trackStatistics, bool sendClientMessage, Action<CommunicateMessage> onCommunicateMessagePrepared = null, Action<UpdateMessage> onUpdateMessagePrepared = null, string correlationID = null)
-			=> session.SendSessionStateAsync(serviceName, serviceURI, serviceSystemID, online, trackStatistics, sendClientMessage, onCommunicateMessagePrepared, onUpdateMessagePrepared, correlationID).Run();
+			=> session.SendSessionStateAsync(serviceName, serviceURI, serviceSystemID, online, trackStatistics, sendClientMessage, onCommunicateMessagePrepared, onUpdateMessagePrepared, correlationID).Execute();
 
 		/// <summary>
 		/// Sends session state

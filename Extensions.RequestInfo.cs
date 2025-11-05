@@ -744,7 +744,7 @@ namespace net.vieapps.Services
 		/// <param name="onCommunicateMessagePrepared"></param>
 		/// <param name="onUpdateMessagePrepared"></param>
 		public static void SendSessionState(this RequestInfo requestInfo, JObject systemIdentityJson, string serviceName, string serviceURI, bool online, bool trackStatistics, bool sendClientMessage, Action<CommunicateMessage> onCommunicateMessagePrepared = null, Action<UpdateMessage> onUpdateMessagePrepared = null)
-			=> requestInfo.SendSessionStateAsync(systemIdentityJson, serviceName, serviceURI, online, trackStatistics, sendClientMessage, onCommunicateMessagePrepared, onUpdateMessagePrepared).Run();
+			=> requestInfo.SendSessionStateAsync(systemIdentityJson, serviceName, serviceURI, online, trackStatistics, sendClientMessage, onCommunicateMessagePrepared, onUpdateMessagePrepared).Execute();
 
 		/// <summary>
 		/// Sends session state

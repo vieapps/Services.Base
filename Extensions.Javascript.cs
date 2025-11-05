@@ -73,7 +73,7 @@ namespace net.vieapps.Services
 
 		static Action<string, string> Func_WriteLogs => (correlationID, logs) =>
 		{
-			ServiceBase.ServiceComponent.WriteLogsAsync(correlationID, null, null, ServiceBase.ServiceComponent.Logger, new List<string> { logs }, null, ServiceBase.ServiceComponent.ServiceName, "WebHooks").Run();
+			ServiceBase.ServiceComponent.WriteLogsAsync(correlationID, null, null, ServiceBase.ServiceComponent.Logger, new List<string> { logs }, null, ServiceBase.ServiceComponent.ServiceName, "WebHooks").Execute();
 		};
 
 		static JObject GetError(this Exception exception, Action<JObject> onCompleted = null)
@@ -204,7 +204,7 @@ namespace net.vieapps.Services
 				smtp.Get("username", ""),
 				smtp.Get("password", ""),
 				ServiceBase.ServiceComponent.CancellationToken
-			).Run();
+			).Execute();
 		};
 
 		static Func<string, string, string, string, bool, int, string> Func_SendHttp => (url, method, body, headers, returnErrorDetailsIfGot, waitingSeconds) =>

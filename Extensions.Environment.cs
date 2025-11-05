@@ -223,7 +223,7 @@ namespace net.vieapps.Services
 					: throttle > 0
 						? source.Throttle(TimeSpan.FromMilliseconds(throttle))
 						: source
-			).Subscribe(onNext);
+			).Subscribe(onNext, _ => { });
 
 		/// <summary>
 		/// Subscribes an element handler, and an exception handler to an observable sequence.
@@ -251,12 +251,12 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <typeparam name="T">The type of the elements in the source sequence.</typeparam>
 		/// <param name="source">Observable sequence to subscribe to.</param>
-		/// <param name="onNext">Action to invoke for each element in the observable sequence.</param>
+		/// <param name="onNextAsync">Action to invoke for each element in the observable sequence.</param>
 		/// <param name="delay">The times (miliseconds) for delaying.</param>
 		/// <param name="throttle">The times (miliseconds) for throttling.</param>
 		/// <returns><see cref="IDisposable"/> object used to unsubscribe from the observable sequence.</returns>
-		/// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="onNext"/> is <c>null</c>.</exception>
-		public static IDisposable Subscribe<T>(this IObservable<T> source, Func<T, Task> onNext, int delay = 0, int throttle = 0)
+		/// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="onNextAsync"/> is <c>null</c>.</exception>
+		public static IDisposable Subscribe<T>(this IObservable<T> source, Func<T, Task> onNextAsync, int delay = 0, int throttle = 0)
 			=> (delay > 0 && throttle > 0
 				? source.Delay(TimeSpan.FromMilliseconds(delay)).Throttle(TimeSpan.FromMilliseconds(throttle))
 				: delay > 0
@@ -264,20 +264,20 @@ namespace net.vieapps.Services
 					: throttle > 0
 						? source.Throttle(TimeSpan.FromMilliseconds(throttle))
 						: source
-			).Subscribe(data => onNext(data).Run());
+			).Subscribe(data => onNextAsync(data).Execute(), _ => { });
 
 		/// <summary>
 		/// Subscribes an element handler, and an exception handler to an observable sequence.
 		/// </summary>
 		/// <typeparam name="T">The type of the elements in the source sequence.</typeparam>
 		/// <param name="source">Observable sequence to subscribe to.</param>
-		/// <param name="onNext">Action to invoke for each element in the observable sequence.</param>
+		/// <param name="onNextAsync">Action to invoke for each element in the observable sequence.</param>
 		/// <param name="onError">Action to invoke upon exceptional termination of the observable sequence.</param>
 		/// <param name="delay">The times (miliseconds) for delaying.</param>
 		/// <param name="throttle">The times (miliseconds) for throttling.</param>
 		/// <returns><see cref="IDisposable"/> object used to unsubscribe from the observable sequence.</returns>
-		/// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="onNext"/> or <paramref name="onError"/> is <c>null</c>.</exception>
-		public static IDisposable Subscribe<T>(this IObservable<T> source, Func<T, Task> onNext, Action<Exception> onError, int delay = 0, int throttle = 0)
+		/// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="onNextAsync"/> or <paramref name="onError"/> is <c>null</c>.</exception>
+		public static IDisposable Subscribe<T>(this IObservable<T> source, Func<T, Task> onNextAsync, Action<Exception> onError, int delay = 0, int throttle = 0)
 			=> (delay > 0 && throttle > 0
 				? source.Delay(TimeSpan.FromMilliseconds(delay)).Throttle(TimeSpan.FromMilliseconds(throttle))
 				: delay > 0
@@ -285,20 +285,20 @@ namespace net.vieapps.Services
 					: throttle > 0
 						? source.Throttle(TimeSpan.FromMilliseconds(throttle))
 						: source
-			).Subscribe(data => onNext(data).Run(onError), onError);
+			).Subscribe(data => onNextAsync(data).Execute(onError), onError);
 
 		/// <summary>
 		/// Subscribes an element handler, and an exception handler to an observable sequence.
 		/// </summary>
 		/// <typeparam name="T">The type of the elements in the source sequence.</typeparam>
 		/// <param name="source">Observable sequence to subscribe to.</param>
-		/// <param name="onNext">Action to invoke for each element in the observable sequence.</param>
-		/// <param name="onError">Action to invoke upon exceptional termination of the observable sequence.</param>
+		/// <param name="onNextAsync">Action to invoke for each element in the observable sequence.</param>
+		/// <param name="onErrorAsync">Action to invoke upon exceptional termination of the observable sequence.</param>
 		/// <param name="delay">The times (miliseconds) for delaying.</param>
 		/// <param name="throttle">The times (miliseconds) for throttling.</param>
 		/// <returns><see cref="IDisposable"/> object used to unsubscribe from the observable sequence.</returns>
-		/// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="onNext"/> or <paramref name="onError"/> is <c>null</c>.</exception>
-		public static IDisposable Subscribe<T>(this IObservable<T> source, Func<T, Task> onNext, Func<Exception, Task> onError, int delay = 0, int throttle = 0)
+		/// <exception cref="ArgumentNullException"><paramref name="source"/> or <paramref name="onNextAsync"/> or <paramref name="onErrorAsync"/> is <c>null</c>.</exception>
+		public static IDisposable Subscribe<T>(this IObservable<T> source, Func<T, Task> onNextAsync, Func<Exception, Task> onErrorAsync, int delay = 0, int throttle = 0)
 			=> (delay > 0 && throttle > 0
 				? source.Delay(TimeSpan.FromMilliseconds(delay)).Throttle(TimeSpan.FromMilliseconds(throttle))
 				: delay > 0
@@ -306,7 +306,7 @@ namespace net.vieapps.Services
 					: throttle > 0
 						? source.Throttle(TimeSpan.FromMilliseconds(throttle))
 						: source
-			).Subscribe(data => onNext(data).Run(onError), ex => onError(ex).Run());
+			).Subscribe(data => onNextAsync(data).Execute(onErrorAsync), ex => onErrorAsync(ex).Execute());
 		#endregion
 
 		#region ReactiveX WAMP extensions
@@ -364,13 +364,13 @@ namespace net.vieapps.Services
 		/// <typeparam name="T"></typeparam>
 		/// <param name="wampChannel">The WAMP channel for subscribing.</param>
 		/// <param name="topicURI">URI of a topic.</param>
-		/// <param name="onNext">Action to invoke for each element in the observable sequence.</param>
+		/// <param name="onNextAsync">Action to invoke for each element in the observable sequence.</param>
 		/// <param name="delay">The times (miliseconds) for delaying.</param>
 		/// <param name="throttle">The times (miliseconds) for throttling.</param>
 		/// <returns><see cref="IDisposable"/> object used to unsubscribe from the observable sequence.</returns>
-		/// <exception cref="ArgumentNullException"><paramref name="wampChannel"/> or <paramref name="onNext"/> is <c>null</c>.</exception>
-		public static IDisposable Subscribe<T>(this IWampChannel wampChannel, string topicURI, Func<T, Task> onNext, int delay = 0, int throttle = 0)
-			=> wampChannel?.RealmProxy.Services.GetSubject<T>(topicURI).Subscribe(onNext, delay, throttle);
+		/// <exception cref="ArgumentNullException"><paramref name="wampChannel"/> or <paramref name="onNextAsync"/> is <c>null</c>.</exception>
+		public static IDisposable Subscribe<T>(this IWampChannel wampChannel, string topicURI, Func<T, Task> onNextAsync, int delay = 0, int throttle = 0)
+			=> wampChannel?.RealmProxy.Services.GetSubject<T>(topicURI).Subscribe(onNextAsync, delay, throttle);
 
 		/// <summary>
 		/// Subscribes an element handler to a WAMP channel's topic.
@@ -378,13 +378,13 @@ namespace net.vieapps.Services
 		/// <typeparam name="T"></typeparam>
 		/// <param name="wampChannel">The WAMP channel for subscribing.</param>
 		/// <param name="topicURI">URI of a topic.</param>
-		/// <param name="onNext">Action to invoke for each element in the observable sequence.</param>
+		/// <param name="onNextAsync">Action to invoke for each element in the observable sequence.</param>
 		/// <param name="delay">The times (miliseconds) for delaying.</param>
 		/// <param name="throttle">The times (miliseconds) for throttling.</param>
 		/// <returns><see cref="IDisposable"/> object used to unsubscribe from the observable sequence.</returns>
-		/// <exception cref="ArgumentNullException"><paramref name="wampChannel"/> or <paramref name="onNext"/> or <paramref name="onError"/> is <c>null</c>.</exception>
-		public static IDisposable Subscribe<T>(this IWampChannel wampChannel, string topicURI, Func<T, Task> onNext, Action<Exception> onError, int delay = 0, int throttle = 0)
-			=> wampChannel?.RealmProxy.Services.GetSubject<T>(topicURI).Subscribe(onNext, onError, delay, throttle);
+		/// <exception cref="ArgumentNullException"><paramref name="wampChannel"/> or <paramref name="onNextAsync"/> or <paramref name="onError"/> is <c>null</c>.</exception>
+		public static IDisposable Subscribe<T>(this IWampChannel wampChannel, string topicURI, Func<T, Task> onNextAsync, Action<Exception> onError, int delay = 0, int throttle = 0)
+			=> wampChannel?.RealmProxy.Services.GetSubject<T>(topicURI).Subscribe(onNextAsync, onError, delay, throttle);
 
 		/// <summary>
 		/// Subscribes an element handler to a WAMP channel's topic.
@@ -392,13 +392,13 @@ namespace net.vieapps.Services
 		/// <typeparam name="T"></typeparam>
 		/// <param name="wampChannel">The WAMP channel for subscribing.</param>
 		/// <param name="topicURI">URI of a topic.</param>
-		/// <param name="onNext">Action to invoke for each element in the observable sequence.</param>
+		/// <param name="onNextAsync">Action to invoke for each element in the observable sequence.</param>
 		/// <param name="delay">The times (miliseconds) for delaying.</param>
 		/// <param name="throttle">The times (miliseconds) for throttling.</param>
 		/// <returns><see cref="IDisposable"/> object used to unsubscribe from the observable sequence.</returns>
-		/// <exception cref="ArgumentNullException"><paramref name="wampChannel"/> or <paramref name="onNext"/> or <paramref name="onError"/> is <c>null</c>.</exception>
-		public static IDisposable Subscribe<T>(this IWampChannel wampChannel, string topicURI, Func<T, Task> onNext, Func<Exception, Task> onError, int delay = 0, int throttle = 0)
-			=> wampChannel?.RealmProxy.Services.GetSubject<T>(topicURI).Subscribe(onNext, onError, delay, throttle);
+		/// <exception cref="ArgumentNullException"><paramref name="wampChannel"/> or <paramref name="onNextAsync"/> or <paramref name="onErrorAsync"/> is <c>null</c>.</exception>
+		public static IDisposable Subscribe<T>(this IWampChannel wampChannel, string topicURI, Func<T, Task> onNextAsync, Func<Exception, Task> onErrorAsync, int delay = 0, int throttle = 0)
+			=> wampChannel?.RealmProxy.Services.GetSubject<T>(topicURI).Subscribe(onNextAsync, onErrorAsync, delay, throttle);
 		#endregion
 
 	}

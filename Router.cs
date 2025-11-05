@@ -286,7 +286,7 @@ namespace net.vieapps.Services
 					{
 						logger?.LogError($"Cannot connect to statistic websocket => {exception.Message}", exception);
 						Router.StatisticsWebSocketState = "closed";
-						Router.ConnectStatisticsWebSocketAsync(logger).Run();
+						Router.ConnectStatisticsWebSocketAsync(logger).Execute();
 					}
 				);
 			}
@@ -342,7 +342,7 @@ namespace net.vieapps.Services
 		/// <param name="name"></param>
 		/// <param name="description"></param>
 		public static void Update(this IWampChannel wampChannel, long sessionID, string name, string description, ILogger logger = null)
-			=> wampChannel.UpdateAsync(sessionID, name, description, logger).Run();
+			=> wampChannel.UpdateAsync(sessionID, name, description, logger).Execute();
 		#endregion
 
 		#region Connect & Disconnect
@@ -409,7 +409,7 @@ namespace net.vieapps.Services
 			CancellationToken cancellationToken = default,
 			Action<Exception> onError = null
 		)
-			=> Router.ConnectAsync(onIncomingConnectionEstablished, onIncomingConnectionBroken, onIncomingConnectionError, onOutgoingConnectionEstablished, onOutgoingConnectionBroken, onOutgoingConnectionError, cancellationToken, onError).Run();
+			=> Router.ConnectAsync(onIncomingConnectionEstablished, onIncomingConnectionBroken, onIncomingConnectionError, onOutgoingConnectionEstablished, onOutgoingConnectionBroken, onOutgoingConnectionError, cancellationToken, onError).Execute();
 
 		/// <summary>
 		/// Disconnects from API Gateway Router (means close all WAMP channels)
@@ -429,7 +429,7 @@ namespace net.vieapps.Services
 		/// <param name="message">The message to send to API Gateway Router before closing the channel</param>
 		/// <param name="onError">The action to run when got any error</param>
 		public static void Disconnect(string message = null, Action<Exception> onError = null)
-			=> Router.DisconnectAsync(message, onError).Run(true);
+			=> Router.DisconnectAsync(message, onError).Execute(true);
 
 		static IDisposable ReconnectTimer { get; set; }
 

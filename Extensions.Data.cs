@@ -801,8 +801,7 @@ namespace net.vieapps.Services
 							await cache.ProcessL1CacheRequestAsync(message.Data.Get<string>("Key"), message.Data.Get<string>("Reason")).ConfigureAwait(false);
 						}
 						catch { }
-				},
-				UtilityService.DefaultExHandler
+				}
 			);
 
 		/// <summary>
