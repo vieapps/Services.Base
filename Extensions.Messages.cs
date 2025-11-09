@@ -128,12 +128,14 @@ namespace net.vieapps.Services
 
 		static ConcurrentDictionary<string, ISubject<CommunicateMessage>> CommunicatingSubjects { get; } = new ConcurrentDictionary<string, ISubject<CommunicateMessage>>();
 
-		static ISubject<CommunicateMessage> GetCommunicatingSubject(this BaseMessage message, string uri = null)
+		static ISubject<CommunicateMessage> GetCommunicatingSubject(this BaseMessage message, string uri = null, bool useBackupChannel = false)
 		{
 			uri = uri ?? $"messages.services.{(message != null && message is CommunicateMessage ? (message as CommunicateMessage).ServiceName.Trim().ToLower() : "apigateway")}";
 			if (!Extensions.CommunicatingSubjects.TryGetValue(uri, out var subject))
 			{
-				subject = Router.OutgoingChannel?.RealmProxy.Services.GetSubject<CommunicateMessage>(uri);
+				subject = useBackupChannel && Router.BackupChannel != null
+					? Router.BackupChannel?.RealmProxy.Services.GetSubject<CommunicateMessage>(uri)
+					: Router.OutgoingChannel?.RealmProxy.Services.GetSubject<CommunicateMessage>(uri);
 				if (subject != null)
 					Extensions.CommunicatingSubjects.TryAdd(uri, subject);
 			}
@@ -145,11 +147,11 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="message"></param>
 		/// <returns></returns>
-		public static void Send(this CommunicateMessage message)
+		public static void Send(this CommunicateMessage message, bool useBackupChannel = false)
 		{
 			try
 			{
-				message?.GetCommunicatingSubject()?.OnNext(message);
+				message?.GetCommunicatingSubject(null, useBackupChannel)?.OnNext(message);
 			}
 			catch { }
 		}
@@ -161,11 +163,11 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken"></param>
 		/// <param name="defer"></param>
 		/// <returns></returns>
-		public static async Task SendAsync(this CommunicateMessage message, CancellationToken cancellationToken = default, int defer = 0)
+		public static async Task SendAsync(this CommunicateMessage message, CancellationToken cancellationToken = default, bool useBackupChannel = false, int defer = 0)
 		{
 			if (defer > 0)
 				await Task.Delay(defer, cancellationToken).ConfigureAwait(false);
-			message?.Send();
+			message?.Send(useBackupChannel);
 		}
 
 		/// <summary>
@@ -173,11 +175,11 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="messages"></param>
 		/// <returns></returns>
-		public static void Send(this IEnumerable<CommunicateMessage> messages, bool parallelExecutions = false, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+		public static void Send(this IEnumerable<CommunicateMessage> messages, bool useBackupChannel = false, bool parallelExecutions = false, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
 		{
 			if (messages != null && messages.Any())
 			{
-				var subject = messages.First().GetCommunicatingSubject();
+				var subject = messages.First().GetCommunicatingSubject(null, useBackupChannel);
 				messages.ForEach(message =>
 				{
 					try
@@ -196,11 +198,11 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken"></param>
 		/// <param name="defer"></param>
 		/// <returns></returns>
-		public static async Task SendAsync(this IEnumerable<CommunicateMessage> messages, CancellationToken cancellationToken = default, int defer = 0)
+		public static async Task SendAsync(this IEnumerable<CommunicateMessage> messages, CancellationToken cancellationToken = default, bool useBackupChannel = false, int defer = 0)
 		{
 			if (defer > 0)
 				await Task.Delay(defer, cancellationToken).ConfigureAwait(false);
-			messages?.Send();
+			messages?.Send(useBackupChannel);
 		}
 
 		/// <summary>
@@ -209,11 +211,11 @@ namespace net.vieapps.Services
 		/// <param name="messages"></param>
 		/// <param name="serviceName"></param>
 		/// <returns></returns>
-		public static void Send(this List<BaseMessage> messages, string serviceName, bool parallelExecutions = false, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
+		public static void Send(this List<BaseMessage> messages, string serviceName, bool useBackupChannel = false, bool parallelExecutions = false, int? maxDegreeOfParallelism = null, CancellationToken cancellationToken = default)
 		{
 			if (messages != null && messages.Count != 0)
 			{
-				var subject = messages.First().GetCommunicatingSubject($"messages.services.{serviceName.Trim().ToLower()}");
+				var subject = messages.First().GetCommunicatingSubject($"messages.services.{serviceName.Trim().ToLower()}", useBackupChannel);
 				messages.Select(message => new CommunicateMessage(serviceName, message)).ForEach(message =>
 				{
 					try
@@ -233,11 +235,11 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken"></param>
 		/// <param name="defer"></param>
 		/// <returns></returns>
-		public static async Task SendAsync(this List<BaseMessage> messages, string serviceName, CancellationToken cancellationToken = default, int defer = 0)
+		public static async Task SendAsync(this List<BaseMessage> messages, string serviceName, CancellationToken cancellationToken = default, bool useBackupChannel = false, int defer = 0)
 		{
 			if (defer > 0)
 				await Task.Delay(defer, cancellationToken).ConfigureAwait(false);
-			messages?.Send(serviceName);
+			messages?.Send(serviceName, useBackupChannel);
 		}
 	}
 }

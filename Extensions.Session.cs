@@ -244,7 +244,7 @@ namespace net.vieapps.Services
 			if (!string.IsNullOrWhiteSpace(correlationID))
 				communicateMessage.Data["CorrelationID"] = correlationID;
 			onCommunicateMessagePrepared?.Invoke(communicateMessage);
-			communicateMessage.Send();
+			communicateMessage.Send(Router.GotBackupRouter());
 
 			if (sendClientMessage && !string.IsNullOrWhiteSpace(session.User.ID))
 			{
@@ -314,7 +314,7 @@ namespace net.vieapps.Services
 					["UserID"] = session?.User?.ID,
 					["CorrelationID"] = correlationID
 				}
-			}.Send();
+			}.Send(Router.GotBackupRouter());
 		#endregion
 
 	}

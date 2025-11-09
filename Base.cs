@@ -2124,19 +2124,25 @@ namespace net.vieapps.Services
 		/// <param name="onOutgoingConnectionEstablished">The action to run when the outgoing connection is established</param>
 		/// <param name="onOutgoingConnectionBroken">The action to run when the outgoing connection is broken</param>
 		/// <param name="onOutgoingConnectionError">The action to run when the outgoing connection got any error</param>
+		/// <param name="onBackupConnectionEstablished">The action to run when the backup connection is established</param>
+		/// <param name="onBackupConnectionBroken">The action to run when the backup connection is broken</param>
+		/// <param name="onBackupConnectionError">The action to run when the backup connection got any error</param>
 		/// <returns></returns>
 		public virtual Task ConnectAsync(
 			string[] args,
-			Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null,
-			Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null,
-			Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null,
-			Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null,
-			Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null,
-			Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null
+			Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished,
+			Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken,
+			Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError,
+			Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished,
+			Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken,
+			Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError,
+			Action<object, WampSessionCreatedEventArgs> onBackupConnectionEstablished,
+			Action<object, WampSessionCloseEventArgs> onBackupConnectionBroken,
+			Action<object, WampConnectionErrorEventArgs> onBackupConnectionError
 		)
 		{
 			this.PrepareNodeID(args);
-			this.WriteLogs(UtilityService.NewUUID, $"Attempting to connect to API Gateway Router [{new Uri(Router.GetRouterStrInfo()).GetResolvedURI()}]");
+			this.WriteLogs(UtilityService.NewUUID, $"Attempting to connect to API Gateway Router [{(Router.GotBackupRouter() ? "Primary: " : "")}{new Uri(Router.GetRouterStrInfo()).GetResolvedURI()}{(Router.GotBackupRouter() ? $" - Backup: {new Uri(Router.GetRouterStrInfo(true)).GetResolvedURI()}" : "")}]");
 			return Router.ConnectAsync
 			(
 				(sender, arguments) =>
@@ -2235,10 +2241,77 @@ namespace net.vieapps.Services
 						this.WriteLogs(correlationID, $"Error occurred while processing an exception when the outgoing connection was got an unexpected error => {ex.Message}", ex);
 					}
 				},
+				(sender, arguments) =>
+				{
+					var correlationID = UtilityService.NewUUID;
+					try
+					{
+						Router.BackupChannel.Update(arguments.SessionId, this.ServiceName, $"Backup: {this.ServiceURI} @ {this.NodeID}", this.Logger);
+						this.WriteLogs(correlationID, $"The API Gateway backup channel was established - Session ID: {arguments.SessionId}");
+						onBackupConnectionEstablished?.Invoke(sender, arguments);
+					}
+					catch (Exception ex)
+					{
+						this.WriteLogs(correlationID, $"Error occurred while preparing when the backup connection was established => {ex.Message}", ex);
+					}
+				},
+				(sender, arguments) =>
+				{
+					var correlationID = UtilityService.NewUUID;
+					try
+					{
+						if (Router.ChannelsAreClosedBySystem || (arguments.CloseType.Equals(SessionCloseType.Goodbye) && "wamp.close.normal".IsEquals(arguments.Reason)))
+							this.WriteLogs(correlationID, $"The API Gateway backup channel was closed - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+						else if (Router.BackupChannel != null)
+						{
+							this.WriteLogs(correlationID, $"The API Gateway backup channel was broken - {arguments.CloseType} ({(string.IsNullOrWhiteSpace(arguments.Reason) ? "Unknown" : arguments.Reason)})");
+							Router.BackupChannel.ReOpen(this.CancellationToken, (msg, ex) => this.Logger?.LogDebug(msg, ex), "Backup");
+						}
+						onBackupConnectionBroken?.Invoke(sender, arguments);
+					}
+					catch (Exception ex)
+					{
+						this.WriteLogs(correlationID, $"Error occurred while preparing when the backup connection was broken => {ex.Message}", ex);
+					}
+				},
+				(sender, arguments) =>
+				{
+					var correlationID = UtilityService.NewUUID;
+					try
+					{
+						this.WriteLogs(correlationID, $"Got an unexpected error of the API Gateway backup channel => {arguments.Exception.Message}", arguments.Exception);
+						onBackupConnectionError?.Invoke(sender, arguments);
+					}
+					catch (Exception ex)
+					{
+						this.WriteLogs(correlationID, $"Error occurred while processing an exception when the backup connection was got an unexpected error => {ex.Message}", ex);
+					}
+				},
 				this.CancellationToken,
 				exception => this.WriteLogs(UtilityService.NewUUID, $"Error occurred while connecting to API Gateway Router => {exception.Message}", exception)
 			);
 		}
+
+		/// <summary>
+		/// Connects to API Gateway Router
+		/// </summary>
+		/// <param name="args">The arguments</param>
+		/// <param name="onIncomingConnectionEstablished">The action to run when the incomming connection is established</param>
+		/// <param name="onIncomingConnectionBroken">The action to run when the incomming connection is broken</param>
+		/// <param name="onIncomingConnectionError">The action to run when the incomming connection got any error</param>
+		/// <param name="onOutgoingConnectionEstablished">The action to run when the outgoing connection is established</param>
+		/// <param name="onOutgoingConnectionBroken">The action to run when the outgoing connection is broken</param>
+		/// <param name="onOutgoingConnectionError">The action to run when the outgoing connection got any error</param>
+		/// <returns></returns>
+		public virtual Task ConnectAsync(
+			string[] args,
+			Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null,
+			Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null,
+			Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null,
+			Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null,
+			Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null,
+			Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null
+		) => this.ConnectAsync(args, onIncomingConnectionEstablished, onIncomingConnectionBroken, onIncomingConnectionError, onOutgoingConnectionEstablished, onOutgoingConnectionBroken, onOutgoingConnectionError, null, null, null);
 
 		/// <summary>
 		/// Initializes the repository
@@ -2479,19 +2552,24 @@ namespace net.vieapps.Services
 		/// <param name="onOutgoingConnectionEstablished">The action to run when the outgoing connection is established</param>
 		/// <param name="onOutgoingConnectionBroken">The action to run when the outgoing connection is broken</param>
 		/// <param name="onOutgoingConnectionError">The action to run when the outgoing connection got any error</param>
+		/// <param name="onBackupConnectionEstablished">The action to run when the backup connection is established</param>
+		/// <param name="onBackupConnectionBroken">The action to run when the backup connection is broken</param>
+		/// <param name="onBackupConnectionError">The action to run when the backup connection got any error</param>
 		/// <returns></returns>
 		protected virtual Task StartAsync(
 			string[] args,
-			Action<IService> onRegisterSuccess = null,
-			Action<Exception> onRegisterError = null,
-			Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null,
-			Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null,
-			Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null,
-			Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null,
-			Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null,
-			Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null
-		)
-			=> this.ConnectAsync
+			Action<IService> onRegisterSuccess,
+			Action<Exception> onRegisterError,
+			Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished,
+			Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken,
+			Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError,
+			Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished,
+			Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken,
+			Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError,
+			Action<object, WampSessionCreatedEventArgs> onBackupConnectionEstablished,
+			Action<object, WampSessionCloseEventArgs> onBackupConnectionBroken,
+			Action<object, WampConnectionErrorEventArgs> onBackupConnectionError
+		) => this.ConnectAsync
 			(
 				args,
 				async (sender, arguments) =>
@@ -2536,8 +2614,36 @@ namespace net.vieapps.Services
 					onOutgoingConnectionEstablished?.Invoke(sender, arguments);
 				},
 				onOutgoingConnectionBroken,
-				onOutgoingConnectionError
+				onOutgoingConnectionError,
+				onBackupConnectionEstablished,
+				onBackupConnectionBroken,
+				onBackupConnectionError
 			);
+
+		/// <summary>
+		/// Starts the service (the short way - connect to API Gateway Router and register the service)
+		/// </summary>
+		/// <param name="args">The arguments</param>
+		/// <param name="onRegisterSuccess">The action to run when the service was registered successful</param>
+		/// <param name="onRegisterError">The action to run when got any error while registering the service</param>
+		/// <param name="onIncomingConnectionEstablished">The action to run when the incomming connection is established</param>
+		/// <param name="onIncomingConnectionBroken">The action to run when the incomming connection is broken</param>
+		/// <param name="onIncomingConnectionError">The action to run when the incomming connection got any error</param>
+		/// <param name="onOutgoingConnectionEstablished">The action to run when the outgoing connection is established</param>
+		/// <param name="onOutgoingConnectionBroken">The action to run when the outgoing connection is broken</param>
+		/// <param name="onOutgoingConnectionError">The action to run when the outgoing connection got any error</param>
+		/// <returns></returns>
+		protected virtual Task StartAsync(
+			string[] args,
+			Action<IService> onRegisterSuccess = null,
+			Action<Exception> onRegisterError = null,
+			Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null,
+			Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null,
+			Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null,
+			Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null,
+			Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null,
+			Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null
+		) => this.StartAsync(args, onRegisterSuccess, onRegisterError, onIncomingConnectionEstablished, onIncomingConnectionBroken, onIncomingConnectionError, onOutgoingConnectionEstablished, onOutgoingConnectionBroken, onOutgoingConnectionError, null, null, null);
 
 		public virtual Task StartAsync(string[] args = null, bool initializeRepository = true, Action<IService> next = null)
 		{

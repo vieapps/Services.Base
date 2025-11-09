@@ -822,7 +822,7 @@ namespace net.vieapps.Services
 		/// <param name="cache"></param>
 		/// <param name="serviceName"></param>
 		/// <param name="nodeID"></param>
-		public static void AssignSendL1CacheRequest(this Cache cache, string serviceName, string nodeID)
+		public static void AssignSendL1CacheRequest(this Cache cache, string serviceName, string nodeID, bool useBackupChannel = false)
 			=> cache.SendL1CacheRequest = (key, reason) => new CommunicateMessage($"{serviceName}.cache")
 			{
 				ExcludedNodeID = nodeID,
@@ -831,7 +831,7 @@ namespace net.vieapps.Services
 					["Key"] = key,
 					["Reason"] = reason
 				}
-			}.Send();
+			}.Send(useBackupChannel);
 
 		/// <summary>
 		/// Assigns 'SendL1CacheRequest' handler of this caching component
@@ -839,8 +839,8 @@ namespace net.vieapps.Services
 		/// <param name="cache"></param>
 		/// <param name="service"></param>
 		/// <param name="suffix"></param>
-		public static void AssignSendL1CacheRequest(this Cache cache, ServiceBase service, string suffix = null)
-			=> cache.AssignSendL1CacheRequest($"{service.ServiceName}{suffix ?? ""}", service.NodeID);
+		public static void AssignSendL1CacheRequest(this Cache cache, ServiceBase service, bool useBackupChannel = false, string suffix = null)
+			=> cache.AssignSendL1CacheRequest($"{service.ServiceName}{suffix ?? ""}", service.NodeID, useBackupChannel);
 
 		/// <summary>
 		/// Gets the caching key

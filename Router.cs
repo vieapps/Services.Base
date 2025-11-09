@@ -47,6 +47,16 @@ namespace net.vieapps.Services
 		public static long OutgoingChannelSessionID { get; internal set; } = 0;
 
 		/// <summary>
+		/// Gets the backup channel of API Gateway Router
+		/// </summary>
+		public static IWampChannel BackupChannel { get; internal set; }
+
+		/// <summary>
+		/// Gets the session's identity of the API Gateway Router's backup channel
+		/// </summary>
+		public static long BackupChannelSessionID { get; internal set; } = 0;
+
+		/// <summary>
 		/// Gets the state that determines that the API Gateways' channels are closed by the system
 		/// </summary>
 		public static bool ChannelsAreClosedBySystem { get; internal set; } = false;
@@ -55,27 +65,51 @@ namespace net.vieapps.Services
 
 		static string StatisticsWebSocketState { get; set; }
 
+		static IDisposable ReconnectTimer { get; set; }
+		#endregion
+
+		#region Get settings of API Gateway Router
 		/// <summary>
-		/// Gets information of API Gateway Router
+		/// Gets settings of API Gateway Router
 		/// </summary>
+		/// <param name="backup">true to use backing-up router</param>
 		/// <returns></returns>
-		public static (string Address, string Realm, bool UseJSON) GetRouterInfo()
-			=> (UtilityService.GetAppSetting("Router:Uri", "ws://127.0.0.1:16429/"), UtilityService.GetAppSetting("Router:Realm", "VIEAppsRealm"), "json".IsEquals(UtilityService.GetAppSetting("Router:ChannelsMode", "MessagePack")));
+		public static (string Address, string Realm, bool UseJSON) GetRouterInfo(bool backup = false)
+		{
+			var address = backup
+				? UtilityService.GetAppSetting("Router:URI:Backup")
+				: UtilityService.GetAppSetting("Router:URI", UtilityService.GetAppSetting("Router:Uri", "ws://127.0.0.1:16429/"));
+			var realm = backup
+				? UtilityService.GetAppSetting("Router:Realm:Backup", "VIEAppsRealm")
+				: UtilityService.GetAppSetting("Router:Realm", "VIEAppsRealm");
+			var useJSON = backup
+				? "json".IsEquals(UtilityService.GetAppSetting("Router:Mode:Backup", "MessagePack"))
+				: "json".IsEquals(UtilityService.GetAppSetting("Router:Mode", "MessagePack"));
+			return (address, realm, useJSON);
+		}
 
 		/// <summary>
-		/// Gets information of API Gateway Router
+		/// Gets settings of API Gateway Router
+		/// </summary>
+		/// <param name="backup">true to use backing-up router</param>
+		/// <returns></returns>
+		public static string GetRouterStrInfo(bool backup = false)
+		{
+			var (address, realm, _) = Router.GetRouterInfo(backup);
+			return $"{address}{(address.IsEndsWith("/") ? "" : "/")}{realm}";
+		}
+
+		/// <summary>
+		/// Gets the state that got backup router
 		/// </summary>
 		/// <returns></returns>
-		public static string GetRouterStrInfo()
-		{
-			var (address, realm, _) = Router.GetRouterInfo();
-			return $"{address}{(address.EndsWith("/") ? "" : "/")}{realm}";
-		}
+		public static bool GotBackupRouter()
+			=> Router.GetRouterInfo(true).Address != null;
 		#endregion
 
 		#region Open & ReOpen channels
 		/// <summary>
-		/// Opens a channel to the API Gateway Router
+		/// Opens a channel of the API Gateway Router
 		/// </summary>
 		/// <param name="wampChannel">The channel to open</param>
 		/// <param name="cancellationToken">The cancellation token</param>
@@ -102,7 +136,30 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Opens a channel to the API Gateway Router
+		/// Opens a channel of the API Gateway Router
+		/// </summary>
+		/// <param name="routerInfo">The settings of API Gateway Router</param>
+		/// <param name="onConnectionEstablished">The action to run when the connection is established</param>
+		/// <param name="onConnectionBroken">The action to run when the connection is broken</param>
+		/// <param name="onConnectionError">The action to run when the connection got any error</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		public static Task<IWampChannel> OpenAsync(
+			(string Address, string Realm, bool UseJSON) routerInfo,
+			Action<object, WampSessionCreatedEventArgs> onConnectionEstablished,
+			Action<object, WampSessionCloseEventArgs> onConnectionBroken,
+			Action<object, WampConnectionErrorEventArgs> onConnectionError,
+			CancellationToken cancellationToken
+		)
+		{
+			var wampChannel = routerInfo.UseJSON
+				? new DefaultWampChannelFactory().CreateJsonChannel(routerInfo.Address, routerInfo.Realm)
+				: new DefaultWampChannelFactory().CreateMsgpackChannel(routerInfo.Address, routerInfo.Realm);
+			return wampChannel.OpenAsync(cancellationToken, onConnectionEstablished, onConnectionBroken, onConnectionError);
+		}
+
+		/// <summary>
+		/// Opens a channel of the API Gateway Router
 		/// </summary>
 		/// <param name="onConnectionEstablished">The action to run when the connection is established</param>
 		/// <param name="onConnectionBroken">The action to run when the connection is broken</param>
@@ -114,17 +171,10 @@ namespace net.vieapps.Services
 			Action<object, WampSessionCloseEventArgs> onConnectionBroken = null,
 			Action<object, WampConnectionErrorEventArgs> onConnectionError = null,
 			CancellationToken cancellationToken = default
-		)
-		{
-			var (address, realm, useJsonChannel) = Router.GetRouterInfo();
-			var wampChannel = useJsonChannel
-				? new DefaultWampChannelFactory().CreateJsonChannel(address, realm)
-				: new DefaultWampChannelFactory().CreateMsgpackChannel(address, realm);
-			return wampChannel.OpenAsync(cancellationToken, onConnectionEstablished, onConnectionBroken, onConnectionError);
-		}
+		) => Router.OpenAsync(Router.GetRouterInfo(), onConnectionEstablished, onConnectionBroken, onConnectionError, cancellationToken);
 
 		/// <summary>
-		/// Reopens a channel to the API Gateway Router
+		/// Reopens a channel of the API Gateway Router
 		/// </summary>
 		/// <param name="wampChannel">The channel to re-open</param>
 		/// <param name="cancellationToken">The cancellation token</param>
@@ -161,7 +211,7 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Opens the incoming channel to the API Gateway Router
+		/// Opens the API Gateway Router incoming channel
 		/// </summary>
 		/// <param name="onConnectionEstablished">The action to run when the connection is established</param>
 		/// <param name="onConnectionBroken">The action to run when the connection is broken</param>
@@ -190,7 +240,7 @@ namespace net.vieapps.Services
 			).ConfigureAwait(false));
 
 		/// <summary>
-		/// Opens the outgoging channel to the API Gateway Router
+		/// Opens the API Gateway Router outgoging channel
 		/// </summary>
 		/// <param name="onConnectionEstablished">The action to run when the connection is established</param>
 		/// <param name="onConnectionBroken">The action to run when the connection is broken</param>
@@ -217,11 +267,43 @@ namespace net.vieapps.Services
 				onConnectionError,
 				cancellationToken
 			).ConfigureAwait(false));
+
+		/// <summary>
+		/// Opens the API Gateway Router backup channel
+		/// </summary>
+		/// <param name="onConnectionEstablished">The action to run when the connection is established</param>
+		/// <param name="onConnectionBroken">The action to run when the connection is broken</param>
+		/// <param name="onConnectionError">The action to run when the connection got any error</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		public static async Task<IWampChannel> OpenBackupChannelAsync(
+			Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null,
+			Action<object, WampSessionCloseEventArgs> onConnectionBroken = null,
+			Action<object, WampConnectionErrorEventArgs> onConnectionError = null,
+			CancellationToken cancellationToken = default
+		) => Router.GotBackupRouter()
+			? Router.BackupChannel ?? (Router.BackupChannel = await Router.OpenAsync
+			(
+				Router.GetRouterInfo(true),
+				(sender, args) =>
+				{
+					Router.BackupChannelSessionID = args.SessionId;
+					onConnectionEstablished?.Invoke(sender, args);
+				},
+				(sender, args) =>
+				{
+					Router.BackupChannelSessionID = 0;
+					onConnectionBroken?.Invoke(sender, args);
+				},
+				onConnectionError,
+				cancellationToken
+			).ConfigureAwait(false))
+			: null;
 		#endregion
 
 		#region Close channels
 		/// <summary>
-		/// Closes the incoming channel of the API Gateway Router
+		/// Closes the API Gateway Router incoming channel
 		/// </summary>
 		/// <param name="message">The message to send to API Gateway Router before closing the channel</param>
 		/// <param name="onError">The action to run when got any error</param>
@@ -229,10 +311,7 @@ namespace net.vieapps.Services
 		{
 			try
 			{
-				await (Router.IncomingChannel != null
-					? Router.IncomingChannel.Close(message ?? "Disconnected", new GoodbyeDetails { Message = message ?? "Disconnected" })
-					: Task.CompletedTask
-				).ConfigureAwait(false);
+				await (Router.IncomingChannel != null ? Router.IncomingChannel.Close(message ?? "Disconnected", new GoodbyeDetails { Message = message ?? "Disconnected" }) : Task.CompletedTask).ConfigureAwait(false);
 			}
 			catch (Exception ex)
 			{
@@ -246,7 +325,7 @@ namespace net.vieapps.Services
 		}
 
 		/// <summary>
-		/// Closes the outgoing channel of the API Gateway Router
+		/// Closes the API Gateway Router outgoing channel
 		/// </summary>
 		/// <param name="message">The message to send to API Gateway Router before closing the channel</param>
 		/// <param name="onError">The action to run when got any error</param>
@@ -254,10 +333,7 @@ namespace net.vieapps.Services
 		{
 			try
 			{
-				await (Router.OutgoingChannel != null
-					? Router.OutgoingChannel.Close(message ?? "Disconnected", new GoodbyeDetails { Message = message ?? "Disconnected" })
-					: Task.CompletedTask
-				).ConfigureAwait(false);
+				await (Router.OutgoingChannel != null ? Router.OutgoingChannel.Close(message ?? "Disconnected", new GoodbyeDetails { Message = message ?? "Disconnected" }) : Task.CompletedTask).ConfigureAwait(false);
 			}
 			catch (Exception ex)
 			{
@@ -267,6 +343,28 @@ namespace net.vieapps.Services
 			{
 				Router.OutgoingChannel = null;
 				Router.OutgoingChannelSessionID = 0;
+			}
+		}
+
+		/// <summary>
+		/// Closes the API Gateway Router backup channel
+		/// </summary>
+		/// <param name="message">The message to send to API Gateway Router before closing the channel</param>
+		/// <param name="onError">The action to run when got any error</param>
+		public static async Task CloseBackupChannelAsync(string message = null, Action<Exception> onError = null)
+		{
+			try
+			{
+				await (Router.BackupChannel != null ? Router.BackupChannel.Close(message ?? "Disconnected", new GoodbyeDetails { Message = message ?? "Disconnected" }) : Task.CompletedTask).ConfigureAwait(false);
+			}
+			catch (Exception ex)
+			{
+				onError?.Invoke(ex);
+			}
+			finally
+			{
+				Router.BackupChannel = null;
+				Router.BackupChannelSessionID = 0;
 			}
 		}
 		#endregion
@@ -355,18 +453,24 @@ namespace net.vieapps.Services
 		/// <param name="onOutgoingConnectionEstablished">The action to run when the outgoing connection is established</param>
 		/// <param name="onOutgoingConnectionBroken">The action to run when the outgoing connection is broken</param>
 		/// <param name="onOutgoingConnectionError">The action to run when the outgoing connection got any error</param>
+		/// <param name="onBackupConnectionEstablished">The action to run when the backup connection is established</param>
+		/// <param name="onBackupConnectionBroken">The action to run when the backup connection is broken</param>
+		/// <param name="onBackupConnectionError">The action to run when the backup connection got any error</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <param name="onError">The action to run when got any error</param>
 		/// <returns></returns>
 		public static async Task ConnectAsync(
-			Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null,
-			Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null,
-			Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null,
-			Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null,
-			Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null,
-			Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null,
-			CancellationToken cancellationToken = default,
-			Action<Exception> onError = null
+			Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished,
+			Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken,
+			Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError,
+			Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished,
+			Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken,
+			Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError,
+			Action<object, WampSessionCreatedEventArgs> onBackupConnectionEstablished,
+			Action<object, WampSessionCloseEventArgs> onBackupConnectionBroken,
+			Action<object, WampConnectionErrorEventArgs> onBackupConnectionError,
+			CancellationToken cancellationToken,
+			Action<Exception> onError
 		)
 		{
 			try
@@ -374,7 +478,8 @@ namespace net.vieapps.Services
 				await Task.WhenAll
 				(
 					Router.OpenIncomingChannelAsync(onIncomingConnectionEstablished, onIncomingConnectionBroken, onIncomingConnectionError, cancellationToken),
-					Router.OpenOutgoingChannelAsync(onOutgoingConnectionEstablished, onOutgoingConnectionBroken, onOutgoingConnectionError, cancellationToken)
+					Router.OpenOutgoingChannelAsync(onOutgoingConnectionEstablished, onOutgoingConnectionBroken, onOutgoingConnectionError, cancellationToken),
+					Router.OpenBackupChannelAsync(onBackupConnectionEstablished, onBackupConnectionBroken, onBackupConnectionError, cancellationToken)
 				).ConfigureAwait(false);
 				Router.ChannelsAreClosedBySystem = false;
 			}
@@ -400,6 +505,32 @@ namespace net.vieapps.Services
 		/// <param name="onError">The action to run when got any error</param>
 		/// <returns></returns>
 		public static void Connect(
+			Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished,
+			Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken,
+			Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError,
+			Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished,
+			Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken,
+			Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError,
+			Action<object, WampSessionCreatedEventArgs> onBackupConnectionEstablished,
+			Action<object, WampSessionCloseEventArgs> onBackupConnectionBroken,
+			Action<object, WampConnectionErrorEventArgs> onBackupConnectionError,
+			CancellationToken cancellationToken,
+			Action<Exception> onError = null
+		) => Router.ConnectAsync(onIncomingConnectionEstablished, onIncomingConnectionBroken, onIncomingConnectionError, onOutgoingConnectionEstablished, onOutgoingConnectionBroken, onOutgoingConnectionError, onBackupConnectionEstablished, onBackupConnectionBroken, onBackupConnectionError, cancellationToken, onError).Execute();
+
+		/// <summary>
+		/// Connects to API Gateway Router
+		/// </summary>
+		/// <param name="onIncomingConnectionEstablished">The action to run when the incomming connection is established</param>
+		/// <param name="onIncomingConnectionBroken">The action to run when the incomming connection is broken</param>
+		/// <param name="onIncomingConnectionError">The action to run when the incomming connection got any error</param>
+		/// <param name="onOutgoingConnectionEstablished">The action to run when the outgoing connection is established</param>
+		/// <param name="onOutgoingConnectionBroken">The action to run when the outgoing connection is broken</param>
+		/// <param name="onOutgoingConnectionError">The action to run when the outgoing connection got any error</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <param name="onError">The action to run when got any error</param>
+		/// <returns></returns>
+		public static Task ConnectAsync(
 			Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null,
 			Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null,
 			Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null,
@@ -408,8 +539,30 @@ namespace net.vieapps.Services
 			Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null,
 			CancellationToken cancellationToken = default,
 			Action<Exception> onError = null
-		)
-			=> Router.ConnectAsync(onIncomingConnectionEstablished, onIncomingConnectionBroken, onIncomingConnectionError, onOutgoingConnectionEstablished, onOutgoingConnectionBroken, onOutgoingConnectionError, cancellationToken, onError).Execute();
+		) => Router.ConnectAsync(onIncomingConnectionEstablished, onIncomingConnectionBroken, onIncomingConnectionError, onOutgoingConnectionEstablished, onOutgoingConnectionBroken, onOutgoingConnectionError, null, null, null, cancellationToken, onError);
+
+		/// <summary>
+		/// Connects to API Gateway Router
+		/// </summary>
+		/// <param name="onIncomingConnectionEstablished">The action to run when the incomming connection is established</param>
+		/// <param name="onIncomingConnectionBroken">The action to run when the incomming connection is broken</param>
+		/// <param name="onIncomingConnectionError">The action to run when the incomming connection got any error</param>
+		/// <param name="onOutgoingConnectionEstablished">The action to run when the outgoing connection is established</param>
+		/// <param name="onOutgoingConnectionBroken">The action to run when the outgoing connection is broken</param>
+		/// <param name="onOutgoingConnectionError">The action to run when the outgoing connection got any error</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <param name="onError">The action to run when got any error</param>
+		/// <returns></returns>
+		public static void Connect(
+			Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished = null,
+			Action<object, WampSessionCloseEventArgs> onIncomingConnectionBroken = null,
+			Action<object, WampConnectionErrorEventArgs> onIncomingConnectionError = null,
+			Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished = null,
+			Action<object, WampSessionCloseEventArgs> onOutgoingConnectionBroken = null,
+			Action<object, WampConnectionErrorEventArgs> onOutgoingConnectionError = null,
+			CancellationToken cancellationToken = default,
+			Action<Exception> onError = null
+		) => Router.ConnectAsync(onIncomingConnectionEstablished, onIncomingConnectionBroken, onIncomingConnectionError, onOutgoingConnectionEstablished, onOutgoingConnectionBroken, onOutgoingConnectionError, cancellationToken, onError).Execute();
 
 		/// <summary>
 		/// Disconnects from API Gateway Router (means close all WAMP channels)
@@ -420,7 +573,12 @@ namespace net.vieapps.Services
 		{
 			Router.ChannelsAreClosedBySystem = true;
 			Router.ReconnectTimer?.Dispose();
-			return Task.WhenAll(Router.CloseIncomingChannelAsync(message, onError), Router.CloseOutgoingChannelAsync(message, onError));
+			return Task.WhenAll
+			(
+				Router.CloseIncomingChannelAsync(message, onError),
+				Router.CloseOutgoingChannelAsync(message, onError),
+				Router.CloseBackupChannelAsync(message, onError)
+			);
 		}
 
 		/// <summary>
@@ -431,20 +589,24 @@ namespace net.vieapps.Services
 		public static void Disconnect(string message = null, Action<Exception> onError = null)
 			=> Router.DisconnectAsync(message, onError).Execute(true);
 
-		static IDisposable ReconnectTimer { get; set; }
-
 		/// <summary>
 		/// Runs the reconnect timer to re-connect when the connections were broken
 		/// </summary>
-		public static void RunReconnectTimer()
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <param name="tracker">The tracker to track the logs</param>
+		/// <param name="prefix"></param>
+		/// <param name="awatingTimes"></param>
+		public static void RunReconnectTimer(CancellationToken cancellationToken = default, Action<string, Exception> tracker = null, string prefix = null, int awatingTimes = 0)
 		{
 			Router.ReconnectTimer?.Dispose();
 			Router.ReconnectTimer = System.Reactive.Linq.Observable.Timer(TimeSpan.FromMinutes(3), TimeSpan.FromSeconds(13)).Subscribe(_ =>
 			{
 				if (Router.IncomingChannel != null && (!Router.ChannelsAreClosedBySystem || Router.IncomingChannelSessionID < 1))
-					Router.IncomingChannel.ReOpen();
+					Router.IncomingChannel.ReOpen(cancellationToken, tracker, prefix, awatingTimes);
 				if (Router.OutgoingChannel != null && (!Router.ChannelsAreClosedBySystem || Router.OutgoingChannelSessionID < 1))
-					Router.OutgoingChannel.ReOpen();
+					Router.OutgoingChannel.ReOpen(cancellationToken, tracker, prefix, awatingTimes);
+				if (Router.BackupChannel != null && (!Router.ChannelsAreClosedBySystem || Router.BackupChannelSessionID < 1))
+					Router.BackupChannel.ReOpen(cancellationToken, tracker, prefix, awatingTimes);
 			});
 		}
 		#endregion
