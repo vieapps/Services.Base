@@ -1,17 +1,17 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFrameworks>net9.0;netstandard2.0</TargetFrameworks>
+		<TargetFrameworks>net10.0;netstandard2.0</TargetFrameworks>
 		<WarningLevel>3</WarningLevel>
 		<NoWarn>1573,1591,IDE0054,IDE0057,IDE0063,IDE0074,IDE0090,CA1068,NU1701</NoWarn>
 		<DocumentationFile>bin/$(Configuration)/$(TargetFramework)/VIEApps.Services.Base.xml</DocumentationFile>
 		<RootNamespace>net.vieapps.Services</RootNamespace>
 		<AssemblyName>VIEApps.Services.Base</AssemblyName>
 		<AssemblyTitle>VIEApps NGX Service Base</AssemblyTitle>
-		<AssemblyVersion>10.9.2511.1</AssemblyVersion>
-		<FileVersion>10.9.2511.1</FileVersion>
-		<Version>10.9.2511.1</Version>
-		<InformationalVersion>10.9.$([System.DateTime]::Now.Year).$([System.DateTime]::Now.Month).$([System.DateTime]::Now.Day)@$(TargetFramework)#moving.forward</InformationalVersion>
+		<AssemblyVersion>10.10.2511.1</AssemblyVersion>
+		<FileVersion>10.10.2511.1</FileVersion>
+		<Version>10.10.2511.1</Version>
+		<InformationalVersion>10.10.$([System.DateTime]::Now.Year).$([System.DateTime]::Now.Month).$([System.DateTime]::Now.Day)@$(TargetFramework)#ongoing.improvement</InformationalVersion>
 		<Title>VIEApps NGX Service Base</Title>
 		<Description>The base of all microservices in the VIEApps NGX</Description>
 		<Authors>VIEApps.net</Authors>
@@ -30,7 +30,7 @@
 		<PackageIcon>Icon.png</PackageIcon>
 		<PackageOutputPath>../../Components</PackageOutputPath>
 		<PackageTags>services;microservices;vieapps;vieapps.components;vieapps.services;vieapps.microservices</PackageTags>
-		<PackageReleaseNotes>Javascript helper methods</PackageReleaseNotes>
+		<PackageReleaseNotes>Support .NET 10</PackageReleaseNotes>
 		<PackageProjectUrl>https://vieapps.net</PackageProjectUrl>
 		<RepositoryUrl>https://github.com/vieapps/Services.Base</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
@@ -48,9 +48,9 @@
 	<ItemGroup>
 		<PackageReference Include="JavaScriptEngineSwitcher.ChakraCore" Version="3.27.3" />
 		<PackageReference Include="JSPool" Version="4.0.0" />
-		<PackageReference Include="VIEApps.Components.Repository" Version="10.9.2511.1" />
-		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.9.2511.1" />
-		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.9.2511.1" />
+		<PackageReference Include="VIEApps.Components.Repository" Version="10.10.2511.1" />
+		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.10.2511.1" />
+		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.10.2511.1" />
 	</ItemGroup>
 
 </Project>

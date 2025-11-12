@@ -1,6 +1,5 @@
 ﻿#region Related components
 using System;
-using System.Linq;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,9 +9,9 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using WampSharp.Core.Listener;
 using WampSharp.V2;
+using WampSharp.V2.Realm;
 using WampSharp.V2.Client;
 using WampSharp.V2.Core.Contracts;
-using WampSharp.V2.Realm;
 using net.vieapps.Components.Utility;
 using net.vieapps.Components.WebSockets;
 #endregion
@@ -32,24 +31,24 @@ namespace net.vieapps.Services
 		public static IWampChannel IncomingChannel { get; internal set; }
 
 		/// <summary>
-		/// Gets the session's identity of the API Gateway incoming channel
-		/// </summary>
-		public static long IncomingChannelSessionID { get; internal set; } = 0;
-
-		/// <summary>
 		/// Gets the API Gateway outgoing channel
 		/// </summary>
 		public static IWampChannel OutgoingChannel { get; internal set; }
 
 		/// <summary>
-		/// Gets the session's identity of the API Gateway outgoing channel
-		/// </summary>
-		public static long OutgoingChannelSessionID { get; internal set; } = 0;
-
-		/// <summary>
 		/// Gets the backup channel of API Gateway Router
 		/// </summary>
 		public static IWampChannel BackupChannel { get; internal set; }
+
+		/// <summary>
+		/// Gets the session's identity of the API Gateway incoming channel
+		/// </summary>
+		public static long IncomingChannelSessionID { get; internal set; } = 0;
+
+		/// <summary>
+		/// Gets the session's identity of the API Gateway outgoing channel
+		/// </summary>
+		public static long OutgoingChannelSessionID { get; internal set; } = 0;
 
 		/// <summary>
 		/// Gets the session's identity of the API Gateway Router's backup channel
@@ -61,11 +60,30 @@ namespace net.vieapps.Services
 		/// </summary>
 		public static bool ChannelsAreClosedBySystem { get; internal set; } = false;
 
-		static WebSocket StatisticsWebSocket { get; set; }
+		internal static WebSocket StatisticsWebSocket { get; } = new WebSocket
+		{
+			OnConnectionBroken = websocket =>
+			{
+				if (Router.BackupStatisticsWebSocketID.Equals(websocket.ID))
+				{
+					Router.BackupStatisticsWebSocketID = Guid.Empty;
+					Router.BackupStatisticsWebSocketState = "closed";
+				}
+				else
+				{
+					Router.PrimaryStatisticsWebSocketID = Guid.Empty;
+					Router.PrimaryStatisticsWebSocketState = "closed";
+				}
+			}
+		};
 
-		static string StatisticsWebSocketState { get; set; }
+		internal static Guid PrimaryStatisticsWebSocketID { get; set; } = Guid.Empty;
 
-		static IDisposable ReconnectTimer { get; set; }
+		internal static string PrimaryStatisticsWebSocketState { get; set; } = "initializing";
+
+		internal static Guid BackupStatisticsWebSocketID { get; set; } = Guid.Empty;
+
+		internal static string BackupStatisticsWebSocketState { get; set; } = "initializing";
 		#endregion
 
 		#region Get settings of API Gateway Router
@@ -107,30 +125,15 @@ namespace net.vieapps.Services
 			=> Router.GetRouterInfo(true).Address != null;
 		#endregion
 
-		#region Open & ReOpen channels
+		#region Open channels
 		/// <summary>
 		/// Opens a channel of the API Gateway Router
 		/// </summary>
-		/// <param name="wampChannel">The channel to open</param>
-		/// <param name="cancellationToken">The cancellation token</param>
-		/// <param name="onConnectionEstablished">The action to run when the connection is established</param>
-		/// <param name="onConnectionBroken">The action to run when the connection is broken</param>
-		/// <param name="onConnectionError">The action to run when the connection got any error</param>
+		/// <param name="wampChannel"></param>
+		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		public static async Task<IWampChannel> OpenAsync(
-			this IWampChannel wampChannel,
-			CancellationToken cancellationToken = default,
-			Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null,
-			Action<object, WampSessionCloseEventArgs> onConnectionBroken = null,
-			Action<object, WampConnectionErrorEventArgs> onConnectionError = null
-		)
+		public static async Task<IWampChannel> OpenAsync(this IWampChannel wampChannel, CancellationToken cancellationToken = default)
 		{
-			if (onConnectionEstablished != null)
-				wampChannel.RealmProxy.Monitor.ConnectionEstablished += new EventHandler<WampSessionCreatedEventArgs>(onConnectionEstablished);
-			if (onConnectionBroken != null)
-				wampChannel.RealmProxy.Monitor.ConnectionBroken += new EventHandler<WampSessionCloseEventArgs>(onConnectionBroken);
-			if (onConnectionError != null)
-				wampChannel.RealmProxy.Monitor.ConnectionError += new EventHandler<WampConnectionErrorEventArgs>(onConnectionError);
 			await wampChannel.Open().WithCancellationToken(cancellationToken).ConfigureAwait(false);
 			return wampChannel;
 		}
@@ -138,13 +141,58 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Opens a channel of the API Gateway Router
 		/// </summary>
+		/// <param name="wampChannel">The channel to open</param>
+		/// <param name="onConnectionEstablished">The action to run when the connection is established</param>
+		/// <param name="onConnectionBroken">The action to run when the connection is broken</param>
+		/// <param name="onConnectionError">The action to run when the connection got any error</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		public static Task<IWampChannel> OpenAsync(this IWampChannel wampChannel, Action<object, WampSessionCreatedEventArgs> onConnectionEstablished, Action<object, WampSessionCloseEventArgs> onConnectionBroken, Action<object, WampConnectionErrorEventArgs> onConnectionError, CancellationToken cancellationToken = default)
+		{
+			wampChannel.RealmProxy.Monitor.ConnectionEstablished += new EventHandler<WampSessionCreatedEventArgs>((sender, args) =>
+			{
+				try
+				{
+					onConnectionEstablished?.Invoke(sender, args);
+				}
+				catch { }
+			});
+			wampChannel.RealmProxy.Monitor.ConnectionBroken += new EventHandler<WampSessionCloseEventArgs>((sender, args) =>
+			{
+				try
+				{
+					onConnectionBroken?.Invoke(sender, args);
+				}
+				catch { }
+				if (!Router.ChannelsAreClosedBySystem)
+				{
+					using (var reconnector = new WampChannelReconnector(wampChannel, () => wampChannel.OpenAsync()))
+						reconnector.Start();
+				}
+			});
+			wampChannel.RealmProxy.Monitor.ConnectionError += new EventHandler<WampConnectionErrorEventArgs>((sender, args) =>
+			{
+				try
+				{
+					onConnectionError?.Invoke(sender, args);
+				}
+				catch { }
+			});
+			return wampChannel.OpenAsync(cancellationToken);
+		}
+		#endregion
+
+		#region Create & Update channels
+		/// <summary>
+		/// Creates and opens a channel of the API Gateway Router
+		/// </summary>
 		/// <param name="routerInfo">The settings of API Gateway Router</param>
 		/// <param name="onConnectionEstablished">The action to run when the connection is established</param>
 		/// <param name="onConnectionBroken">The action to run when the connection is broken</param>
 		/// <param name="onConnectionError">The action to run when the connection got any error</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
-		public static Task<IWampChannel> OpenAsync(
+		public static Task<IWampChannel> CreateAsync(
 			(string Address, string Realm, bool UseJSON) routerInfo,
 			Action<object, WampSessionCreatedEventArgs> onConnectionEstablished,
 			Action<object, WampSessionCloseEventArgs> onConnectionBroken,
@@ -155,61 +203,93 @@ namespace net.vieapps.Services
 			var wampChannel = routerInfo.UseJSON
 				? new DefaultWampChannelFactory().CreateJsonChannel(routerInfo.Address, routerInfo.Realm)
 				: new DefaultWampChannelFactory().CreateMsgpackChannel(routerInfo.Address, routerInfo.Realm);
-			return wampChannel.OpenAsync(cancellationToken, onConnectionEstablished, onConnectionBroken, onConnectionError);
+			return wampChannel.OpenAsync(onConnectionEstablished, onConnectionBroken,	onConnectionError, cancellationToken);
+		}
+
+		static void ConnectStatisticsWebSocket(ILogger logger = null, bool isBackup = false)
+		{
+			var uri = new Uri(Router.GetRouterStrInfo(isBackup));
+			var connect = isBackup
+				? Router.BackupStatisticsWebSocketID.Equals(Guid.Empty) && (Router.BackupStatisticsWebSocketState == "initializing" || Router.BackupStatisticsWebSocketState == "closed")
+				: Router.PrimaryStatisticsWebSocketID.Equals(Guid.Empty) && (Router.PrimaryStatisticsWebSocketState == "initializing" || Router.PrimaryStatisticsWebSocketState == "closed");
+			if (connect)
+				Router.StatisticsWebSocket.Connect
+				(
+					$"{uri.Scheme}://{uri.Host}:56429/",
+					websocket =>
+					{
+						if (isBackup)
+						{
+							Router.BackupStatisticsWebSocketID = websocket.ID;
+							Router.BackupStatisticsWebSocketState = "connected";
+						}
+						else
+						{
+							Router.PrimaryStatisticsWebSocketID = websocket.ID;
+							Router.PrimaryStatisticsWebSocketState = "connected";
+						}
+					},
+					exception =>
+					{
+						logger?.LogError($"Cannot connect to statistic websocket => {exception.Message}", exception);
+						Router.ConnectStatisticsWebSocketAsync(logger, isBackup).Execute();
+					}
+				);
+		}
+
+		static async Task ConnectStatisticsWebSocketAsync(ILogger logger = null, bool isBackup = false)
+		{
+			await Task.Delay(UtilityService.GetRandomNumber(456, 789)).ConfigureAwait(false);
+			Router.ConnectStatisticsWebSocket(logger, isBackup);
 		}
 
 		/// <summary>
-		/// Opens a channel of the API Gateway Router
+		/// Updates related information of the channel
 		/// </summary>
-		/// <param name="onConnectionEstablished">The action to run when the connection is established</param>
-		/// <param name="onConnectionBroken">The action to run when the connection is broken</param>
-		/// <param name="onConnectionError">The action to run when the connection got any error</param>
-		/// <param name="cancellationToken">The cancellation token</param>
-		/// <returns></returns>
-		public static Task<IWampChannel> OpenAsync(
-			Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null,
-			Action<object, WampSessionCloseEventArgs> onConnectionBroken = null,
-			Action<object, WampConnectionErrorEventArgs> onConnectionError = null,
-			CancellationToken cancellationToken = default
-		) => Router.OpenAsync(Router.GetRouterInfo(), onConnectionEstablished, onConnectionBroken, onConnectionError, cancellationToken);
+		/// <param name="wampChannel"></param>
+		/// <param name="sessionID"></param>
+		/// <param name="name"></param>
+		/// <param name="description"></param>
+		public static async Task UpdateAsync(this IWampChannel wampChannel, long sessionID, string name, string description, ILogger logger = null, bool isBackup = false)
+		{
+			Router.ConnectStatisticsWebSocket(logger, isBackup);
+			var state = isBackup ? Router.BackupStatisticsWebSocketState : Router.PrimaryStatisticsWebSocketState;
+			while (state == null || state == "initializing" || state == "connecting")
+			{
+				await Task.Delay(UtilityService.GetRandomNumber(234, 567)).ConfigureAwait(false);
+				state = isBackup ? Router.BackupStatisticsWebSocketState : Router.PrimaryStatisticsWebSocketState;
+			}
+
+			var websocket = Router.StatisticsWebSocket.GetWebSocket(isBackup ? Router.BackupStatisticsWebSocketID : Router.PrimaryStatisticsWebSocketID);
+			if (websocket != null && websocket.State == System.Net.WebSockets.WebSocketState.Open)
+				try
+				{
+					await websocket.SendAsync(new JObject
+					{
+						{ "Command", "Update" },
+						{ "SessionID", sessionID },
+						{ "Name", name },
+						{ "Description", description }
+					}.ToString(Formatting.None), true).ConfigureAwait(false);
+				}
+				catch (Exception ex)
+				{
+					logger?.LogError($"Cannot update statistic websocket info => {ex.Message}", ex);
+				}
+		}
 
 		/// <summary>
-		/// Reopens a channel of the API Gateway Router
+		/// Updates related information of the channel
 		/// </summary>
-		/// <param name="wampChannel">The channel to re-open</param>
-		/// <param name="cancellationToken">The cancellation token</param>
-		/// <param name="tracker">The tracker to track the logs</param>
-		/// <param name="prefix"></param>
-		/// <param name="awatingTimes"></param>
-		public static void ReOpen(this IWampChannel wampChannel, CancellationToken cancellationToken = default, Action<string, Exception> tracker = null, string prefix = null, int awatingTimes = 0)
-		{
-			using (var reconnector = new WampChannelReconnector(wampChannel, () => wampChannel.ReOpenAsync(tracker, prefix, awatingTimes, cancellationToken)))
-				reconnector.Start();
-		}
+		/// <param name="wampChannel"></param>
+		/// <param name="sessionID"></param>
+		/// <param name="name"></param>
+		/// <param name="description"></param>
+		public static void Update(this IWampChannel wampChannel, long sessionID, string name, string description, ILogger logger = null, bool isBackup = false)
+			=> wampChannel.UpdateAsync(sessionID, name, description, logger, isBackup).Execute();
+		#endregion
 
-		static async Task ReOpenAsync(this IWampChannel wampChannel, Action<string, Exception> tracker, string prefix, int awatingTimes, CancellationToken cancellationToken)
-		{
-			try
-			{
-				await Task.Delay(awatingTimes > 0 ? awatingTimes : UtilityService.GetRandomNumber(1234, 2345), cancellationToken).ConfigureAwait(false);
-			}
-			catch (Exception ex)
-			{
-				tracker?.Invoke($"{(string.IsNullOrWhiteSpace(prefix) ? "" : $"[{prefix}] => ")}Canceled", ex is OperationCanceledException ? null : ex);
-				return;
-			}
-			try
-			{
-				tracker?.Invoke($"{(string.IsNullOrWhiteSpace(prefix) ? "" : $"[{prefix}] => ")}Reconnecting", null);
-				await wampChannel.OpenAsync(cancellationToken).ConfigureAwait(false);
-				tracker?.Invoke($"{(string.IsNullOrWhiteSpace(prefix) ? "" : $"[{prefix}] => ")}Reconnected", null);
-			}
-			catch (Exception ex)
-			{
-				tracker?.Invoke($"{(string.IsNullOrWhiteSpace(prefix) ? "" : $"[{prefix}] => ")}Reconnect error: {ex.Message}", ex is System.Net.WebSockets.WebSocketException || ex is ArgumentException || ex is OperationCanceledException ? null : ex);
-			}
-		}
-
+		#region Incoming channel
 		/// <summary>
 		/// Opens the API Gateway Router incoming channel
 		/// </summary>
@@ -219,89 +299,26 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		public static async Task<IWampChannel> OpenIncomingChannelAsync(
-			Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null,
-			Action<object, WampSessionCloseEventArgs> onConnectionBroken = null,
-			Action<object, WampConnectionErrorEventArgs> onConnectionError = null,
-			CancellationToken cancellationToken = default
-		)
-			=> Router.IncomingChannel ?? (Router.IncomingChannel = await Router.OpenAsync(
-				(sender, args) =>
-				{
-					Router.IncomingChannelSessionID = args.SessionId;
-					onConnectionEstablished?.Invoke(sender, args);
-				},
-				(sender, args) =>
-				{
-					Router.IncomingChannelSessionID = 0;
-					onConnectionBroken?.Invoke(sender, args);
-				},
-				onConnectionError,
-				cancellationToken
-			).ConfigureAwait(false));
+			Action<object, WampSessionCreatedEventArgs> onConnectionEstablished,
+			Action<object, WampSessionCloseEventArgs> onConnectionBroken,
+			Action<object, WampConnectionErrorEventArgs> onConnectionError,
+			CancellationToken cancellationToken
+		) => Router.IncomingChannel = await Router.CreateAsync(
+			Router.GetRouterInfo(),
+			(sender, args) =>
+			{
+				Router.IncomingChannelSessionID = args.SessionId;
+				onConnectionEstablished?.Invoke(sender, args);
+			},
+			(sender, args) =>
+			{
+				Router.IncomingChannelSessionID = 0;
+				onConnectionBroken?.Invoke(sender, args);
+			},
+			onConnectionError,
+			cancellationToken
+		).ConfigureAwait(false);
 
-		/// <summary>
-		/// Opens the API Gateway Router outgoging channel
-		/// </summary>
-		/// <param name="onConnectionEstablished">The action to run when the connection is established</param>
-		/// <param name="onConnectionBroken">The action to run when the connection is broken</param>
-		/// <param name="onConnectionError">The action to run when the connection got any error</param>
-		/// <param name="cancellationToken">The cancellation token</param>
-		/// <returns></returns>
-		public static async Task<IWampChannel> OpenOutgoingChannelAsync(
-			Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null,
-			Action<object, WampSessionCloseEventArgs> onConnectionBroken = null,
-			Action<object, WampConnectionErrorEventArgs> onConnectionError = null,
-			CancellationToken cancellationToken = default
-		)
-			=> Router.OutgoingChannel ?? (Router.OutgoingChannel = await Router.OpenAsync(
-				(sender, args) =>
-				{
-					Router.OutgoingChannelSessionID = args.SessionId;
-					onConnectionEstablished?.Invoke(sender, args);
-				},
-				(sender, args) =>
-				{
-					Router.OutgoingChannelSessionID = 0;
-					onConnectionBroken?.Invoke(sender, args);
-				},
-				onConnectionError,
-				cancellationToken
-			).ConfigureAwait(false));
-
-		/// <summary>
-		/// Opens the API Gateway Router backup channel
-		/// </summary>
-		/// <param name="onConnectionEstablished">The action to run when the connection is established</param>
-		/// <param name="onConnectionBroken">The action to run when the connection is broken</param>
-		/// <param name="onConnectionError">The action to run when the connection got any error</param>
-		/// <param name="cancellationToken">The cancellation token</param>
-		/// <returns></returns>
-		public static async Task<IWampChannel> OpenBackupChannelAsync(
-			Action<object, WampSessionCreatedEventArgs> onConnectionEstablished = null,
-			Action<object, WampSessionCloseEventArgs> onConnectionBroken = null,
-			Action<object, WampConnectionErrorEventArgs> onConnectionError = null,
-			CancellationToken cancellationToken = default
-		) => Router.GotBackupRouter()
-			? Router.BackupChannel ?? (Router.BackupChannel = await Router.OpenAsync
-			(
-				Router.GetRouterInfo(true),
-				(sender, args) =>
-				{
-					Router.BackupChannelSessionID = args.SessionId;
-					onConnectionEstablished?.Invoke(sender, args);
-				},
-				(sender, args) =>
-				{
-					Router.BackupChannelSessionID = 0;
-					onConnectionBroken?.Invoke(sender, args);
-				},
-				onConnectionError,
-				cancellationToken
-			).ConfigureAwait(false))
-			: null;
-		#endregion
-
-		#region Close channels
 		/// <summary>
 		/// Closes the API Gateway Router incoming channel
 		/// </summary>
@@ -323,6 +340,37 @@ namespace net.vieapps.Services
 				Router.IncomingChannelSessionID = 0;
 			}
 		}
+		#endregion
+
+		#region Outgoging channel
+		/// <summary>
+		/// Opens the API Gateway Router outgoging channel
+		/// </summary>
+		/// <param name="onConnectionEstablished">The action to run when the connection is established</param>
+		/// <param name="onConnectionBroken">The action to run when the connection is broken</param>
+		/// <param name="onConnectionError">The action to run when the connection got any error</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		public static async Task<IWampChannel> OpenOutgoingChannelAsync(
+			Action<object, WampSessionCreatedEventArgs> onConnectionEstablished,
+			Action<object, WampSessionCloseEventArgs> onConnectionBroken,
+			Action<object, WampConnectionErrorEventArgs> onConnectionError,
+			CancellationToken cancellationToken
+		) => Router.OutgoingChannel = await Router.CreateAsync(
+			Router.GetRouterInfo(),
+			(sender, args) =>
+			{
+				Router.OutgoingChannelSessionID = args.SessionId;
+				onConnectionEstablished?.Invoke(sender, args);
+			},
+			(sender, args) =>
+			{
+				Router.OutgoingChannelSessionID = 0;
+				onConnectionBroken?.Invoke(sender, args);
+			},
+			onConnectionError,
+			cancellationToken
+		).ConfigureAwait(false);
 
 		/// <summary>
 		/// Closes the API Gateway Router outgoing channel
@@ -345,6 +393,40 @@ namespace net.vieapps.Services
 				Router.OutgoingChannelSessionID = 0;
 			}
 		}
+		#endregion
+
+		#region Backup channel
+		/// <summary>
+		/// Opens the API Gateway Router backup channel
+		/// </summary>
+		/// <param name="onConnectionEstablished">The action to run when the connection is established</param>
+		/// <param name="onConnectionBroken">The action to run when the connection is broken</param>
+		/// <param name="onConnectionError">The action to run when the connection got any error</param>
+		/// <param name="cancellationToken">The cancellation token</param>
+		/// <returns></returns>
+		public static async Task<IWampChannel> OpenBackupChannelAsync(
+			Action<object, WampSessionCreatedEventArgs> onConnectionEstablished,
+			Action<object, WampSessionCloseEventArgs> onConnectionBroken,
+			Action<object, WampConnectionErrorEventArgs> onConnectionError,
+			CancellationToken cancellationToken
+		) => Router.GotBackupRouter()
+			? Router.BackupChannel = await Router.CreateAsync
+			(
+				Router.GetRouterInfo(true),
+				(sender, args) =>
+				{
+					Router.BackupChannelSessionID = args.SessionId;
+					onConnectionEstablished?.Invoke(sender, args);
+				},
+				(sender, args) =>
+				{
+					Router.BackupChannelSessionID = 0;
+					onConnectionBroken?.Invoke(sender, args);
+				},
+				onConnectionError,
+				cancellationToken
+			).ConfigureAwait(false)
+			: null;
 
 		/// <summary>
 		/// Closes the API Gateway Router backup channel
@@ -367,80 +449,6 @@ namespace net.vieapps.Services
 				Router.BackupChannelSessionID = 0;
 			}
 		}
-		#endregion
-
-		#region Update channels
-		static void ConnectStatisticsWebSocket(ILogger logger = null)
-		{
-			if (Router.StatisticsWebSocketState == null || Router.StatisticsWebSocketState == "initializing" || Router.StatisticsWebSocketState == "closed")
-			{
-				Router.StatisticsWebSocketState = "connecting";
-				var uri = new Uri(Router.GetRouterStrInfo());
-				Router.StatisticsWebSocket.Connect
-				(
-					$"{uri.Scheme}://{uri.Host}:56429/",
-					websocket => Router.StatisticsWebSocketState = "connected",
-					exception =>
-					{
-						logger?.LogError($"Cannot connect to statistic websocket => {exception.Message}", exception);
-						Router.StatisticsWebSocketState = "closed";
-						Router.ConnectStatisticsWebSocketAsync(logger).Execute();
-					}
-				);
-			}
-		}
-
-		static async Task ConnectStatisticsWebSocketAsync(ILogger logger = null)
-		{
-			await Task.Delay(UtilityService.GetRandomNumber(456, 789)).ConfigureAwait(false);
-			Router.ConnectStatisticsWebSocket(logger);
-		}
-
-		/// <summary>
-		/// Updates related information of the channel
-		/// </summary>
-		/// <param name="wampChannel"></param>
-		/// <param name="sessionID"></param>
-		/// <param name="name"></param>
-		/// <param name="description"></param>
-		public static async Task UpdateAsync(this IWampChannel wampChannel, long sessionID, string name, string description, ILogger logger = null)
-		{
-			if (Router.StatisticsWebSocket == null)
-			{
-				Router.StatisticsWebSocket = new WebSocket(null, null, CancellationToken.None);
-				Router.StatisticsWebSocketState = "initializing";
-			}
-
-			Router.ConnectStatisticsWebSocket(logger);
-			while (Router.StatisticsWebSocketState == null || Router.StatisticsWebSocketState == "initializing" || Router.StatisticsWebSocketState == "connecting")
-				await Task.Delay(UtilityService.GetRandomNumber(234, 567)).ConfigureAwait(false);
-
-			if (Router.StatisticsWebSocketState == "connected" && Router.StatisticsWebSocket.GetWebSockets().Any())
-				try
-				{
-					await Router.StatisticsWebSocket.GetWebSockets().First().SendAsync(new JObject
-					{
-						{ "Command", "Update" },
-						{ "SessionID", sessionID },
-						{ "Name", name },
-						{ "Description", description }
-					}.ToString(Formatting.None), true).ConfigureAwait(false);
-				}
-				catch (Exception ex)
-				{
-					logger?.LogError($"Cannot update statistic websocket info => {ex.Message}", ex);
-				}
-		}
-
-		/// <summary>
-		/// Updates related information of the channel
-		/// </summary>
-		/// <param name="wampChannel"></param>
-		/// <param name="sessionID"></param>
-		/// <param name="name"></param>
-		/// <param name="description"></param>
-		public static void Update(this IWampChannel wampChannel, long sessionID, string name, string description, ILogger logger = null)
-			=> wampChannel.UpdateAsync(sessionID, name, description, logger).Execute();
 		#endregion
 
 		#region Connect & Disconnect
@@ -572,7 +580,6 @@ namespace net.vieapps.Services
 		public static Task DisconnectAsync(string message = null, Action<Exception> onError = null)
 		{
 			Router.ChannelsAreClosedBySystem = true;
-			Router.ReconnectTimer?.Dispose();
 			return Task.WhenAll
 			(
 				Router.CloseIncomingChannelAsync(message, onError),
@@ -588,27 +595,6 @@ namespace net.vieapps.Services
 		/// <param name="onError">The action to run when got any error</param>
 		public static void Disconnect(string message = null, Action<Exception> onError = null)
 			=> Router.DisconnectAsync(message, onError).Execute(true);
-
-		/// <summary>
-		/// Runs the reconnect timer to re-connect when the connections were broken
-		/// </summary>
-		/// <param name="cancellationToken">The cancellation token</param>
-		/// <param name="tracker">The tracker to track the logs</param>
-		/// <param name="prefix"></param>
-		/// <param name="awatingTimes"></param>
-		public static void RunReconnectTimer(CancellationToken cancellationToken = default, Action<string, Exception> tracker = null, string prefix = null, int awatingTimes = 0)
-		{
-			Router.ReconnectTimer?.Dispose();
-			Router.ReconnectTimer = System.Reactive.Linq.Observable.Timer(TimeSpan.FromMinutes(3), TimeSpan.FromSeconds(13)).Subscribe(_ =>
-			{
-				if (Router.IncomingChannel != null && (!Router.ChannelsAreClosedBySystem || Router.IncomingChannelSessionID < 1))
-					Router.IncomingChannel.ReOpen(cancellationToken, tracker, prefix, awatingTimes);
-				if (Router.OutgoingChannel != null && (!Router.ChannelsAreClosedBySystem || Router.OutgoingChannelSessionID < 1))
-					Router.OutgoingChannel.ReOpen(cancellationToken, tracker, prefix, awatingTimes);
-				if (Router.BackupChannel != null && (!Router.ChannelsAreClosedBySystem || Router.BackupChannelSessionID < 1))
-					Router.BackupChannel.ReOpen(cancellationToken, tracker, prefix, awatingTimes);
-			});
-		}
 		#endregion
 
 		#region Get & Call a service
@@ -693,10 +679,12 @@ namespace net.vieapps.Services
 			catch (WampSessionNotEstablishedException)
 			{
 				await Task.Delay(UtilityService.GetRandomNumber(567, 789), cancellationToken).ConfigureAwait(false);
-				Router.IncomingChannel?.ReOpen(cancellationToken);
-				Router.OutgoingChannel?.ReOpen(cancellationToken);
+				await Task.WhenAll
+				(
+					Router.IncomingChannelSessionID > 0 ? Task.CompletedTask : Router.IncomingChannel.OpenAsync(cancellationToken),
+					Router.OutgoingChannelSessionID > 0 ? Task.CompletedTask : Router.OutgoingChannel.OpenAsync(cancellationToken)
+				).ConfigureAwait(false);
 				await Task.Delay(UtilityService.GetRandomNumber(567, 789), cancellationToken).ConfigureAwait(false);
-
 				try
 				{
 					var json = await Router.GetService(requestInfo.ServiceName).ProcessRequestAsync(requestInfo, cancellationToken).ConfigureAwait(false);
@@ -773,10 +761,12 @@ namespace net.vieapps.Services
 			catch (WampSessionNotEstablishedException)
 			{
 				await Task.Delay(UtilityService.GetRandomNumber(567, 789), cancellationToken).ConfigureAwait(false);
-				Router.IncomingChannel?.ReOpen(cancellationToken);
-				Router.OutgoingChannel?.ReOpen(cancellationToken);
+				await Task.WhenAll
+				(
+					Router.IncomingChannelSessionID > 0 ? Task.CompletedTask : Router.IncomingChannel.OpenAsync(cancellationToken),
+					Router.OutgoingChannelSessionID > 0 ? Task.CompletedTask : Router.OutgoingChannel.OpenAsync(cancellationToken)
+				).ConfigureAwait(false);
 				await Task.Delay(UtilityService.GetRandomNumber(567, 789), cancellationToken).ConfigureAwait(false);
-
 				try
 				{
 					var json = await Router.GetSyncableService(requestInfo.ServiceName).SyncAsync(requestInfo, cancellationToken).ConfigureAwait(false);
