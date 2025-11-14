@@ -56,6 +56,8 @@ namespace net.vieapps.Services
 						}
 						catch { }
 				}
+				catch (TaskCanceledException)	{ }
+				catch (OperationCanceledException) { }
 				catch (Exception ex)
 				{
 					logger?.LogError($"Cannot write logs into files => {ex.Message}", ex);
@@ -63,7 +65,11 @@ namespace net.vieapps.Services
 				finally
 				{
 					Extensions.Writting = false;
-					Extensions.Locker.Release();
+					try
+					{
+						Extensions.Locker.Release();
+					}
+					catch { }
 				}
 		}
 	}
