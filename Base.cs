@@ -40,6 +40,9 @@ namespace net.vieapps.Services
 		public virtual Task<JToken> ProcessWebHookMessageAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
 			=> Task.FromException<JToken>(new NotImplementedException());
 
+		public virtual Task<JToken> ProcessMcpRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
+			=> Task.FromException<JToken>(new NotImplementedException());
+
 		/// <summary>
 		/// Processes the inter-communicate messages between the services' instances
 		/// </summary>
@@ -2401,6 +2404,7 @@ namespace net.vieapps.Services
 				if (this.ServiceUniqueInstance != null)
 					await this.ServiceUniqueInstance.DisposeAsync().ConfigureAwait(false);
 			}
+			catch (ObjectDisposedException) { }
 			catch (Exception ex)
 			{
 				if (ex is WampException && ex.Message.IsContains("wamp.error.no_such_registration"))
@@ -2421,6 +2425,7 @@ namespace net.vieapps.Services
 				if (this.ServiceSyncInstance != null)
 					await this.ServiceSyncInstance.DisposeAsync().ConfigureAwait(false);
 			}
+			catch (ObjectDisposedException) { }
 			catch (Exception ex)
 			{
 				if (ex is WampException && ex.Message.IsContains("wamp.error.no_such_registration"))

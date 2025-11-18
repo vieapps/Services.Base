@@ -130,7 +130,7 @@ namespace net.vieapps.Services
 
 		static ISubject<CommunicateMessage> GetCommunicatingSubject(this BaseMessage message, string uri = null, bool useBackupChannel = false)
 		{
-			uri = uri ?? $"messages.services.{(message != null && message is CommunicateMessage ? (message as CommunicateMessage).ServiceName.Trim().ToLower() : "apigateway")}";
+			uri = uri ?? $"messages.services.{(message != null && message is CommunicateMessage communicateMessage ? communicateMessage.ServiceName.Trim().ToLower() : "apigateway")}";
 			if (!Extensions.CommunicatingSubjects.TryGetValue(uri, out var subject))
 			{
 				subject = useBackupChannel && Router.BackupChannel != null
