@@ -68,20 +68,11 @@ namespace net.vieapps.Services
 		{
 			correlationID = correlationID ?? UtilityService.NewUUID;
 			session = session ?? websocket.Get<Session>("Session");
-			var account = "Visitor";
-			if (!string.IsNullOrWhiteSpace(session?.User?.ID))
-				try
-				{
-					var json = await Router.GetService("Users").ProcessRequestAsync(new RequestInfo(session, "Users", "Profile", "GET") { CorrelationID = correlationID }, cancellationToken).ConfigureAwait(false);
-					account = $"{json?.Get<string>("Name") ?? "Unknown"} ({session.User.ID})";
-				}
-				catch (Exception ex)
-				{
-					account = $"Unknown ({session.User.ID})";
-					logger?.LogError($"Error occurred while fetching an account profile => {ex.Message}", ex);
-				}
+			var (account, location) = session != null
+				? await session.PrepareConnectionInfoAsync(correlationID, cancellationToken, logger).ConfigureAwait(false)
+				: ("Visitor", "Unknown");
 			websocket.Set("AccountInfo", account);
-			websocket.Set("LocationInfo", session != null ? await session.GetLocationAsync(correlationID, cancellationToken).ConfigureAwait(false) : "Unknown");
+			websocket.Set("LocationInfo", location);
 		}
 
 		/// <summary>
@@ -93,9 +84,9 @@ namespace net.vieapps.Services
 		public static string GetConnectionInfo(this ManagedWebSocket websocket, Session session = null)
 		{
 			session = session ?? websocket.Get<Session>("Session");
-			return $"- Account: {websocket.Get("AccountInfo", "Visitor")} - Session ID: {session?.SessionID ?? "Unknown"} - Device ID: {session?.DeviceID ?? "Unknown"} - Origin: {(websocket.Headers.TryGetValue("Origin", out var origin) ? origin : session?.AppOrigin ?? "Unknown")}" + "\r\n" +
-				$"- App: {session?.AppName ?? "Unknown"} @ {session?.AppPlatform ?? "Unknown"} [{session?.AppAgent ?? "Unknown"}]" + "\r\n" +
-				$"- Connection IP: {session?.IP ?? "Unknown"} - Location: {websocket.Get("LocationInfo", "Unknown")} - WebSocket: {websocket.ID} @ {websocket.RemoteEndPoint}";
+			var account = websocket.Get("AccountInfo", "Visitor");
+			var location = websocket.Get("LocationInfo", "Unknown");
+			return $"- Account: {account} {session?.GetConnectionInfo(websocket.Headers)}\r\n - Location: {location} - WebSocket: {websocket.ID} @ {websocket.RemoteEndPoint}";
 		}
 	}
 }

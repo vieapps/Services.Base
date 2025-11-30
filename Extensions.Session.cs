@@ -61,7 +61,7 @@ namespace net.vieapps.Services
 				else
 					location = $"{city}, {region}, {country}".Replace(", ,", ",");
 			}
-			catch {}
+			catch { }
 			return location;
 		}
 
@@ -231,7 +231,7 @@ namespace net.vieapps.Services
 					json["Online"] = online;
 					json["Track"] = online && trackStatistics;
 					json["AppInfo"] = $"{session.AppName} @ {session.AppPlatform}";
-					json["OSInfo"] = $"{Extensions.GetOSInfo(session.AppAgent)} [{session.AppAgent}]";			
+					json["OSInfo"] = $"{Extensions.GetOSInfo(session.AppAgent)} [{session.AppAgent}]";
 				})
 			};
 			if (!string.IsNullOrWhiteSpace(serviceName) && !string.IsNullOrWhiteSpace(serviceURI))
@@ -315,6 +315,44 @@ namespace net.vieapps.Services
 					["CorrelationID"] = correlationID
 				}
 			}.Send(Router.GotBackupRouter());
+		#endregion
+
+		#region Connection info
+		/// <summary>
+		/// Prepares connection information of the session
+		/// </summary>
+		/// <param name="session"></param>
+		/// <param name="correlationID"></param>
+		/// <param name="cancellationToken"></param>
+		/// <param name="logger"></param>
+		/// <returns></returns>
+		public static async Task<(string Account, string Location)> PrepareConnectionInfoAsync(this Session session, string correlationID = null, CancellationToken cancellationToken = default, Microsoft.Extensions.Logging.ILogger logger = null)
+		{
+			correlationID = correlationID ?? UtilityService.NewUUID;
+			var account = "Visitor";
+			if (!string.IsNullOrWhiteSpace(session?.User?.ID))
+				try
+				{
+					var json = await Router.GetService("Users").ProcessRequestAsync(new RequestInfo(session, "Users", "Profile", "GET") { CorrelationID = correlationID }, cancellationToken).ConfigureAwait(false);
+					account = $"{json?.Get<string>("Name") ?? "Unknown"} ({session.User.ID})";
+				}
+				catch (Exception ex)
+				{
+					account = $"Unknown ({session.User.ID})";
+					logger?.LogError($"Error occurred while fetching an account profile => {ex.Message}", ex);
+				}
+			return (account, (session != null ? await session.GetLocationAsync(correlationID, cancellationToken).ConfigureAwait(false) : null) ?? "Unknown");
+		}
+
+		/// <summary>
+		/// Gets the information of the connection
+		/// </summary>
+		/// <param name="session"></param>
+		/// <returns></returns>
+		public static string GetConnectionInfo(this Session session, Dictionary<string, string> headers = null)
+			=> $"- Session ID: {session?.SessionID ?? "Unknown"} - Device ID: {session?.DeviceID ?? "Unknown"} - Origin: {(headers != null && headers.TryGetValue("Origin", out var origin) ? origin : session?.AppOrigin ?? "Unknown")}" + "\r\n" +
+				 $"- App: {session?.AppName ?? "Unknown"} @ {session?.AppPlatform ?? "Unknown"} [{session?.AppAgent ?? "Unknown"}]" + "\r\n" +
+				 $"- Connection IP: {session?.IP ?? "Unknown"}";
 		#endregion
 
 	}
