@@ -268,10 +268,10 @@ namespace net.vieapps.Services
 				},
 				CorrelationID = requestInfo.CorrelationID
 			};
-			if (requestInfo.TryGetParameter("x-logs", out var debugLogs))
-				request.Header["x-logs"] = debugLogs;
-			if (requestInfo.TryGetParameter("x-force-cache", out var forceCache))
-				request.Header["x-force-cache"] = forceCache;
+			if (requestInfo.ContainsKey("x-logs"))
+				request.Header["x-logs"] = "1";
+			if (requestInfo.ContainsKey("x-force-cache"))
+				request.Header["x-force-cache"] = "1";
 			return request.CallServiceAsync(cancellationToken);
 		}
 
