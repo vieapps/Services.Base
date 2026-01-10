@@ -365,6 +365,9 @@ namespace net.vieapps.Services
 			},
 			(sender, args) =>
 			{
+				Router.Services.Clear();
+				Router.UniqueServices.Clear();
+				Router.SyncableServices.Clear();
 				Router.OutgoingChannelSessionID = 0;
 				onConnectionBroken?.Invoke(sender, args);
 			},
