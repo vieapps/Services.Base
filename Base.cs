@@ -417,17 +417,7 @@ namespace net.vieapps.Services
 
 			// update queue & write to centerlized logs
 			this.Logs.Enqueue(((DateTime.Now, correlationID, developerID, appID, this.NodeID ?? Extensions.GetNodeID(), serviceName ?? this.ServiceName ?? "APIGateway", objectName ?? ""), logs, exception?.GetStack(false)));
-			try
-			{
-				await this.Logs.WriteLogsAsync(this.Logger, this.CancellationToken).ConfigureAwait(false);
-			}
-			catch (ObjectDisposedException) { }
-			catch (TaskCanceledException) { }
-			catch (OperationCanceledException) { }
-			catch (Exception ex)
-			{
-				logger?.LogError(ex, $"Error occurred while writting logs => {ex.Message}");
-			}
+			await this.Logs.WriteLogsAsync(this.Logger, this.CancellationToken).ConfigureAwait(false);
 		}
 
 		/// <summary>
@@ -2705,6 +2695,7 @@ namespace net.vieapps.Services
 				{
 					this.WriteLogs(correlationID, $"Error occurred while invoking the next action when dispose the service => {ex.Message}", ex);
 				}
+				Extensions.ShutdownLogsAsync().Execute(true);
 			}));
 		}
 

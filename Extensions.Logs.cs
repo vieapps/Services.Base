@@ -2,13 +2,12 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Collections.Generic;
-using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Reactive.Linq;
+using System.Threading.Channels;
+using System.Collections.Generic;
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using net.vieapps.Components.Utility;
 #endregion
@@ -19,9 +18,38 @@ namespace net.vieapps.Services
 	{
 		static string LogsPath { get; } = UtilityService.GetAppSetting("Path:Logs", "logs");
 
-		static SemaphoreSlim Locker { get; } = new SemaphoreSlim(1, 1);
+		static Channel<((DateTime Time, string CorrelationID, string DeveloperID, string AppID, string NodeID, string ServiceName, string ObjectName) Info, List<string> Logs, string Stack)> LogsQueue { get; } = Channel.CreateBounded<((DateTime, string, string, string, string, string, string), List<string>, string)>(new BoundedChannelOptions(4096)
+		{
+			SingleReader = true,
+			SingleWriter = false,
+			FullMode = BoundedChannelFullMode.Wait
+		});
 
-		static bool Writting { get; set; } = false;
+		static Task LogsWritter { get; } = Task.Run(Extensions.WriteLogsAsync);
+
+		static async Task WriteLogsAsync()
+		{
+			while (await Extensions.LogsQueue.Reader.WaitToReadAsync().ConfigureAwait(false))
+			{
+				while (Extensions.LogsQueue.Reader.TryRead(out var log))
+					try
+					{
+						await new JObject
+						{
+							{ "Time", log.Info.Time },
+							{ "CorrelationID", log.Info.CorrelationID },
+							{ "DeveloperID", log.Info.DeveloperID },
+							{ "AppID", log.Info.AppID },
+							{ "NodeID", log.Info.NodeID },
+							{ "ServiceName", log.Info.ServiceName },
+							{ "ObjectName", log.Info.ObjectName },
+							{ "Logs", log.Logs?.Join("\r\n") ?? "" },
+							{ "Stack", log.Stack }
+						}.SaveAsTextAsync(Path.Combine(Extensions.LogsPath, $"zlogs.services.{log.Info.Time:yyyyMMddHHmmssffffff}.{UtilityService.NewUUID}.json")).ConfigureAwait(false);
+					}
+					catch { }
+			}
+		}
 
 		/// <summary>
 		/// Writes the log messages into centerlized log storage
@@ -32,45 +60,25 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static async Task WriteLogsAsync(this ConcurrentQueue<((DateTime Time, string CorrelationID, string DeveloperID, string AppID, string NodeID, string ServiceName, string ObjectName) Info, List<string> Logs, string Stack)> logs, ILogger logger = null, CancellationToken cancellationToken = default)
 		{
-			if (!Extensions.Writting)
-				try
-				{
-					Extensions.Writting = true;
-					await Extensions.Locker.WaitAsync(cancellationToken).ConfigureAwait(false);
-					while (logs.TryDequeue(out var log))
-						try
-						{
-							var filePath = Path.Combine(Extensions.LogsPath, $"zlogs.services.{log.Info.Time:yyyyMMddHHmmssffffff}.{UtilityService.NewUUID}.json");
-							await new JObject
-							{
-								{ "Time", log.Info.Time },
-								{ "CorrelationID", log.Info.CorrelationID },
-								{ "DeveloperID", log.Info.DeveloperID },
-								{ "AppID", log.Info.AppID },
-								{ "NodeID", log.Info.NodeID },
-								{ "ServiceName", log.Info.ServiceName },
-								{ "ObjectName", log.Info.ObjectName },
-								{ "Logs", log.Logs?.Join("\r\n") ?? "" },
-								{ "Stack", log.Stack }
-							}.SaveAsTextAsync(filePath, cancellationToken).ConfigureAwait(false);
-						}
-						catch { }
-				}
-				catch (TaskCanceledException)	{ }
-				catch (OperationCanceledException) { }
-				catch (Exception ex)
-				{
-					logger?.LogError($"Cannot write logs into files => {ex.Message}", ex);
-				}
-				finally
-				{
-					Extensions.Writting = false;
-					try
-					{
-						Extensions.Locker.Release();
-					}
-					catch { }
-				}
+			try
+			{
+				while (logs.TryDequeue(out var log))
+					await Extensions.LogsQueue.Writer.WriteAsync(log, cancellationToken).ConfigureAwait(false);
+			}
+			catch (Exception ex)
+			{
+				logger?.LogError(ex, $"Error occurred while writting logs => {ex.Message}");
+			}
+		}
+
+		/// <summary>
+		/// Shutdowns the logs
+		/// </summary>
+		/// <returns></returns>
+		public static Task ShutdownLogsAsync()
+		{
+			Extensions.LogsQueue.Writer.TryComplete();
+			return Extensions.LogsWritter;
 		}
 	}
 }
