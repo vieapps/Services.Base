@@ -86,7 +86,7 @@ namespace net.vieapps.Services
 			session = session ?? websocket.Get<Session>("Session");
 			var account = websocket.Get("AccountInfo", "Visitor");
 			var location = websocket.Get("LocationInfo", "Unknown");
-			return $"- Account: {account} {session?.GetConnectionInfo(websocket.Headers)}\r\n - Location: {location} - WebSocket: {websocket.ID} @ {websocket.RemoteEndPoint}";
+			return $"- Account: {account} {session?.GetConnectionInfo(websocket.Headers)}\r\n- Location: {location} - WebSocket: {websocket.ID} @ {websocket.RemoteEndPoint}";
 		}
 	}
 }

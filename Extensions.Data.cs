@@ -108,8 +108,8 @@ namespace net.vieapps.Services
 					var fetch = new Uri(url).FetchHttpAsync(null, 5);
 					if (fetch.Wait(5000))
 						value = string.IsNullOrWhiteSpace(element)
-							? fetch.Result
-							: fetch.Result?.ToExpandoObject()?.Get(element)?.ToString();
+							? fetch.GetAwaiter().GetResult()
+							: fetch.GetAwaiter().GetResult()?.ToExpandoObject()?.Get(element)?.ToString();
 				}
 				catch (Exception ex)
 				{

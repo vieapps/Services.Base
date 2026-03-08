@@ -3,9 +3,10 @@ using System;
 using System.Linq;
 using System.Dynamic;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using JSPool;
 using JavaScriptEngineSwitcher.Core;
-using JavaScriptEngineSwitcher.ChakraCore;
+using JavaScriptEngineSwitcher.V8;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using net.vieapps.Components.Utility;
@@ -20,16 +21,12 @@ namespace net.vieapps.Services
 
 		static Extensions()
 		{
-			JsEngineSwitcher.Current.DefaultEngineName = ChakraCoreJsEngine.EngineName;
-			JsEngineSwitcher.Current.EngineFactories.AddChakraCore(new ChakraCoreSettings
-			{
-				DisableEval = true,
-				EnableExperimentalFeatures = true
-			});
+			JsEngineSwitcher.Current.DefaultEngineName = V8JsEngine.EngineName;
+			JsEngineSwitcher.Current.EngineFactories.AddV8(new V8Settings());
 			Extensions.JsEnginePool = new JsPool(new JsPoolConfig
 			{
-				MaxEngines = UtilityService.GetAppSetting("JsEngine:MaxEngines", "25").As<int>(),
-				MaxUsagesPerEngine = UtilityService.GetAppSetting("JsEngine:MaxUsagesPerEngine", "100").As<int>(),
+				MaxEngines = UtilityService.GetAppSetting("JsEngine:MaxEngines", "8").As<int>(),
+				MaxUsagesPerEngine = UtilityService.GetAppSetting("JsEngine:MaxUsagesPerEngine", "25").As<int>(),
 				GetEngineTimeout = TimeSpan.FromSeconds(UtilityService.GetAppSetting("JsEngine:GetEngineTimeout", "3").As<int>())
 			});
 		}
@@ -64,12 +61,7 @@ namespace net.vieapps.Services
 
 		static Func<string, string, string, string> Func_Hmac => (value, key, algorithm) => CryptoService.GetHMAC(value, key, algorithm);
 
-		static Func<string, string> Func_GetLocation => ipAddress =>
-		{
-			var task = Extensions.GetLocationAsync(null, ipAddress, UtilityService.NewUUID, ServiceBase.ServiceComponent.CancellationToken);
-			task.Wait();
-			return task.Result;
-		};
+		static Func<string, string> Func_GetLocation => ipAddress => Extensions.GetLocationAsync(null, ipAddress, UtilityService.NewUUID, ServiceBase.ServiceComponent.CancellationToken).GetAwaiter().GetResult();
 
 		static Action<string, string> Func_WriteLogs => (correlationID, logs) =>
 		{
@@ -128,7 +120,7 @@ namespace net.vieapps.Services
 			try
 			{
 				var request = requestInfo.ToJson();
-				var task = Router.GetService(service).ProcessRequestAsync(new RequestInfo
+				var response = Router.GetService(service).ProcessRequestAsync(new RequestInfo
 				{
 					Session = new Session(request.Get<JObject>("Session")),
 					ServiceName = request.Get<string>("ServiceName") ?? service,
@@ -139,16 +131,13 @@ namespace net.vieapps.Services
 					Body = request.Get<JObject>("Body")?.ToString(Formatting.None),
 					Extra = request.Get<JObject>("Extra")?.ToDictionary(token => token.ToString()),
 					CorrelationID = request.Get<string>("CorrelationID")
-				}, ServiceBase.ServiceComponent.CancellationToken);
-				task.Wait();
-				if (task.Exception != null)
-					throw task.Exception;
+				}, ServiceBase.ServiceComponent.CancellationToken).GetAwaiter().GetResult();
 				return new JObject
 				{
 					["status"] = "OK",
 					["code"] = 200,
 					["message"] = "Success",
-					["response"] = task.Result?.ToString(Formatting.None)
+					["response"] = response?.ToString(Formatting.None)
 				}.ToString(Formatting.None);
 			}
 			catch (Exception ex)
@@ -212,17 +201,9 @@ namespace net.vieapps.Services
 			try
 			{
 				if (waitingSeconds > 0)
-					System.Threading.Tasks.Task.Delay(waitingSeconds * 1000, ServiceBase.ServiceComponent.CancellationToken).Wait();
-				var requestTask = new Uri(url).SendHttpRequestAsync(method ?? "GET", (headers?.ToJson() as JObject)?.ToDictionary(token => token.ToString()), body, 120, ServiceBase.ServiceComponent.CancellationToken);
-				requestTask.Wait();
-				if (requestTask.Exception != null)
-					throw requestTask.Exception;
-				using (requestTask.Result)
-				{
-					var readTask = requestTask.Result.ReadAsStringAsync(ServiceBase.ServiceComponent.CancellationToken);
-					readTask.Wait();
-					return readTask.Result;
-				}
+					Task.Delay(waitingSeconds * 1000, ServiceBase.ServiceComponent.CancellationToken).Wait();
+				using (var result = new Uri(url).SendHttpRequestAsync(method ?? "GET", (headers?.ToJson() as JObject)?.ToDictionary(token => token.ToString()), body, 120, ServiceBase.ServiceComponent.CancellationToken).GetAwaiter().GetResult())
+					return result.ReadAsStringAsync(ServiceBase.ServiceComponent.CancellationToken).GetAwaiter().GetResult();
 			}
 			catch (Exception exception)
 			{
@@ -577,19 +558,34 @@ namespace net.vieapps.Services
 		/// <param name="jsFunctions">The additional Javascript helper functions</param>
 		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
+		/// <param name="timeout">The time-out miliseconds to interup the script executions</param>
 		/// <returns>The object that presents the returning value - supported types: Undefined, Boolean, Int, Double, String</returns>
-		public static object JsEvaluate(this string expression, JToken @object, JToken requestInfo, JToken @params, string jsFunctions, IDictionary<string, object> embedObjects, IDictionary<string, Type> embedTypes = null)
+		public static object JsEvaluate(this string expression, JToken @object, JToken requestInfo, JToken @params, string jsFunctions, IDictionary<string, object> embedObjects, IDictionary<string, Type> embedTypes = null, int timeout = 0)
 		{
 			if (!string.IsNullOrWhiteSpace(expression))
 				using (var jsEngine = Extensions.JsEnginePool.GetEngine())
 				{
 					var jsExpression = string.Empty;
+					var isTimeOut = false;
 					try
 					{
+						jsExpression = expression.GetJsExpression(@object, requestInfo, @params, jsFunctions);
+						timeout = timeout > 0 ? timeout : UtilityService.GetAppSetting("JsEngine:ExecutionTimeout", "0").As<int>();
 						Extensions.GetEmbedObjects(embedObjects).Where(kvp => !string.IsNullOrWhiteSpace(kvp.Key) && kvp.Value != null).ForEach(kvp => jsEngine.EmbedHostObject(kvp.Key, kvp.Value));
 						Extensions.GetEmbedTypes(embedTypes).Where(kvp => !string.IsNullOrWhiteSpace(kvp.Key) && kvp.Value != null).ForEach(kvp => jsEngine.EmbedHostType(kvp.Key, kvp.Value));
-						jsExpression = expression.GetJsExpression(@object, requestInfo, @params, jsFunctions);
-						var jsValue = jsEngine.Evaluate(jsExpression);
+						var task = Task.Run(() => jsEngine.Evaluate(jsExpression));
+						if (timeout > 0 && !task.Wait(timeout))
+						{
+							isTimeOut = true;
+							jsEngine.Interrupt();
+							try
+							{
+								task.Wait(1000);
+							}
+							catch { }
+							throw new TimeoutException("JS execution timeout");
+						}
+						var jsValue = task.GetAwaiter().GetResult();
 						return jsValue is Undefined ? null : jsValue;
 					}
 					catch (Exception ex)
@@ -597,6 +593,11 @@ namespace net.vieapps.Services
 						if (ex is JsRuntimeException)
 							throw new ServiceOperationException($"Error occurred while running JS code => {ex.Message}\n\nSource:\n{jsExpression}", ex);
 						throw;
+					}
+					finally
+					{
+						if (isTimeOut)
+							jsEngine.InnerEngine?.Dispose();
 					}
 				}
 			return null;
@@ -611,9 +612,10 @@ namespace net.vieapps.Services
 		/// <param name="params">The object that presents the additional parameters (the variable named as '__params')</param>
 		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
+		/// <param name="timeout">The time-out miliseconds to interup the script executions</param>
 		/// <returns>The object that presents the returning value - supported types: Undefined, Boolean, Int, Double, String</returns>
-		public static object JsEvaluate(this string expression, JToken @object, JToken requestInfo = null, JToken @params = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
-			=> expression?.JsEvaluate(@object, requestInfo, @params, null, embedObjects, embedTypes);
+		public static object JsEvaluate(this string expression, JToken @object, JToken requestInfo = null, JToken @params = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null, int timeout = 0)
+			=> expression?.JsEvaluate(@object, requestInfo, @params, null, embedObjects, embedTypes, timeout);
 
 		/// <summary>
 		/// Evaluates an Javascript expression
@@ -625,9 +627,10 @@ namespace net.vieapps.Services
 		/// <param name="jsFunctions">The additional Javascript helper functions</param>
 		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
+		/// <param name="timeout">The time-out miliseconds to interup the script executions</param>
 		/// <returns>The object that presents the returning value - supported types: Undefined, Boolean, Int, Double, String</returns>
-		public static object JsEvaluate(this string expression, ExpandoObject @object, ExpandoObject requestInfo, ExpandoObject @params, string jsFunctions, IDictionary<string, object> embedObjects, IDictionary<string, Type> embedTypes = null)
-			=> expression?.JsEvaluate(@object?.ToJson(), requestInfo?.ToJson(), @params?.ToJson(), jsFunctions, embedObjects, embedTypes);
+		public static object JsEvaluate(this string expression, ExpandoObject @object, ExpandoObject requestInfo, ExpandoObject @params, string jsFunctions, IDictionary<string, object> embedObjects, IDictionary<string, Type> embedTypes = null, int timeout = 0)
+			=> expression?.JsEvaluate(@object?.ToJson(), requestInfo?.ToJson(), @params?.ToJson(), jsFunctions, embedObjects, embedTypes, timeout);
 
 		/// <summary>
 		/// Evaluates an Javascript expression
@@ -638,9 +641,10 @@ namespace net.vieapps.Services
 		/// <param name="params">The object that presents the additional parameters (the variable named as '__params')</param>
 		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
+		/// <param name="timeout">The time-out miliseconds to interup the script executions</param>
 		/// <returns>The object that presents the returning value - supported types: Undefined, Boolean, Int, Double, String</returns>
-		public static object JsEvaluate(this string expression, ExpandoObject @object, ExpandoObject requestInfo = null, ExpandoObject @params = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
-			=> expression?.JsEvaluate(@object, requestInfo, @params, null, embedObjects, embedTypes);
+		public static object JsEvaluate(this string expression, ExpandoObject @object, ExpandoObject requestInfo = null, ExpandoObject @params = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null, int timeout = 0)
+			=> expression?.JsEvaluate(@object, requestInfo, @params, null, embedObjects, embedTypes, timeout);
 
 		/// <summary>
 		/// Evaluates an Javascript expression
@@ -652,9 +656,10 @@ namespace net.vieapps.Services
 		/// <param name="jsFunctions">The additional Javascript helper functions</param>
 		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
+		/// <param name="timeout">The time-out miliseconds to interup the script executions</param>
 		/// <returns>The object that presents the returning value - supported types: Undefined, Boolean, Int, Double, String</returns>
-		public static object JsEvaluate(this string expression, object @object, RequestInfo requestInfo, ExpandoObject @params, string jsFunctions, IDictionary<string, object> embedObjects, IDictionary<string, Type> embedTypes = null)
-			=> expression?.JsEvaluate(@object is IBusinessEntity bizObject ? bizObject.ToExpandoObject() : @object?.ToExpandoObject(), requestInfo?.AsExpandoObject, @params, jsFunctions, embedObjects, embedTypes);
+		public static object JsEvaluate(this string expression, object @object, RequestInfo requestInfo, ExpandoObject @params, string jsFunctions, IDictionary<string, object> embedObjects, IDictionary<string, Type> embedTypes = null, int timeout = 0)
+			=> expression?.JsEvaluate(@object is IBusinessEntity bizObject ? bizObject.ToExpandoObject() : @object?.ToExpandoObject(), requestInfo?.AsExpandoObject, @params, jsFunctions, embedObjects, embedTypes, timeout);
 
 		/// <summary>
 		/// Evaluates an Javascript expression
@@ -665,8 +670,9 @@ namespace net.vieapps.Services
 		/// <param name="params">The object that presents the additional parameters (the variable named as '__params')</param>
 		/// <param name="embedObjects">The collection that presents objects are embed as global variables, can be simple classes (generic is not supported), strucs or delegates</param>
 		/// <param name="embedTypes">The collection that presents objects are embed as global types</param>
+		/// <param name="timeout">The time-out miliseconds to interup the script executions</param>
 		/// <returns>The object that presents the returning value - supported types: Undefined, Boolean, Int, Double, String</returns>
-		public static object JsEvaluate(this string expression, object @object = null, RequestInfo requestInfo = null, ExpandoObject @params = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null)
-			=> expression?.JsEvaluate(@object, requestInfo, @params, null, embedObjects, embedTypes);
+		public static object JsEvaluate(this string expression, object @object = null, RequestInfo requestInfo = null, ExpandoObject @params = null, IDictionary<string, object> embedObjects = null, IDictionary<string, Type> embedTypes = null, int timeout = 0)
+			=> expression?.JsEvaluate(@object, requestInfo, @params, null, embedObjects, embedTypes, timeout);
 	}
 }
