@@ -693,6 +693,25 @@ namespace net.vieapps.Services
 		/// Sends session state
 		/// </summary>
 		/// <param name="requestInfo"></param>
+		/// <param name="serviceName"></param>
+		/// <param name="serviceURI"></param>
+		/// <param name="serviceSystemID"></param>
+		/// <param name="online"></param>
+		/// <param name="trackStatistics"></param>
+		/// <param name="sendClientMessage"></param>
+		/// <param name="onCommunicateMessagePrepared"></param>
+		/// <param name="onUpdateMessagePrepared"></param>
+		/// <returns></returns>
+		public static async Task<RequestInfo> SendSessionStateAsync(this RequestInfo requestInfo, string serviceName, string serviceURI, string serviceSystemID, bool online, bool trackStatistics, bool sendClientMessage, Action<CommunicateMessage> onCommunicateMessagePrepared = null, Action<UpdateMessage> onUpdateMessagePrepared = null)
+		{
+			await (requestInfo.Session != null ? requestInfo.Session.SendSessionStateAsync((serviceName ?? requestInfo.ServiceName).ToLower(), serviceURI ?? $"{requestInfo.Verb} {requestInfo.GetURI()}", serviceSystemID, online, trackStatistics, sendClientMessage, onCommunicateMessagePrepared, onUpdateMessagePrepared, requestInfo.CorrelationID) : Task.CompletedTask).ConfigureAwait(false);
+			return requestInfo;
+		}
+
+		/// <summary>
+		/// Sends session state
+		/// </summary>
+		/// <param name="requestInfo"></param>
 		/// <param name="systemIdentityJson"></param>
 		/// <param name="serviceName"></param>
 		/// <param name="serviceURI"></param>
@@ -702,33 +721,31 @@ namespace net.vieapps.Services
 		/// <param name="onCommunicateMessagePrepared"></param>
 		/// <param name="onUpdateMessagePrepared"></param>
 		/// <returns></returns>
-		public static async Task<RequestInfo> SendSessionStateAsync(this RequestInfo requestInfo, JObject systemIdentityJson, string serviceName, string serviceURI, bool online, bool trackStatistics, bool sendClientMessage, Action<CommunicateMessage> onCommunicateMessagePrepared = null, Action<UpdateMessage> onUpdateMessagePrepared = null)
+		public static Task<RequestInfo> SendSessionStateAsync(this RequestInfo requestInfo, JObject systemIdentityJson, string serviceName, string serviceURI, bool online, bool trackStatistics, bool sendClientMessage, Action<CommunicateMessage> onCommunicateMessagePrepared = null, Action<UpdateMessage> onUpdateMessagePrepared = null)
 		{
-			var systemID = systemIdentityJson?.Get<string>("ID");
-			if (string.IsNullOrWhiteSpace(systemID) && requestInfo.ServiceName.IsStartsWith("Portals"))
+			var serviceSystemID = systemIdentityJson?.Get<string>("ID");
+			if (string.IsNullOrWhiteSpace(serviceSystemID) && requestInfo.ServiceName.IsStartsWith("Portals"))
 				try
 				{
 					var body = requestInfo.Verb.IsEquals("POST") || requestInfo.Verb.IsEquals("PUT") || requestInfo.Verb.IsEquals("PATCH") ? requestInfo.BodyAsJson : null;
-					systemID = body?.Get<string>("SystemID") ?? requestInfo.GetParameter("SystemID") ?? requestInfo.GetParameter("OrganizationID") ?? requestInfo.GetParameter("x-system-id");
-					if (string.IsNullOrWhiteSpace(systemID))
+					serviceSystemID = body?.Get<string>("SystemID") ?? requestInfo.GetParameter("SystemID") ?? requestInfo.GetParameter("OrganizationID") ?? requestInfo.GetParameter("x-system-id");
+					if (string.IsNullOrWhiteSpace(serviceSystemID))
 					{
-						systemID = requestInfo.GetParameter("active-id");
-						if (string.IsNullOrWhiteSpace(systemID) && requestInfo.TryGetParameter("x-request", out var base64Request))
+						serviceSystemID = requestInfo.GetParameter("active-id");
+						if (string.IsNullOrWhiteSpace(serviceSystemID) && requestInfo.TryGetParameter("x-request", out var base64Request))
 						{
 							var request = base64Request.Url64Decode();
 							var start = request.PositionOf("\"SystemID\":{\"Equals\":\"");
 							if (start > 0)
 							{
 								start = request.PositionOf(":\"", start) + 2;
-								var end = request.PositionOf("\"", start);
-								systemID = request.Substring(start, end - start);
+								serviceSystemID = request.Substring(start, request.PositionOf("\"", start) - start);
 							}
 						}
 					}
 				}
 				catch { }
-			await requestInfo.Session.SendSessionStateAsync((serviceName ?? requestInfo.ServiceName).ToLower(), serviceURI ?? $"{requestInfo.Verb} {requestInfo.GetURI()}", systemID, online, trackStatistics, sendClientMessage, onCommunicateMessagePrepared, onUpdateMessagePrepared, requestInfo.CorrelationID).ConfigureAwait(false);
-			return requestInfo;
+			return requestInfo.SendSessionStateAsync((serviceName ?? requestInfo.ServiceName).ToLower(), serviceURI ?? $"{requestInfo.Verb} {requestInfo.GetURI()}", serviceSystemID, online, trackStatistics, sendClientMessage, onCommunicateMessagePrepared, onUpdateMessagePrepared);
 		}
 
 		/// <summary>
