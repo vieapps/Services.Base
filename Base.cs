@@ -131,7 +131,11 @@ namespace net.vieapps.Services
 		/// </summary>
 		protected bool Syncable { get; set; } = true;
 
-		public string NodeID { get; private set; }
+		public string NodeID
+		{
+			get => Router.NodeID;
+			private set => Router.NodeID = value;
+		}
 
 		public string ServiceURI => $"services.{(this.ServiceName ?? "unknown").Trim().ToLower()}";
 

@@ -26,6 +26,11 @@ namespace net.vieapps.Services
 
 		#region Properties
 		/// <summary>
+		/// Gets or sets identity of the node that runs or host the services
+		/// </summary>
+		public static string NodeID { get; set; }
+
+		/// <summary>
 		/// Gets the API Gateway incoming channel
 		/// </summary>
 		public static IWampChannel IncomingChannel { get; internal set; }
