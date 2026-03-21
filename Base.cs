@@ -2743,9 +2743,7 @@ namespace net.vieapps.Services
 		public bool Disposed { get; private set; } = false;
 
 		public virtual ValueTask DisposeAsync(string[] args, bool available = true, bool disconnect = true, Action<IService> next = null)
-		{
-			GC.SuppressFinalize(this);
-			return new ValueTask(this.Disposed ? Task.CompletedTask : this.StopAsync(args, available, disconnect, _ =>
+			=> new ValueTask(this.Disposed ? Task.CompletedTask : this.StopAsync(args, available, disconnect, _ =>
 			{
 				this.Disposed = true;
 				var correlationID = UtilityService.NewUUID;
@@ -2771,7 +2769,6 @@ namespace net.vieapps.Services
 				}
 				Extensions.ShutdownLogsAsync().Execute(true);
 			}));
-		}
 
 		/// <summary>
 		/// Disposes the service (unregister the service, disconnect from API Gateway and do the clean-up tasks)
@@ -2787,9 +2784,6 @@ namespace net.vieapps.Services
 		/// </summary>
 		public virtual void Dispose()
 			=> this.Dispose(null);
-
-		~ServiceBase()
-			=> this.Dispose();
 		#endregion
 
 	}

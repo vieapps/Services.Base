@@ -227,6 +227,7 @@ namespace net.vieapps.Services
 				Data = session.ToJson(json =>
 				{
 					json["SessionID"] = session.SessionID;
+					json["DeviceID"] = session.DeviceID;
 					json["UserID"] = session.User?.ID;
 					json["Online"] = online;
 					json["Track"] = online && trackStatistics;
