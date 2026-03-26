@@ -1132,16 +1132,17 @@ namespace net.vieapps.Services
 		/// Finds version contents of an object
 		/// </summary>
 		/// <param name="object"></param>
-		/// <param name="cancellationToken"></param>
+		/// <param name="processCache"></param>
 		/// <param name="sendUpdateMessage"></param>
+		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
-		public static async Task<List<VersionContent>> FindVersionsAsync(this RepositoryBase @object, CancellationToken cancellationToken = default, bool sendUpdateMessage = true)
+		public static async Task<List<VersionContent>> FindVersionsAsync(this RepositoryBase @object, bool processCache, bool sendUpdateMessage, CancellationToken cancellationToken = default)
 		{
 			if (string.IsNullOrWhiteSpace(@object?.ID))
 				return new List<VersionContent>();
 
 			var definition = RepositoryMediator.GetEntityDefinition(@object.GetType());
-			var versions = definition.Cache != null
+			var versions = definition.Cache != null && processCache
 				? await definition.Cache.GetAsync<List<VersionContent>>($"{@object.GetCacheKey()}:Versions", cancellationToken).ConfigureAwait(false)
 				: null;
 
@@ -1149,7 +1150,7 @@ namespace net.vieapps.Services
 			{
 				versions = await RepositoryMediator.FindVersionContentsAsync(@object.ID, cancellationToken).ConfigureAwait(false);
 				if (definition.Cache != null)
-					await definition.Cache.SetAsync($"{@object.GetCacheKey()}:Versions", versions, 0, cancellationToken).ConfigureAwait(false);
+					definition.Cache.SetAsync($"{@object.GetCacheKey()}:Versions", versions, 0).Execute();
 			}
 
 			if (sendUpdateMessage)
@@ -1168,6 +1169,27 @@ namespace net.vieapps.Services
 
 			return versions;
 		}
+
+		/// <summary>
+		/// Finds version contents of an object
+		/// </summary>
+		/// <param name="object"></param>
+		/// <param name="processCache"></param>
+		/// <param name="cancellationToken"></param>
+		/// <param name="sendUpdateMessage"></param>
+		/// <returns></returns>
+		public static Task<List<VersionContent>> FindVersionsAsync(this RepositoryBase @object, bool processCache, CancellationToken cancellationToken = default, bool sendUpdateMessage = true)
+			=> @object.FindVersionsAsync(processCache, sendUpdateMessage, cancellationToken);
+
+		/// <summary>
+		/// Finds version contents of an object
+		/// </summary>
+		/// <param name="object"></param>
+		/// <param name="cancellationToken"></param>
+		/// <param name="sendUpdateMessage"></param>
+		/// <returns></returns>
+		public static Task<List<VersionContent>> FindVersionsAsync(this RepositoryBase @object, CancellationToken cancellationToken = default, bool sendUpdateMessage = true)
+			=> @object.FindVersionsAsync(true, cancellationToken, sendUpdateMessage);
 
 		/// <summary>
 		/// Finds version contents of a collection of object
