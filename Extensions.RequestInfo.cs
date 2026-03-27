@@ -800,5 +800,12 @@ namespace net.vieapps.Services
 			=> requestInfo.Session?.TrackStatistics(requestInfo.CorrelationID);
 		#endregion
 
+		/// <summary>
+		/// Gets the state that determines the user in this request is authenticated or not
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <returns></returns>
+		public static bool IsAuthenticated(this RequestInfo requestInfo)
+			=> requestInfo?.Session?.User != null && requestInfo.Session.User.IsAuthenticated;
 	}
 }
