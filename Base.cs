@@ -415,8 +415,17 @@ namespace net.vieapps.Services
 			}
 			else if (exception != null)
 			{
-				logs.Add($"> Message: {exception.Message}");
-				logs.Add($"> Type: {exception.GetType()}");
+				if (exception is AggregateException agg)
+					foreach (var inner in agg.Flatten().InnerExceptions)
+					{
+						logs.Add($"> Message: {inner.Message}");
+						logs.Add($"> Type: {inner.GetTypeName(true)}");
+					}
+				else
+				{
+					logs.Add($"> Message: {exception.Message}");
+					logs.Add($"> Type: {exception.GetTypeName(true)}");
+				}
 			}
 
 			// update queue & write to centerlized logs

@@ -21,7 +21,7 @@ namespace net.vieapps.Services
 		/// <returns>The string that presents the stack trace</returns>
 		public static string GetStack(this Exception exception, bool onlyStack = true, RequestInfo requestInfo = null)
 		{
-			var stack = "";
+			var stack = string.Empty;
 			if (exception is WampException wampException)
 			{
 				if (wampException.Details != null && wampException.Details.Count == 7)
@@ -41,16 +41,28 @@ namespace net.vieapps.Services
 						: wampDetails.Stack?.Replace("\\r", "\r")?.Replace("\\n", "\n")?.Replace(@"\\", @"\");
 				}
 			}
-			else if (exception != null)
+			else
 			{
-				stack = exception.StackTrace;
-				var inner = onlyStack ? null : exception.InnerException;
-				var counter = 0;
-				while (inner != null)
+				if (exception is AggregateException agg)
 				{
-					counter++;
-					stack += "\r\n" + $"--- Inner ({counter}): ---------------------- " + "\r\n" + $"> Message: {inner.Message}\r\n" + $"> Type: {inner.GetType()}\r\n" + inner.StackTrace;
-					inner = inner.InnerException;
+					var counter = 0;
+					foreach (var inner in agg.Flatten().InnerExceptions)
+					{
+						counter++;
+						stack += "\r\n" + $"--- Inner ({counter}): ---------------------- " + "\r\n" + $"> Message: {inner.Message}\r\n" + $"> Type: {inner.GetType()}\r\n" + inner.StackTrace;
+					}
+				}
+				else if (!onlyStack)
+				{
+					stack = exception.StackTrace;
+					var inner = onlyStack ? null : exception.InnerException;
+					var counter = 0;
+					while (inner != null)
+					{
+						counter++;
+						stack += "\r\n" + $"--- Inner ({counter}): ---------------------- " + "\r\n" + $"> Message: {inner.Message}\r\n" + $"> Type: {inner.GetType()}\r\n" + inner.StackTrace;
+						inner = inner.InnerException;
+					}
 				}
 			}
 			return stack;
@@ -144,7 +156,7 @@ namespace net.vieapps.Services
 			{
 				if (wampException.ErrorUri.Equals(WampErrors.Canceled))
 				{
-					message = "Operation Canceled";
+					message = "Operation canceled";
 					type = "OperationCanceledException";
 				}
 				else
@@ -196,8 +208,7 @@ namespace net.vieapps.Services
 				{ "Source", exception["Source"] }
 			};
 
-			var inner = exception["InnerException"];
-			if (inner != null && inner is JObject)
+			if (exception["InnerException"] is JToken inner)
 				json["InnerException"] = inner.GetJsonException();
 
 			return json;
@@ -227,6 +238,9 @@ namespace net.vieapps.Services
 			onCompleted?.Invoke(message, exception);
 
 			// return the exception
+			Dictionary<string, object> errorDetails;
+			var errorURI = "wamp.error.runtime_error";
+
 			if (exception is WampException wampException)
 			{
 				if (wampException.ErrorUri.Equals("wamp.error.runtime_error") && wampException.Details != null && wampException.Details.Count == 7)
@@ -242,7 +256,7 @@ namespace net.vieapps.Services
 					innerStack += (innerStack != "" ? "\r\n" : "") + $"--- Inner ({counter}): ---------------------- \r\n{innerException.StackTrace}";
 					innerException = innerException.InnerException;
 				}
-				var details = new Dictionary<string, object>
+				errorDetails = new Dictionary<string, object>
 				{
 					["Code"] = wampDetails.Code,
 					["Message"] = wampDetails.Message,
@@ -252,32 +266,22 @@ namespace net.vieapps.Services
 					["InnerJson"] = wampDetails.InnerJSON,
 					["RequestInfo"] = requestInfo.ToJson()
 				};
-				return new WampException(details, wampException.ErrorUri, new object[0]);
+				errorURI = wampException.ErrorUri;
 			}
 
 			else
-			{
-				var innerStack = "";
-				var innerException = exception?.InnerException;
-				var counter = 0;
-				while (innerException != null)
-				{
-					counter++;
-					innerStack += (innerStack != "" ? "\r\n" : "") + $"--- Inner ({counter}): ---------------------- \r\n{innerException.StackTrace}";
-					innerException = innerException.InnerException;
-				}
-				var details = new Dictionary<string, object>
+				errorDetails = new Dictionary<string, object>
 				{
 					["Code"] = (exception?.GetTypeName(true) ?? "").GetErrorCode(),
 					["Message"] = message,
 					["Type"] = exception?.GetTypeName(true) ?? "ServiceOperationException",
-					["Stack"] = exception?.StackTrace,
-					["InnerStack"] = innerStack,
+					["Stack"] = exception is AggregateException agg ? agg.GetStack() : exception?.StackTrace,
+					["InnerStack"] = exception?.GetStack(false, requestInfo),
 					["InnerJson"] = null,
 					["RequestInfo"] = requestInfo.ToJson()
 				};
-				return new WampException(details, "wamp.error.runtime_error", Array.Empty<object>());
-			}
+
+			return new WampException(errorDetails, errorURI, Array.Empty<object>());
 		}
 	}
 }
