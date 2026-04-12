@@ -1,5 +1,6 @@
 ﻿#region Related components
 using System;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Threading;
@@ -15,6 +16,7 @@ using WampSharp.V2.Core.Contracts;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Microsoft.Extensions.Logging;
+using net.vieapps.Components.Caching;
 using net.vieapps.Components.Utility;
 using net.vieapps.Components.Security;
 using net.vieapps.Components.Repository;
@@ -2175,6 +2177,102 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
+		#region Monitors
+		/// <summary>
+		/// Gets the state to monitor this service
+		/// </summary>
+		public virtual bool Monitor { get; internal protected set; } = false;
+
+		/// <summary>
+		/// Gets the last-time monitoring this service
+		/// </summary>
+		public virtual DateTime MonitorLastTime { get; internal protected set; } = DateTime.Now;
+
+		/// <summary>
+		/// Gets the fiel path to store monitoring logs
+		/// </summary>
+		public virtual string MonitorLogFilePath { get; internal protected set; }
+
+		/// <summary>
+		/// Starts to monitor this service
+		/// </summary>
+		/// <param name="logPath"></param>
+		public virtual void StartMonitor(Cache cache, string logPath)
+		{
+			ThreadPool.GetMaxThreads(out var maxWorker, out var maxIO);
+			ThreadPool.GetMinThreads(out var minWorker, out var minIO);
+			this.Logger.LogInformation($"ThreadPool - Workers: {minWorker:###,##0} / {maxWorker:###,##0} - Async IO: {minIO:###,##0} / {maxIO:###,##0}");
+
+			if (this.Monitor && cache != null && !string.IsNullOrWhiteSpace(logPath) && Directory.Exists(logPath))
+			{
+				this.MonitorLogFilePath = Path.Combine(logPath, this.ServiceName.ToLower());
+				this.Logger.LogInformation($"Start to monitor the service => {this.MonitorLogFilePath}-yyyyMMddHH-monitor.txt");
+
+				if (!Int32.TryParse(UtilityService.GetAppSetting($"{this.ServiceName}:Monitor:Interval"), out var interval) || interval < 0)
+					interval = 5;
+				if (!Int32.TryParse(UtilityService.GetAppSetting($"{this.ServiceName}:Monitor:Cache:Ping:Warn"), out var warnPing) || warnPing < 0)
+					warnPing = 5;
+				if (!Int32.TryParse(UtilityService.GetAppSetting($"{this.ServiceName}:Monitor:Cache:Ping:Critical"), out var criticalPing) || criticalPing < 0)
+					criticalPing = 10;
+				if (!Int32.TryParse(UtilityService.GetAppSetting($"{this.ServiceName}:Monitor:Cache:QueueSize:Warn"), out var warnQS) || warnQS < 0)
+					warnQS = 1000;
+				if (!Int32.TryParse(UtilityService.GetAppSetting($"{this.ServiceName}:Monitor:Cache:QueueSize:Critical"), out var criticalQS) || criticalQS < 0)
+					criticalQS = 5000;
+
+				cache.StartMonitor(
+					(msg, details) => this.OnMonitor(msg, details),
+					(msg, _, ex) => this.OnMonitor(msg, ("", 0, 0, 0), ex),
+					(msg, _) => this.OnMonitor(msg, ("", 0, 0, 0)),
+					(msg, _, ex) => this.OnMonitor(msg, ("", 0, 0, 0), ex),
+					interval * 1000, warnPing, criticalPing, warnQS, criticalQS, this.CancellationToken);
+			}
+		}
+
+		/// <summary>
+		/// Stops the monitoring process
+		/// </summary>
+		public virtual void StopMonitor(Cache cache)
+			=> cache?.StopMonitor();
+
+		/// <summary>
+		/// Tracks the monitoring info
+		/// </summary>
+		/// <param name="message"></param>
+		/// <param name="details"></param>
+		/// <param name="ex"></param>
+		public virtual void OnMonitor(string message, (string Level, long Total, long Interactive, long PingMiliseconds) details, Exception ex = null)
+		{
+			ThreadPool.GetAvailableThreads(out var workers, out var io);
+			var now = DateTime.Now;
+			var elapsedSeconds = (now - this.MonitorLastTime).TotalSeconds;
+			var pid = Process.GetCurrentProcess().Id.ToString();
+			var logs = $"{this.ServiceName} @ {this.NodeID} - PID: {pid} - {now:HH:mm:ss} -----\r\n";
+			if (string.IsNullOrWhiteSpace(details.Level))
+			{
+				logs += message;
+				if (ex != null)
+					logs += "\r\n" + ex.Message + " [" + ex.GetTypeName(true) + "]" + "\r\n" + "Stack: " + ex.GetStack(false);
+			}
+			else
+			{
+				ThreadPool.GetAvailableThreads(out var availableWorkers, out var availableIO);
+				ThreadPool.GetMaxThreads(out var maxWorkers, out var maxIO);
+				var currentWorkers = maxWorkers - availableWorkers;
+				var currentIO = maxIO - availableIO;
+				logs += $"ThreadPool - Workers: {currentWorkers:###,##0} / {maxWorkers:###,##0} | Async IO: {currentIO:###,##0} / {maxIO:###,##0}" + "\r\n"
+					+ $"Cache - {message}";
+			}
+			logs += "\r\n\r\n";
+			var filePath = this.MonitorLogFilePath + "-" + now.ToString("yyyyMMddHH") + "-monitor.txt";
+			if (!this.CancellationTokenSource.IsCancellationRequested)
+#if NETSTANDARD2_0
+				UtilityService.SaveAsTextAsync(logs, filePath, this.CancellationToken, true).Execute();
+#else
+				File.AppendAllTextAsync(filePath, logs, this.CancellationToken).Execute();
+#endif
+		}
+		#endregion
+
 		#region Connect to API Gateway Router
 		/// <summary>
 		/// Creates new cancellation token source
@@ -2557,6 +2655,7 @@ namespace net.vieapps.Services
 		/// <param name="onBackupConnectionError">The action to run when the backup connection got any error</param>
 		/// <param name="onRegisterSuccess">The action to run when the service was registered successful</param>
 		/// <param name="onRegisterError">The action to run when got any error while registering the service</param>
+		/// <param name="cache">The caching component (for monitoring)</param>
 		/// <returns></returns>
 		protected virtual Task StartAsync(
 			string[] args,
@@ -2570,7 +2669,8 @@ namespace net.vieapps.Services
 			Action<object, WampSessionCloseEventArgs> onBackupConnectionBroken,
 			Action<object, WampConnectionErrorEventArgs> onBackupConnectionError,
 			Action<IService> onRegisterSuccess,
-			Action<Exception> onRegisterError
+			Action<Exception> onRegisterError,
+			Cache cache
 		) => this.ConnectAsync
 			(
 				args,
@@ -2600,10 +2700,14 @@ namespace net.vieapps.Services
 							{
 								await this.WriteLogsAsync(UtilityService.NewUUID, $"Error occurred while sending a sync request to API Gateway => {ex.Message}", ex).ConfigureAwait(false);
 							}
-						}, (Int32.TryParse(UtilityService.GetAppSetting("TimerInterval:Sync", "7"), out var syncInterval) && syncInterval > 0 ? syncInterval : 7) * 60);
+						}, (Int32.TryParse(UtilityService.GetAppSetting($"{this.ServiceName}:Timer:Interval:Sync"), out var syncInterval) && syncInterval > 0 ? syncInterval : 7) * 60);
 
 					// send the service information to API Gateway
 					this.SendServiceInfoAsync(args, true).Execute(ex => this.WriteLogsAsync(UtilityService.NewUUID, $"Error occurred while sending info to API Gateway => {ex.Message}", ex));
+
+					// start to monitor the service
+					this.Monitor = "true".IsEquals(UtilityService.GetAppSetting($"{this.ServiceName}:Monitor"));
+					this.StartMonitor(cache, UtilityService.GetAppSetting("Path:Logs"));
 
 					// handling the 'on-established' event
 					onOutgoingConnectionEstablished?.Invoke(sender, arguments);
@@ -2623,15 +2727,16 @@ namespace net.vieapps.Services
 		/// <param name="onOutgoingConnectionEstablished">The action to run when the outgoing connection is established</param>
 		/// <param name="onBackupConnectionEstablished">The action to run when the backup connection is established</param>
 		/// <param name="initializeRepository">true to initialize the repository of the service</param>
+		/// <param name="cache">The caching component (for monitoring)</param>
 		/// <param name="next">The action to run when the service was registered successful</param>
 		/// <returns></returns>
-		public virtual Task StartAsync(string[] args, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished, Action<object, WampSessionCreatedEventArgs> onBackupConnectionEstablished, bool initializeRepository = true, Action<IService> next = null)
+		public virtual Task StartAsync(string[] args, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished, Action<object, WampSessionCreatedEventArgs> onBackupConnectionEstablished, bool initializeRepository, Cache cache, Action<IService> next)
 		{
 			if (this.IsDebugLogEnabled)
 				this.WriteLogs(UtilityService.NewUUID, $"Default working privileges\r\n{this.Privileges?.ToJson()}");
 			if (initializeRepository)
 				this.InitializeRepository();
-			return this.StartAsync(args, onIncomingConnectionEstablished, null, null, onOutgoingConnectionEstablished, null, null, onBackupConnectionEstablished, null, null, next, null);
+			return this.StartAsync(args, onIncomingConnectionEstablished, null, null, onOutgoingConnectionEstablished, null, null, onBackupConnectionEstablished, null, null, next, null, cache);
 		}
 
 		/// <summary>
@@ -2640,14 +2745,40 @@ namespace net.vieapps.Services
 		/// <param name="args">The arguments</param>
 		/// <param name="onBackupConnectionEstablished">The action to run when the backup connection is established</param>
 		/// <param name="initializeRepository">true to initialize the repository of the service</param>
+		/// <param name="cache">The caching component (for monitoring)</param>
 		/// <param name="next">The action to run when the service was registered successful</param>
 		/// <returns></returns>
-		public virtual Task StartAsync(string[] args, Action<object, WampSessionCreatedEventArgs> onBackupConnectionEstablished, bool initializeRepository = true, Action<IService> next = null)
-			=> this.StartAsync(args, null, null, onBackupConnectionEstablished, initializeRepository, next);
+		public virtual Task StartAsync(string[] args, Action<object, WampSessionCreatedEventArgs> onBackupConnectionEstablished, bool initializeRepository, Cache cache = null, Action<IService> next = null)
+			=> this.StartAsync(args, null, null, onBackupConnectionEstablished, initializeRepository, cache, next);
 
+		/// <summary>
+		/// Starts the service (the short way - connect to API Gateway Router and register the service)
+		/// </summary>
+		/// <param name="args">The arguments</param>
+		/// <param name="initializeRepository">true to initialize the repository of the service</param>
+		/// <param name="cache">The caching component (for monitoring)</param>
+		/// <param name="next">The action to run when the service was registered successful</param>
+		/// <returns></returns>
+		public virtual Task StartAsync(string[] args, bool initializeRepository, Cache cache = null, Action<IService> next = null)
+			=> this.StartAsync(args, null, initializeRepository, cache, next);
+
+		/// <summary>
+		/// Starts the service (the short way - connect to API Gateway Router and register the service)
+		/// </summary>
+		/// <param name="args">The arguments</param>
+		/// <param name="initializeRepository">true to initialize the repository of the service</param>
+		/// <param name="next">The action to run when the service was registered successful</param>
+		/// <returns></returns>
 		public virtual Task StartAsync(string[] args = null, bool initializeRepository = true, Action<IService> next = null)
-			=> this.StartAsync(args, null, initializeRepository, next);
+			=> this.StartAsync(args, initializeRepository, null, next);
 
+		/// <summary>
+		/// Starts the service (the short way - connect to API Gateway Router and register the service)
+		/// </summary>
+		/// <param name="args">The arguments</param>
+		/// <param name="initializeRepository">true to initialize the repository of the service</param>
+		/// <param name="next">The action to run when the service was registered successful</param>
+		/// <returns></returns>
 		public virtual void Start(string[] args = null, bool initializeRepository = true, Action<IService> next = null)
 			=> this.StartAsync(args, initializeRepository, next).Execute(true);
 		#endregion
