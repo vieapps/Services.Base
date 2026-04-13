@@ -2240,14 +2240,14 @@ namespace net.vieapps.Services
 		/// <param name="message"></param>
 		/// <param name="details"></param>
 		/// <param name="ex"></param>
-		public virtual void OnMonitor(string message, (string Level, long Total, long Interactive, long PingMiliseconds) details, Exception ex = null)
+		public virtual void OnMonitor(string message, (string Status, long Total, long Interactive, long PingMiliseconds) details, Exception ex = null)
 		{
 			ThreadPool.GetAvailableThreads(out var workers, out var io);
 			var now = DateTime.Now;
 			var elapsedSeconds = (now - this.MonitorLastTime).TotalSeconds;
 			var pid = Process.GetCurrentProcess().Id.ToString();
 			var logs = $"{this.ServiceName} @ {this.NodeID} - PID: {pid} - {now:HH:mm:ss} -----\r\n";
-			if (string.IsNullOrWhiteSpace(details.Level))
+			if (string.IsNullOrWhiteSpace(details.Status))
 			{
 				logs += message;
 				if (ex != null)
