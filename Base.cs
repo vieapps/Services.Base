@@ -2209,15 +2209,15 @@ namespace net.vieapps.Services
 				this.Logger.LogInformation($"Start to monitor the service => {this.MonitorLogFilePath}-yyyyMMddHH-monitor.txt");
 
 				if (!Int32.TryParse(UtilityService.GetAppSetting($"{this.ServiceName}:Monitor:Interval"), out var interval) || interval < 0)
-					interval = 5;
+					interval = 0;
 				if (!Int32.TryParse(UtilityService.GetAppSetting($"{this.ServiceName}:Monitor:Cache:Ping:Warn"), out var warnPing) || warnPing < 0)
-					warnPing = 5;
+					warnPing = 0;
 				if (!Int32.TryParse(UtilityService.GetAppSetting($"{this.ServiceName}:Monitor:Cache:Ping:Critical"), out var criticalPing) || criticalPing < 0)
-					criticalPing = 10;
+					criticalPing = 0;
 				if (!Int32.TryParse(UtilityService.GetAppSetting($"{this.ServiceName}:Monitor:Cache:QueueSize:Warn"), out var warnQS) || warnQS < 0)
-					warnQS = 1000;
+					warnQS = 0;
 				if (!Int32.TryParse(UtilityService.GetAppSetting($"{this.ServiceName}:Monitor:Cache:QueueSize:Critical"), out var criticalQS) || criticalQS < 0)
-					criticalQS = 5000;
+					criticalQS = 0;
 
 				cache.StartMonitor(
 					(msg, details) => this.OnMonitor(msg, details),
