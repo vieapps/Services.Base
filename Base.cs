@@ -2186,7 +2186,12 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Gets the last-time monitoring this service
 		/// </summary>
-		public virtual DateTime MonitorLastTime { get; internal protected set; } = DateTime.Now;
+		public virtual DateTime MonitorLastTime { get; internal protected set; } = DateTime.UtcNow;
+
+		/// <summary>
+		/// Gets or set the last-time of processor
+		/// </summary>
+		public virtual TimeSpan MonitorLastTotalProcessorTime { get; internal protected set; } = TimeSpan.Zero;
 
 		/// <summary>
 		/// Gets the fiel path to store monitoring logs
@@ -2199,6 +2204,8 @@ namespace net.vieapps.Services
 		/// <param name="logPath"></param>
 		public virtual void StartMonitor(Cache cache, string logPath)
 		{
+			this.MonitorLastTime = DateTime.UtcNow;
+			this.MonitorLastTotalProcessorTime = Process.GetCurrentProcess().TotalProcessorTime;
 			ThreadPool.GetMaxThreads(out var maxWorker, out var maxIO);
 			ThreadPool.GetMinThreads(out var minWorker, out var minIO);
 			this.Logger.LogInformation($"ThreadPool - Workers: {minWorker:###,##0} / {maxWorker:###,##0} - Async IO: {minIO:###,##0} / {maxIO:###,##0}");
@@ -2238,16 +2245,17 @@ namespace net.vieapps.Services
 		/// Tracks the monitoring info
 		/// </summary>
 		/// <param name="message"></param>
-		/// <param name="details"></param>
+		/// <param name="state"></param>
 		/// <param name="ex"></param>
-		public virtual void OnMonitor(string message, (string Status, long Total, long Interactive, long PingMilliseconds) details, Exception ex = null)
+		public virtual void OnMonitor(string message, (string Status, long Total, long Interactive, long PingMilliseconds) state, Exception ex = null)
 		{
-			ThreadPool.GetAvailableThreads(out var workers, out var io);
-			var now = DateTime.Now;
-			var elapsedSeconds = (now - this.MonitorLastTime).TotalSeconds;
-			var pid = Process.GetCurrentProcess().Id.ToString();
-			var logs = $"{this.ServiceName} @ {this.NodeID} - PID: {pid} - {now:HH:mm:ss} -----\r\n";
-			if (string.IsNullOrWhiteSpace(details.Status))
+			var (pid, cpuUsage, memoryUsage, lastTotalProcessorTime, now) = Process.GetCurrentProcess().GetRuntimeInfo(this.MonitorLastTotalProcessorTime, this.MonitorLastTime);
+			this.MonitorLastTime = now;
+			this.MonitorLastTotalProcessorTime = lastTotalProcessorTime;
+
+			var nowLocal = now.ToLocalTime();
+			var logs = $"{this.ServiceName} @ {this.NodeID} - PID: {pid} - {nowLocal:HH:mm:ss} -----\r\n";
+			if (string.IsNullOrWhiteSpace(state.Status))
 			{
 				logs += message;
 				if (ex != null)
@@ -2259,11 +2267,39 @@ namespace net.vieapps.Services
 				ThreadPool.GetMaxThreads(out var maxWorkers, out var maxIO);
 				var currentWorkers = maxWorkers - availableWorkers;
 				var currentIO = maxIO - availableIO;
-				logs += $"ThreadPool - Workers: {currentWorkers:###,##0} / {maxWorkers:###,##0} | Async IO: {currentIO:###,##0} / {maxIO:###,##0}" + "\r\n"
+
+				new CommunicateMessage("APIGateway")
+				{
+					Type = "Service#Statistics",
+					Data = new StatisticMessage
+					{
+						Time = nowLocal,
+						IsHttp = false,
+						ServiceName = this.ServiceName,
+						NodeID = this.NodeID,
+						CpuUsage = cpuUsage,
+						MemoryUsage = memoryUsage,
+						ThreadPoolWorkers = currentWorkers,
+						ThreadPoolAsyncIO = currentIO,
+						ThreadPoolMaxWorkers = maxWorkers,
+						ThreadPoolMaxAsyncIO = maxIO,
+						CacheProvider = "Redis",
+						CacheStatus = state.Status,
+						CacheTotalQueue = state.Total,
+						CacheInteractiveQueue = state.Interactive,
+						CachePingMilliseconds = state.PingMilliseconds
+					}.ToJson()
+				}.Send();
+
+				logs += $"Runtime Info - CPU: {cpuUsage:0.00}% | RAM: {memoryUsage:###,###,###,##0}MB | Workers: {currentWorkers:###,##0} / {maxWorkers:###,##0} | Async IO: {currentIO:###,##0} / {maxIO:###,##0}" + "\r\n"
 					+ $"Cache - {message}";
+				var additional = this.OnMonitorAdditional();
+				if (!string.IsNullOrWhiteSpace(additional))
+					logs += "\r\n" + additional;
 			}
 			logs += "\r\n\r\n";
-			var filePath = this.MonitorLogFilePath + "-" + now.ToString("yyyyMMddHH") + "-monitor.txt";
+
+			var filePath = this.MonitorLogFilePath + $"-{nowLocal:yyyyMMddHH}-monitor.txt";
 			if (!this.CancellationTokenSource.IsCancellationRequested)
 #if NETSTANDARD2_0
 				UtilityService.SaveAsTextAsync(logs, filePath, this.CancellationToken, true).Execute();
@@ -2271,6 +2307,12 @@ namespace net.vieapps.Services
 				File.AppendAllTextAsync(filePath, logs, this.CancellationToken).Execute();
 #endif
 		}
+
+		/// <summary>
+		/// Returns the additional information on-monitor
+		/// </summary>
+		/// <returns></returns>
+		protected virtual string OnMonitorAdditional() => null;
 		#endregion
 
 		#region Connect to API Gateway Router

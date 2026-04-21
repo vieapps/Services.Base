@@ -3,6 +3,7 @@ using System;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Reactive.Linq;
@@ -60,6 +61,30 @@ namespace net.vieapps.Services
 			=> (Environment.UserName.Trim().ToLower(), Environment.MachineName.Trim().ToLower(), RuntimeInformation.FrameworkDescription.Trim(), Extensions.GetRuntimePlatform(false));
 
 		/// <summary>
+		/// Gets runtime info for monitoring
+		/// </summary>
+		/// <param name="process"></param>
+		/// <param name="lastTotalProcessorTime"></param>
+		/// <param name="lastCheckTime"></param>
+		/// <returns></returns>
+		public static (int PID, double CpuUsage, int MemoryUsage, TimeSpan LastTotalProcessorTime, DateTime LastCheckTime) GetRuntimeInfo(this Process process, TimeSpan lastTotalProcessorTime, DateTime lastCheckTime)
+		{
+			var pid = process.Id;
+			var now = DateTime.UtcNow;
+			var totalProcessorTime = process.TotalProcessorTime;
+			var cpuUsedMilliseconds = (totalProcessorTime - lastTotalProcessorTime).TotalMilliseconds;
+			var elapsedMilliseconds = (now - lastCheckTime).TotalMilliseconds;
+			double cpuUsage = 0;
+			if (elapsedMilliseconds > 0)
+			{
+				cpuUsage = cpuUsedMilliseconds / (elapsedMilliseconds * Environment.ProcessorCount) * 100;
+				cpuUsage = Math.Max(0, Math.Min(cpuUsage, 100));
+			}
+			var memoryUsage = (int)(process.WorkingSet64 / 1024 / 1024);
+			return (pid, cpuUsage, memoryUsage, totalProcessorTime, now);
+		}
+
+		/// <summary>
 		/// Gets the name of the app's OS
 		/// </summary>
 		/// <param name="userAgent"></param>
@@ -92,12 +117,21 @@ namespace net.vieapps.Services
 		/// <param name="host">The host that running the service</param>
 		/// <param name="platform">The information (description) of the running platform (framework)</param>
 		/// <param name="os">The information of the operating system</param>
+		/// <param name="additional">The additional information like app-pool ID, ... </param>
 		/// <returns>The string that presents the identity of a node (include user and host)</returns>
-		public static string GetNodeID(string user = null, string host = null, string platform = null, string os = null)
+		public static string GetNodeID(string user = null, string host = null, string platform = null, string os = null, string additional = null)
 		{
 			var (User, Host, Platform, OS) = Extensions.GetRuntimeArguments();
-			return $"{user?.Trim().ToLower() ?? User}-{host?.Trim().ToLower() ?? Host}-" + $"{platform?.Trim() ?? Platform} @ {os?.Trim() ?? OS}".GenerateUUID();
+			return $"{user?.Trim().ToLower() ?? User}-{host?.Trim().ToLower() ?? Host}-" + $"{platform?.Trim() ?? Platform} @ {os?.Trim() ?? OS}{additional ?? ""}".GenerateUUID();
 		}
+
+		/// <summary>
+		/// Gets the identity of a node that running a service
+		/// </summary>
+		/// <param name="additional">The additional information like app-pool ID, ... </param>
+		/// <returns>The string that presents the identity of a node (include user and host)</returns>
+		public static string GetNodeID(string additional)
+			=> Extensions.GetNodeID(null, null, null, null, additional);
 
 		/// <summary>
 		/// Gets the identity of a node that running a service
@@ -110,7 +144,8 @@ namespace net.vieapps.Services
 				args?.FirstOrDefault(arg => arg.IsStartsWith("/run-user:"))?.Replace(StringComparison.OrdinalIgnoreCase, "/run-user:", "").UrlDecode(),
 				args?.FirstOrDefault(arg => arg.IsStartsWith("/run-host:"))?.Replace(StringComparison.OrdinalIgnoreCase, "/run-host:", "").UrlDecode(),
 				args?.FirstOrDefault(arg => arg.IsStartsWith("/run-platform:"))?.Replace(StringComparison.OrdinalIgnoreCase, "/run-platform:", "").UrlDecode(),
-				args?.FirstOrDefault(arg => arg.IsStartsWith("/run-os:"))?.Replace(StringComparison.OrdinalIgnoreCase, "/run-os:", "").UrlDecode()
+				args?.FirstOrDefault(arg => arg.IsStartsWith("/run-os:"))?.Replace(StringComparison.OrdinalIgnoreCase, "/run-os:", "").UrlDecode(),
+				args?.FirstOrDefault(arg => arg.IsStartsWith("/run-pool-id:"))?.Replace(StringComparison.OrdinalIgnoreCase, "/run-pool-id:", "").UrlDecode()
 			);
 
 		/// <summary>
@@ -139,9 +174,10 @@ namespace net.vieapps.Services
 		/// <param name="host">The host that running the service</param>
 		/// <param name="platform">The information (description) of the running platform (framework)</param>
 		/// <param name="os">The information of the operating system</param>
+		/// <param name="additional">The additional information like app-pool ID, ... </param>
 		/// <returns>The string that presents unique name of a business service at a host</returns>
-		public static string GetUniqueName(string name, string user, string host, string platform, string os)
-			=> Extensions.GetUniqueName(name, Extensions.GetNodeID(user, host, platform, os));
+		public static string GetUniqueName(string name, string user, string host, string platform, string os, string additional = null)
+			=> Extensions.GetUniqueName(name, Extensions.GetNodeID(user, host, platform, os, additional));
 
 		/// <summary>
 		/// Gets the resolved URI with IP address and port
