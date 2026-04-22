@@ -32,7 +32,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
 		public static Task SendAsync(this ManagedWebSocket websocket, IEnumerable<JToken> messages, CancellationToken cancellationToken = default)
-			=> websocket.SendAsync(messages?.Where(message => message != null).Select(message => message.ToString(Formatting.None)), cancellationToken);
+			=> websocket.SendAsync(messages?.Where(message => message != null).Select(message => message.AsString()), cancellationToken);
 
 		/// <summary>
 		/// Sends the message
@@ -42,7 +42,7 @@ namespace net.vieapps.Services
 		/// <param name="cancellationToken"></param>
 		/// <returns></returns>
 		public static Task SendAsync(this ManagedWebSocket websocket, JToken message, CancellationToken cancellationToken = default)
-			=> websocket.SendAsync(message?.ToString(Formatting.None), cancellationToken);
+			=> websocket.SendAsync(message?.AsString(), cancellationToken);
 
 		/// <summary>
 		/// Sends an update message
