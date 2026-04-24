@@ -2718,7 +2718,7 @@ namespace net.vieapps.Services
 				args,
 				(sender, arguments) =>
 				{
-					this.RegisterServiceAsync(args, onRegisterSuccess, onRegisterError).Execute();
+					this.RegisterServiceAsync(args, onRegisterSuccess, onRegisterError).Execute(ex => this.Logger?.LogInformation($"Error occurred while registering service => {ex.Message}", ex));
 					onIncomingConnectionEstablished?.Invoke(sender, arguments);
 				},
 				onIncomingConnectionBroken,
@@ -2726,7 +2726,7 @@ namespace net.vieapps.Services
 				(sender, arguments) =>
 				{
 					// initialize all helper services
-					this.InitializeHelperServicesAsync().Execute();
+					this.InitializeHelperServicesAsync().Execute(ex => this.Logger?.LogInformation($"Error occurred while initializing helper services => {ex.Message}", ex));
 
 					// start the timer to send the sync request
 					if (this.Syncable && string.IsNullOrWhiteSpace(this.SyncSessionID))
@@ -2745,7 +2745,7 @@ namespace net.vieapps.Services
 						}, (Int32.TryParse(UtilityService.GetAppSetting($"{this.ServiceName}:Timer:Interval:Sync"), out var syncInterval) && syncInterval > 0 ? syncInterval : 7) * 60);
 
 					// send the service information to API Gateway
-					this.SendServiceInfoAsync(args, true).Execute(ex => this.WriteLogsAsync(UtilityService.NewUUID, $"Error occurred while sending info to API Gateway => {ex.Message}", ex));
+					this.SendServiceInfoAsync(args, true).Execute(ex => this.Logger?.LogInformation($"Error occurred while sending info to API Gateway => {ex.Message}", ex));
 
 					// start to monitor the service
 					this.Monitor = "true".IsEquals(UtilityService.GetAppSetting($"{this.ServiceName}:Monitor"));
@@ -2822,7 +2822,7 @@ namespace net.vieapps.Services
 		/// <param name="next">The action to run when the service was registered successful</param>
 		/// <returns></returns>
 		public virtual void Start(string[] args = null, bool initializeRepository = true, Action<IService> next = null)
-			=> this.StartAsync(args, initializeRepository, next).Execute(true);
+			=> this.StartAsync(args, initializeRepository, next).Execute(true, ex => this.Logger?.LogInformation($"Error occurred while starting-up service => {ex.Message}", ex));
 		#endregion
 
 		#region Stop the service
