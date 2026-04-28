@@ -186,7 +186,7 @@ namespace net.vieapps.Services
 			=> messages != null ? messages.SendAsync(deviceID, excludedDeviceID, cancellationToken) : Task.CompletedTask;
 
 		/// <summary>
-		/// Send a message for updating data of other service
+		///Send a message for communicating with other services
 		/// </summary>
 		/// <param name="serviceName">The name of a service</param>
 		/// <param name="message">The message</param>
@@ -196,7 +196,7 @@ namespace net.vieapps.Services
 			=> message != null ? new CommunicateMessage(serviceName, message).SendAsync(cancellationToken) : Task.CompletedTask;
 
 		/// <summary>
-		/// Send a message for communicating of other services
+		/// Send a message for communicating with other services
 		/// </summary>
 		/// <param name="message">The message</param>
 		/// <param name="cancellationToken">The cancellation token</param>
@@ -205,7 +205,7 @@ namespace net.vieapps.Services
 			=> message != null ? message.SendAsync(cancellationToken) : Task.CompletedTask;
 
 		/// <summary>
-		/// Send a message for updating data of other service
+		/// Send a message for communicating with other services
 		/// </summary>
 		/// <param name="serviceName">The name of a service</param>
 		/// <param name="messages">The collection of messages</param>
@@ -215,13 +215,27 @@ namespace net.vieapps.Services
 			=> messages != null ? messages.SendAsync(serviceName, cancellationToken) : Task.CompletedTask;
 
 		/// <summary>
-		/// Send a message for communicating of other services
+		/// Send a message for communicating with other services
 		/// </summary>
 		/// <param name="messages">The collection of messages</param>
 		/// <param name="cancellationToken">The cancellation token</param>
 		/// <returns></returns>
 		protected virtual Task SendInterCommunicateMessagesAsync(List<CommunicateMessage> messages, CancellationToken cancellationToken = default)
 			=> messages != null ? messages.SendAsync(cancellationToken) : Task.CompletedTask;
+
+		/// <summary>
+		/// Send a message for communicating with other services
+		/// </summary>
+		/// <param name="message"></param>
+		/// <param name="useBackupChannel"></param>
+		/// <param name="writeDebugLogs"></param>
+		public virtual void SendInterCommunicateMessage(CommunicateMessage message, bool useBackupChannel = false, bool writeDebugLogs = false)
+		{
+			message?.Send(useBackupChannel);
+			writeDebugLogs = writeDebugLogs || this.IsDebugLogEnabled;
+			if (writeDebugLogs)
+				this.Logger?.LogInformation($"Send an inter-communicate message\r\nMessage [{useBackupChannel}]: {message?.ToJson()}\r\nRx Subject: {Extensions.GetCommunicatingSubject(message, null, useBackupChannel)?.GetTypeName()}");			
+		}
 
 		/// <summary>
 		/// Sends the service information to API Gateway
@@ -2194,9 +2208,14 @@ namespace net.vieapps.Services
 		public virtual TimeSpan MonitorLastTotalProcessorTime { get; internal protected set; } = TimeSpan.Zero;
 
 		/// <summary>
-		/// Gets the fiel path to store monitoring logs
+		/// Gets the file path to store monitoring logs
 		/// </summary>
 		public virtual string MonitorLogFilePath { get; internal protected set; }
+
+		/// <summary>
+		/// Gets the state to write monitoring logs into file
+		/// </summary>
+		public virtual bool WriteMonitorLogIntoFile { get; internal protected set; } = false;
 
 		/// <summary>
 		/// Starts to monitor this service
@@ -2254,9 +2273,11 @@ namespace net.vieapps.Services
 			this.MonitorLastTotalProcessorTime = lastTotalProcessorTime;
 
 			var nowLocal = now.ToLocalTime();
+			var writeLogsIntoFile = this.WriteMonitorLogIntoFile;
 			var logs = $"{this.ServiceName} @ {this.NodeID} - PID: {pid} - {nowLocal:HH:mm:ss} -----\r\n";
 			if (string.IsNullOrWhiteSpace(state.Status))
 			{
+				writeLogsIntoFile = true;
 				logs += message;
 				if (ex != null)
 					logs += "\r\n" + ex.Message + " [" + ex.GetTypeName(true) + "]" + "\r\n" + "Stack: " + ex.GetStack(false);
@@ -2268,7 +2289,7 @@ namespace net.vieapps.Services
 				var currentWorkers = maxWorkers - availableWorkers;
 				var currentIO = maxIO - availableIO;
 
-				new CommunicateMessage("APIGateway")
+				this.SendInterCommunicateMessage(new CommunicateMessage("APIGateway")
 				{
 					Type = "Service#Statistics",
 					Data = new StatisticMessage
@@ -2289,23 +2310,29 @@ namespace net.vieapps.Services
 						CacheInteractiveQueue = state.Interactive,
 						CachePingMilliseconds = state.PingMilliseconds
 					}.ToJson()
-				}.Send();
+				});
 
-				logs += $"Runtime Info - CPU: {cpuUsage:0.00}% | RAM: {memoryUsage:###,###,###,##0}MB | Workers: {currentWorkers:###,##0} / {maxWorkers:###,##0} | Async IO: {currentIO:###,##0} / {maxIO:###,##0}" + "\r\n"
+				if (writeLogsIntoFile)
+				{
+					logs += $"Runtime Info - CPU: {cpuUsage:0.00}% | RAM: {memoryUsage:###,###,###,##0}MB | Workers: {currentWorkers:###,##0} / {maxWorkers:###,##0} | Async IO: {currentIO:###,##0} / {maxIO:###,##0}" + "\r\n"
 					+ $"Cache - {message}";
-				var additional = this.OnMonitorAdditional();
-				if (!string.IsNullOrWhiteSpace(additional))
-					logs += "\r\n" + additional;
+					var additional = this.OnMonitorAdditional();
+					if (!string.IsNullOrWhiteSpace(additional))
+						logs += "\r\n" + additional;
+				}
 			}
-			logs += "\r\n\r\n";
 
-			var filePath = this.MonitorLogFilePath + $"-{nowLocal:yyyyMMddHH}-monitor.txt";
-			if (!this.CancellationTokenSource.IsCancellationRequested)
+			if (writeLogsIntoFile)
+			{
+				logs += "\r\n\r\n";
+				var filePath = $"{this.MonitorLogFilePath}-{nowLocal:yyyyMMddHH}-monitor.txt";
+				if (!this.CancellationTokenSource.IsCancellationRequested)
 #if NETSTANDARD2_0
-				UtilityService.SaveAsTextAsync(logs, filePath, this.CancellationToken, true).Execute();
+					UtilityService.SaveAsTextAsync(logs, filePath, this.CancellationToken, true).Execute();
 #else
-				File.AppendAllTextAsync(filePath, logs, this.CancellationToken).Execute();
+					File.AppendAllTextAsync(filePath, logs, this.CancellationToken).Execute();
 #endif
+			}
 		}
 
 		/// <summary>

@@ -13,9 +13,9 @@ namespace net.vieapps.Services
 {
 	public static partial class Extensions
 	{
-		static ISubject<UpdateMessage> UpdatingSubject { get; set; }
+		internal static ISubject<UpdateMessage> UpdatingSubject { get; set; }
 
-		static ISubject<UpdateMessage> GetUpdatingSubject()
+		internal static ISubject<UpdateMessage> GetUpdatingSubject()
 			=> Extensions.UpdatingSubject ?? (Extensions.UpdatingSubject = Router.OutgoingChannel?.RealmProxy.Services.GetSubject<UpdateMessage>("messages.update"));
 
 		/// <summary>
@@ -126,9 +126,9 @@ namespace net.vieapps.Services
 				}).Send();
 		}
 
-		static ConcurrentDictionary<string, ISubject<CommunicateMessage>> CommunicatingSubjects { get; } = new ConcurrentDictionary<string, ISubject<CommunicateMessage>>();
+		internal static ConcurrentDictionary<string, ISubject<CommunicateMessage>> CommunicatingSubjects { get; } = new ConcurrentDictionary<string, ISubject<CommunicateMessage>>();
 
-		static ISubject<CommunicateMessage> GetCommunicatingSubject(this BaseMessage message, string uri = null, bool useBackupChannel = false)
+		internal static ISubject<CommunicateMessage> GetCommunicatingSubject(this BaseMessage message, string uri = null, bool useBackupChannel = false)
 		{
 			uri = uri ?? $"messages.services.{(message != null && message is CommunicateMessage communicateMessage ? communicateMessage.ServiceName.Trim().ToLower() : "apigateway")}";
 			if (!Extensions.CommunicatingSubjects.TryGetValue(uri, out var subject))
