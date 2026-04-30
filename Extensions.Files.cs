@@ -254,7 +254,7 @@ namespace net.vieapps.Services
 
 			while (true)
 			{
-				requestInfo.Header["x-offset"] = $"{offset}";
+				requestInfo.Header["x-offset"] = offset.ToString();
 				var response = await service.FetchTemporaryFileAsync(requestInfo, cancellationToken).ConfigureAwait(false);
 
 				var data = response.Get<string>("Data");

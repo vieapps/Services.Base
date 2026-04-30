@@ -64,34 +64,9 @@ namespace net.vieapps.Services
 		/// Gets the state that determines that the API Gateways' channels are closed by the system
 		/// </summary>
 		public static bool ChannelsAreClosedBySystem { get; internal set; } = false;
-
-		internal static WebSocket StatisticsWebSocket { get; } = new WebSocket
-		{
-			OnConnectionBroken = websocket =>
-			{
-				if (Router.BackupStatisticsWebSocketID.Equals(websocket.ID))
-				{
-					Router.BackupStatisticsWebSocketID = Guid.Empty;
-					Router.BackupStatisticsWebSocketState = "closed";
-				}
-				else
-				{
-					Router.PrimaryStatisticsWebSocketID = Guid.Empty;
-					Router.PrimaryStatisticsWebSocketState = "closed";
-				}
-			}
-		};
-
-		internal static Guid PrimaryStatisticsWebSocketID { get; set; } = Guid.Empty;
-
-		internal static string PrimaryStatisticsWebSocketState { get; set; } = "initializing";
-
-		internal static Guid BackupStatisticsWebSocketID { get; set; } = Guid.Empty;
-
-		internal static string BackupStatisticsWebSocketState { get; set; } = "initializing";
 		#endregion
 
-		#region Get settings of API Gateway Router
+		#region Router info
 		/// <summary>
 		/// Gets settings of API Gateway Router
 		/// </summary>
@@ -128,6 +103,117 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static bool GotBackupRouter()
 			=> Router.GetRouterInfo(true).Address != null;
+
+		internal static WebSocket RouterWebSocket { get; } = new WebSocket
+		{
+			OnConnectionBroken = websocket =>
+			{
+				var isBackup = false;
+				if (Router.RouterBackupWebSocketID.Equals(websocket.ID))
+				{
+					Router.RouterBackupWebSocketID = Guid.Empty;
+					Router.RouterBackupWebSocketState = "closed";
+					isBackup = true;
+				}
+				else
+				{
+					Router.RouterPrimaryWebSocketID = Guid.Empty;
+					Router.RouterPrimaryWebSocketState = "closed";
+				}
+				Router.ConnectRouterWebSocket(null, isBackup);
+			},
+			OnMessageReceived = (websocket, _, buffer) => Router.OnRouterWebSocketMessageReceived?.Invoke(websocket, buffer.GetString())
+		};
+
+		/// <summary>
+		/// Gets or Sets the action to process when receive messages from Router 
+		/// </summary>
+		public static Action<ManagedWebSocket, string> OnRouterWebSocketMessageReceived { get; set; }
+
+		/// <summary>
+		/// Gets the identity of the web socket that connected to primary router
+		/// </summary>
+		public static Guid RouterPrimaryWebSocketID { get; internal set; } = Guid.Empty;
+
+		internal static string RouterPrimaryWebSocketState { get; set; } = "initializing";
+
+		/// <summary>
+		/// Gets the identity of the web socket that connected to primary router
+		/// </summary>
+		public static Guid RouterBackupWebSocketID { get; internal set; } = Guid.Empty;
+
+		internal static string RouterBackupWebSocketState { get; set; } = "initializing";
+
+		static void ConnectRouterWebSocket(ILogger logger = null, bool isBackup = false)
+		{
+			var uri = new Uri(Router.GetRouterStrInfo(isBackup));
+			var location = $"{uri.Scheme}://{uri.Host}:56429/";
+			var doConnect = isBackup
+				? Router.RouterBackupWebSocketID.Equals(Guid.Empty) && (Router.RouterBackupWebSocketState == "initializing" || Router.RouterBackupWebSocketState == "closed")
+				: Router.RouterPrimaryWebSocketID.Equals(Guid.Empty) && (Router.RouterPrimaryWebSocketState == "initializing" || Router.RouterPrimaryWebSocketState == "closed");
+
+			if (doConnect)
+			{
+				logger?.LogInformation($"Connect to Router websocket [{location}]");
+				if (isBackup)
+					Router.RouterBackupWebSocketState = "connecting";
+				else
+					Router.RouterPrimaryWebSocketState = "connecting";
+
+				Router.RouterWebSocket.Connect
+				(
+					location,
+					websocket =>
+					{
+						if (isBackup)
+						{
+							Router.RouterBackupWebSocketID = websocket.ID;
+							Router.RouterBackupWebSocketState = "connected";
+						}
+						else
+						{
+							Router.RouterPrimaryWebSocketID = websocket.ID;
+							Router.RouterPrimaryWebSocketState = "connected";
+						}
+						logger?.LogInformation($"Router websocket was connected [{location} => {websocket.ID} ({isBackup})]");
+					},
+					exception =>
+					{
+						logger?.LogInformation($"Cannot connect to Router websocket => {exception.Message}", exception);
+						Router.ConnectRouterWebSocketAsync(logger, isBackup).Execute();
+					}
+				);
+			}
+		}
+
+		static async Task ConnectRouterWebSocketAsync(ILogger logger = null, bool isBackup = false)
+		{
+			await Task.Delay(UtilityService.GetRandomNumber(456, 789)).ConfigureAwait(false);
+			Router.ConnectRouterWebSocket(logger, isBackup);
+		}
+
+		/// <summary>
+		/// Gets the router's statistics web-socket (means the WebSocket connection that connected to API Gateway Router to exchange information by specified commands)
+		/// </summary>
+		/// <param name="isBackup"></param>
+		/// <returns></returns>
+		public static ManagedWebSocket GetRouterWebSocket(bool isBackup = false)
+			=> Router.RouterWebSocket.GetWebSocket(isBackup ? Router.RouterBackupWebSocketID : Router.RouterPrimaryWebSocketID);
+
+		/// <summary>
+		/// Sends a message to Router for exchanging information
+		/// </summary>
+		/// <param name="message"></param>
+		/// <param name="isBackup"></param>
+		/// <param name="cancellationToken"></param>
+		/// <returns></returns>
+		public static Task SendMessageToRouterAsync(string message, bool isBackup = false, CancellationToken cancellationToken = default)
+		{
+			var routerWebSocket = Router.GetRouterWebSocket(isBackup);
+			return routerWebSocket != null && routerWebSocket.State == System.Net.WebSockets.WebSocketState.Open
+				? routerWebSocket.SendAsync(message, cancellationToken)
+				: Task.CompletedTask;
+		}
 		#endregion
 
 		#region Open channels
@@ -211,43 +297,6 @@ namespace net.vieapps.Services
 			return wampChannel.OpenAsync(onConnectionEstablished, onConnectionBroken,	onConnectionError, cancellationToken);
 		}
 
-		static void ConnectStatisticsWebSocket(ILogger logger = null, bool isBackup = false)
-		{
-			var uri = new Uri(Router.GetRouterStrInfo(isBackup));
-			var connect = isBackup
-				? Router.BackupStatisticsWebSocketID.Equals(Guid.Empty) && (Router.BackupStatisticsWebSocketState == "initializing" || Router.BackupStatisticsWebSocketState == "closed")
-				: Router.PrimaryStatisticsWebSocketID.Equals(Guid.Empty) && (Router.PrimaryStatisticsWebSocketState == "initializing" || Router.PrimaryStatisticsWebSocketState == "closed");
-			if (connect)
-				Router.StatisticsWebSocket.Connect
-				(
-					$"{uri.Scheme}://{uri.Host}:56429/",
-					websocket =>
-					{
-						if (isBackup)
-						{
-							Router.BackupStatisticsWebSocketID = websocket.ID;
-							Router.BackupStatisticsWebSocketState = "connected";
-						}
-						else
-						{
-							Router.PrimaryStatisticsWebSocketID = websocket.ID;
-							Router.PrimaryStatisticsWebSocketState = "connected";
-						}
-					},
-					exception =>
-					{
-						logger?.LogError($"Cannot connect to statistic websocket => {exception.Message}", exception);
-						Router.ConnectStatisticsWebSocketAsync(logger, isBackup).Execute();
-					}
-				);
-		}
-
-		static async Task ConnectStatisticsWebSocketAsync(ILogger logger = null, bool isBackup = false)
-		{
-			await Task.Delay(UtilityService.GetRandomNumber(456, 789)).ConfigureAwait(false);
-			Router.ConnectStatisticsWebSocket(logger, isBackup);
-		}
-
 		/// <summary>
 		/// Updates related information of the channel
 		/// </summary>
@@ -257,30 +306,29 @@ namespace net.vieapps.Services
 		/// <param name="description"></param>
 		public static async Task UpdateAsync(this IWampChannel wampChannel, long sessionID, string name, string description, ILogger logger = null, bool isBackup = false)
 		{
-			Router.ConnectStatisticsWebSocket(logger, isBackup);
-			var state = isBackup ? Router.BackupStatisticsWebSocketState : Router.PrimaryStatisticsWebSocketState;
+			Router.ConnectRouterWebSocket(logger, isBackup);
+			var state = isBackup ? Router.RouterBackupWebSocketState : Router.RouterPrimaryWebSocketState;
 			while (state == null || state == "initializing" || state == "connecting")
 			{
 				await Task.Delay(UtilityService.GetRandomNumber(234, 567)).ConfigureAwait(false);
-				state = isBackup ? Router.BackupStatisticsWebSocketState : Router.PrimaryStatisticsWebSocketState;
+				state = isBackup ? Router.RouterBackupWebSocketState : Router.RouterPrimaryWebSocketState;
 			}
 
-			var websocket = Router.StatisticsWebSocket.GetWebSocket(isBackup ? Router.BackupStatisticsWebSocketID : Router.PrimaryStatisticsWebSocketID);
-			if (websocket != null && websocket.State == System.Net.WebSockets.WebSocketState.Open)
-				try
+			try
+			{
+				await Router.SendMessageToRouterAsync(new JObject
 				{
-					await websocket.SendAsync(new JObject
-					{
-						{ "Command", "Update" },
-						{ "SessionID", sessionID },
-						{ "Name", name },
-						{ "Description", description }
-					}.ToString(Formatting.None), true).ConfigureAwait(false);
-				}
-				catch (Exception ex)
-				{
-					logger?.LogError($"Cannot update statistic websocket info => {ex.Message}", ex);
-				}
+					["Command"] = "Update",
+					["SessionID"] = sessionID,
+					["Name"] = name,
+					["Description"] = description
+				}.AsString(), isBackup).ConfigureAwait(false);
+				logger?.LogInformation($"Update connection info with Router successful [{sessionID} @ {name} - {description}]");
+			}
+			catch (Exception ex)
+			{
+				logger?.LogInformation($"Cannot update connection info with Router => {ex.Message}", ex);
+			}
 		}
 
 		/// <summary>
@@ -489,6 +537,7 @@ namespace net.vieapps.Services
 			Action<Exception> onError
 		)
 		{
+			Router.ConnectRouterWebSocket();
 			try
 			{
 				await Task.WhenAll
@@ -585,15 +634,16 @@ namespace net.vieapps.Services
 		/// </summary>
 		/// <param name="message">The message to send to API Gateway Router before closing the channel</param>
 		/// <param name="onError">The action to run when got any error</param>
-		public static Task DisconnectAsync(string message = null, Action<Exception> onError = null)
+		public static async Task DisconnectAsync(string message = null, Action<Exception> onError = null)
 		{
 			Router.ChannelsAreClosedBySystem = true;
-			return Task.WhenAll
+			await Task.WhenAll
 			(
 				Router.CloseIncomingChannelAsync(message, onError),
 				Router.CloseOutgoingChannelAsync(message, onError),
 				Router.CloseBackupChannelAsync(message, onError)
-			);
+			).ConfigureAwait(false);
+			await Router.RouterWebSocket.DisposeAsync().ConfigureAwait(false);
 		}
 
 		/// <summary>
@@ -607,6 +657,10 @@ namespace net.vieapps.Services
 
 		#region Get & Call a service
 		internal static ConcurrentDictionary<string, IService> Services { get; } = new ConcurrentDictionary<string, IService>(StringComparer.OrdinalIgnoreCase);
+
+		internal static ConcurrentDictionary<string, IUniqueService> UniqueServices { get; } = new ConcurrentDictionary<string, IUniqueService>(StringComparer.OrdinalIgnoreCase);
+
+		internal static ConcurrentDictionary<string, ISyncableService> SyncableServices { get; } = new ConcurrentDictionary<string, ISyncableService>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>
 		/// Gets a service instance by name
@@ -636,8 +690,6 @@ namespace net.vieapps.Services
 		public static IService GetService(this RequestInfo requestInfo)
 			=> Router.GetService(requestInfo?.ServiceName);
 
-		internal static ConcurrentDictionary<string, IUniqueService> UniqueServices { get; } = new ConcurrentDictionary<string, IUniqueService>(StringComparer.OrdinalIgnoreCase);
-
 		/// <summary>
 		/// Gets an unique service instance by name (means a service at a specified node)
 		/// </summary>
@@ -655,7 +707,7 @@ namespace net.vieapps.Services
 					Router.UniqueServices.TryAdd(name, service);
 			}
 
-			return service ?? throw new ServiceNotFoundException($"The service with unique URI \"{name.ToLower()}\" is not found");
+			return service ?? throw new ServiceNotFoundException($"The service \"{name.ToLower()}\" is not found");
 		}
 
 		/// <summary>
@@ -717,8 +769,6 @@ namespace net.vieapps.Services
 				tracker?.Invoke($"Call service finished in {stopwatch.GetElapsedTimes()}", null);
 			}
 		}
-
-		internal static ConcurrentDictionary<string, ISyncableService> SyncableServices { get; } = new ConcurrentDictionary<string, ISyncableService>(StringComparer.OrdinalIgnoreCase);
 
 		/// <summary>
 		/// Gets a syncable service instance by name
