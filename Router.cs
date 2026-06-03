@@ -854,7 +854,7 @@ namespace net.vieapps.Services
 	}
 
 	/// <summary>
-	/// Presents the RPC Gate (Router's Admission Control) 
+	/// Presents the Router RPC Gate (Admission Control) 
 	/// </summary>
 	public sealed class RouterRpcGate
 	{

@@ -2191,7 +2191,12 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
-		#region Monitors
+		#region Statistics & Monitors
+		/// <summary>
+		/// Gets the statistics
+		/// </summary>
+		public ServiceStatistics Statistics { get; internal set; } = new ServiceStatistics();
+
 		/// <summary>
 		/// Gets the state to monitor this service
 		/// </summary>
@@ -2269,6 +2274,7 @@ namespace net.vieapps.Services
 		public virtual void OnMonitor(string message, (string Status, long Total, long Interactive, long PingMilliseconds) state, Exception ex = null)
 		{
 			var (pid, cpuUsage, memoryUsage, lastTotalProcessorTime, now) = Process.GetCurrentProcess().GetRuntimeInfo(this.MonitorLastTotalProcessorTime, this.MonitorLastTime);
+			var elapsedSeconds = (now - this.MonitorLastTime).TotalSeconds;
 			this.MonitorLastTime = now;
 			this.MonitorLastTotalProcessorTime = lastTotalProcessorTime;
 
@@ -2288,6 +2294,10 @@ namespace net.vieapps.Services
 				ThreadPool.GetMaxThreads(out var maxWorkers, out var maxIO);
 				var currentWorkers = maxWorkers - availableWorkers;
 				var currentIO = maxIO - availableIO;
+				var rpcEnteredRate = this.Statistics.GetRpcEnteredRate(elapsedSeconds);
+				var rpcCompletedRate = this.Statistics.GetRpcCompletedRate(elapsedSeconds);
+				var rpcEnteredTotalRate = this.Statistics.GetRpcEnteredTotalRate(elapsedSeconds);
+				var rpcCompletedTotalRate = this.Statistics.GetRpcCompletedTotalRate(elapsedSeconds);
 
 				this.SendInterCommunicateMessage(new CommunicateMessage("APIGateway")
 				{
@@ -2308,7 +2318,20 @@ namespace net.vieapps.Services
 						CacheStatus = state.Status,
 						CacheTotalQueue = state.Total,
 						CacheInteractiveQueue = state.Interactive,
-						CachePingMilliseconds = state.PingMilliseconds
+						CachePingMilliseconds = state.PingMilliseconds,
+						RpcInFlight = this.Statistics.RpcInFlightCount,
+						RpcEntered = this.Statistics.RpcEnteredCount,
+						RpcEnteredRate = rpcEnteredRate,
+						RpcCompleted = this.Statistics.RpcCompletedCount,
+						RpcCompletedRate = rpcCompletedRate,
+						RpcAverageLatency = this.Statistics.RpcAverageLatency,
+						RpcMaxLatency = this.Statistics.RpcMaxLatency,
+						RpcEnteredTotal = this.Statistics.RpcEnteredTotalCount,
+						RpcEnteredTotalRate = rpcEnteredTotalRate,
+						RpcCompletedTotal = this.Statistics.RpcCompletedTotalCount,
+						RpcCompletedTotalRate = rpcCompletedTotalRate,
+						RpcAverageLatencyTotal = this.Statistics.RpcAverageLatencyTotal,
+						RpcMaxLatencyTotal = this.Statistics.RpcMaxLatencyTotal
 					}.ToJson()
 				});
 
