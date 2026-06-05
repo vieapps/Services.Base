@@ -153,6 +153,11 @@ namespace net.vieapps.Services
 		/// Gets or sets the single instance of current playing service component
 		/// </summary>
 		public static ServiceBase ServiceComponent { get; set; }
+
+		/// <summary>
+		/// Gets or Sets the time (milliseconds) to wait before canceling the service operation
+		/// </summary>
+		protected virtual int CancelAfter { get; set; }
 		#endregion
 
 		#region Send update & communicate messages
@@ -2824,6 +2829,7 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public virtual Task StartAsync(string[] args, Action<object, WampSessionCreatedEventArgs> onIncomingConnectionEstablished, Action<object, WampSessionCreatedEventArgs> onOutgoingConnectionEstablished, Action<object, WampSessionCreatedEventArgs> onBackupConnectionEstablished, bool initializeRepository, Cache cache, Action<IService> next)
 		{
+			this.CancelAfter = Int32.TryParse(UtilityService.GetAppSetting($"{this.ServiceName}:CancelAfter"), out var cancelAfter) && cancelAfter > 0 ? cancelAfter : 0;
 			if (this.IsDebugLogEnabled)
 				this.WriteLogs(UtilityService.NewUUID, $"Default working privileges\r\n{this.Privileges?.ToJson()}");
 			if (initializeRepository)
