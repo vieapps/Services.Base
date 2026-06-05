@@ -92,7 +92,7 @@ namespace net.vieapps.Services
 				else
 					message = "The service is unavailable";
 
-				type = "ServiceUnavailableException";
+				type = wampException.ErrorUri.Equals(WampErrors.NoSuchProcedure) ? "ServiceNotFoundException" : "ServiceUnavailableException";
 				stack = wampException.StackTrace;
 			}
 
