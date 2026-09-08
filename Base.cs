@@ -6,6 +6,7 @@ using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Diagnostics;
+using System.Dynamic;
 using System.Reflection;
 using System.Reactive.Linq;
 using System.Collections.Generic;
@@ -20,6 +21,7 @@ using net.vieapps.Components.Caching;
 using net.vieapps.Components.Utility;
 using net.vieapps.Components.Security;
 using net.vieapps.Components.Repository;
+using net.vieapps.Services.MCP;
 #endregion
 
 namespace net.vieapps.Services
@@ -31,6 +33,11 @@ namespace net.vieapps.Services
 	{
 		public abstract string ServiceName { get; }
 
+		/// <summary>
+		/// Gets the description of this service
+		/// </summary>
+		public virtual string ServiceDescription { get; }
+
 		public abstract Task<JToken> ProcessRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default);
 
 		public virtual Task<JToken> ProcessRollbackRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
@@ -40,9 +47,6 @@ namespace net.vieapps.Services
 			=> Task.FromException<JToken>(new NotImplementedException());
 
 		public virtual Task<JToken> ProcessWebHookMessageAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
-			=> Task.FromException<JToken>(new NotImplementedException());
-
-		public virtual Task<JToken> ProcessMcpRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
 			=> Task.FromException<JToken>(new NotImplementedException());
 
 		/// <summary>
@@ -1812,7 +1816,7 @@ namespace net.vieapps.Services
 			=> this.CanDownloadAsync(requestInfo, objectName, null, null, null, cancellationToken);
 		#endregion
 
-		#region Files (Thumbnails & Attachments) & Form Controls
+		#region Files (Thumbnails & Attachments)
 		/// <summary>
 		/// Gets the collection of thumbnails
 		/// </summary>
@@ -1880,14 +1884,93 @@ namespace net.vieapps.Services
 			=> requestInfo == null
 				? Task.FromResult<JToken>(null)
 				: requestInfo.DeleteFilesAsync(systemID, entityInfo, objectID, this.ValidationKey, cancellationToken, this.GetTracker(requestInfo), this.JsonFormat);
+		#endregion
 
+		#region Form Controls & JSON schemas
 		/// <summary>
-		/// Generates the controls of this type (for working with input forms)
+		/// Generates the controls of this type for working with input forms
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
 		/// <returns></returns>
 		protected virtual JToken GenerateFormControls<T>() where T : class
 			=> RepositoryMediator.GenerateFormControls<T>();
+
+		/// <summary>
+		/// Generates the JSON schema of this type for working with input
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="localization"></param>
+		/// <param name="onCompleted"></param>
+		/// <returns></returns>
+		protected virtual JObject GenerateInputJsonSchema<T>(ExpandoObject localization = null, Action<JObject> onCompleted = null) where T : class
+			=> typeof(T).GenerateInputJsonSchema(localization, onCompleted);
+
+		/// <summary>
+		/// Generates the JSON schema of this type for working with output
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="localization"></param>
+		/// <param name="onCompleted"></param>
+		/// <returns></returns>
+		protected virtual JObject GenerateOutputJsonSchema<T>(ExpandoObject localization = null, Action<JObject> onCompleted = null) where T : class
+			=> typeof(T).GenerateOutputJsonSchema(localization, onCompleted);
+
+		/// <summary>
+		/// Generates the JSON schema of this type for working with search input
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="localization"></param>
+		/// <param name="onCompleted"></param>
+		/// <returns></returns>
+		protected virtual JObject GenerateSearchingInputJsonSchema<T>(ExpandoObject localization = null, Action<JObject> onCompleted = null) where T : class
+			=> typeof(T).GenerateSearchingInputJsonSchema(localization, onCompleted);
+
+		/// <summary>
+		/// Generates the JSON schema of this type for working with search output
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="localization"></param>
+		/// <param name="onCompleted"></param>
+		/// <returns></returns>
+		protected virtual JObject GenerateSearchingOutputJsonSchema<T>(ExpandoObject localization = null, Action<JObject> onCompleted = null) where T : class
+			=> typeof(T).GenerateSearchingOutputJsonSchema(localization, onCompleted);
+
+		/// <summary>
+		/// Generates all JSON schemas of this type for working with MCP tools
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="localization"></param>
+		/// <param name="onCompleted"></param>
+		/// <returns></returns>
+		protected virtual JObject GenerateToolsJsonSchema<T>(ExpandoObject localization = null, Action<JObject> onCompleted = null) where T : class
+			=> typeof(T).GenerateToolsJsonSchema(localization, onCompleted);
+
+		/// <summary>
+		/// Generates details info of this type for working with MCP resources
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="localization"></param>
+		/// <param name="onCompleted"></param>
+		/// <returns></returns>
+		/// <exception cref="InformationInvalidException"></exception>
+		protected virtual JObject GenerateResourceJsonSchema<T>(ExpandoObject localization = null, Action<JObject> onCompleted = null) where T : class
+			=> typeof(T).GenerateResourceJsonSchema(localization, onCompleted);
+
+		public virtual Task<JToken> GetMcpSettingsAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
+		{
+			var mcpSettings = new Settings();
+			RepositoryMediator.EntityDefinitions.ForEach(kvp =>
+			{
+				var name = kvp.Value.GetObjectName(false);
+				var resources = kvp.Key.GenerateResourceJsonSchema();
+				var tools = resources == null ? null : kvp.Key.GenerateToolsJsonSchema();
+				if (resources != null)
+					mcpSettings.Resources[name] = resources;
+				if (tools != null)
+					mcpSettings.Tools[name] = tools;
+			}, true, null, cancellationToken);
+			return Task.FromResult(mcpSettings.Normalize()?.ToJson());
+		}
 		#endregion
 
 		#region Timers
