@@ -1091,7 +1091,7 @@ namespace net.vieapps.Services
 						: getHighValue ? DateTime.Parse($"{time:yyyy/MM/dd HH}:59:59") : DateTime.Parse($"{time:yyyy/MM/dd HH}:46:00");
 		#endregion
 
-		#region Version contents
+		#region Name of service/object
 		/// <summary>
 		/// Gets service name of an entity definition
 		/// </summary>
@@ -1106,7 +1106,7 @@ namespace net.vieapps.Services
 		/// <param name="object"></param>
 		/// <returns></returns>
 		public static string GetServiceName(this RepositoryBase @object)
-			=> RepositoryMediator.GetEntityDefinition(@object?.GetType())?.GetServiceName();
+			=> @object?.GetType().GetEntityDefinition()?.GetServiceName();
 
 		/// <summary>
 		/// Gets name of a service object of an entity definition
@@ -1126,8 +1126,10 @@ namespace net.vieapps.Services
 		/// <param name="includePrefixAndSuffix"></param>
 		/// <returns></returns>
 		public static string GetObjectName(this RepositoryBase @object, bool includePrefixAndSuffix = true)
-			=> RepositoryMediator.GetEntityDefinition(@object?.GetType())?.GetObjectName(includePrefixAndSuffix);
+			=> @object?.GetType().GetEntityDefinition()?.GetObjectName(includePrefixAndSuffix);
+		#endregion
 
+		#region Version contents
 		/// <summary>
 		/// Finds version contents of an object
 		/// </summary>

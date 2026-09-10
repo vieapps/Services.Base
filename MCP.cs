@@ -67,6 +67,7 @@ namespace net.vieapps.Services.MCP
 		{
 			if (attribute.GetCustomAttribute<PrimaryKeyAttribute>() != null)
 				return true;
+
 			propertyInfo = propertyInfo ?? attribute.GetCustomAttribute<PropertyAttribute>();
 			controlInfo = controlInfo ?? attribute.GetCustomAttribute<FormControlAttribute>();
 			return propertyInfo?.NotNull == true || propertyInfo?.NotEmpty == true || attribute.NotNull || (attribute.NotEmpty != null && attribute.NotEmpty.Value) || controlInfo?.Required == true;
@@ -254,7 +255,7 @@ namespace net.vieapps.Services.MCP
 			});
 			var (properties, required) = attributes.ToJsonSchema(localization);
 
-			var serviceName = ServiceBase.ServiceComponent.ServiceName;
+			var serviceName = entityDefinition.GetServiceName();
 			var objectName = entityDefinition.GetObjectName(false);
 
 			var entityInfo = type.GetCustomAttribute<EntityAttribute>();
@@ -305,7 +306,7 @@ namespace net.vieapps.Services.MCP
 			});
 			var (properties, required) = attributes.ToJsonSchema(localization);
 
-			var serviceName = ServiceBase.ServiceComponent.ServiceName;
+			var serviceName = entityDefinition.GetServiceName();
 			var objectName = entityDefinition.GetObjectName(false);
 
 			var entityInfo = type.GetCustomAttribute<EntityAttribute>();
@@ -550,12 +551,10 @@ namespace net.vieapps.Services.MCP
 				["additionalProperties"] = false
 			};
 
-			var searchProperties = filterByProperties.Count > 0
-			 ? new JObject
-			 {
-				 ["FilterBy"] = filterBy
-			 }
-			 : new JObject();
+			var searchProperties = new JObject();
+
+			if (filterByProperties.Count > 0)
+				searchProperties["FilterBy"] = filterBy;
 
 			if (sortProperties.Count > 0)
 				searchProperties["SortBy"] = sortBy;
@@ -585,7 +584,7 @@ namespace net.vieapps.Services.MCP
 				["additionalProperties"] = false
 			};
 
-			var serviceName = ServiceBase.ServiceComponent.ServiceName;
+			var serviceName = entityDefinition.GetServiceName();
 			var objectName = entityDefinition.GetObjectName(false);
 
 			var title = schemaInfo?.Title ?? entityInfo.Title ?? objectName;
@@ -630,7 +629,7 @@ namespace net.vieapps.Services.MCP
 
 			outputSchema.Remove("$id");
 
-			var serviceName = ServiceBase.ServiceComponent.ServiceName;
+			var serviceName = entityDefinition.GetServiceName();
 			var objectName = entityDefinition.GetObjectName(false);
 
 			var entityInfo = type.GetCustomAttribute<EntityAttribute>();
@@ -694,7 +693,7 @@ namespace net.vieapps.Services.MCP
 			if (inputSchema == null && outputSchema == null && searchingInputSchema == null && searchingOutputSchema == null)
 				return null;
 
-			var serviceName = ServiceBase.ServiceComponent.ServiceName;
+			var serviceName = entityDefinition.GetServiceName();
 			var objectName = entityDefinition.GetObjectName(false);
 
 			var entityInfo = type.GetCustomAttribute<EntityAttribute>();
@@ -809,7 +808,7 @@ namespace net.vieapps.Services.MCP
 			if (resourceInfo?.Ignore == true)
 				return null;
 
-			var serviceName = ServiceBase.ServiceComponent.ServiceName;
+			var serviceName = entityDefinition.GetServiceName();
 			var objectName = entityDefinition.GetObjectName(false);
 
 			var entityInfo = type.GetCustomAttribute<EntityAttribute>();
@@ -875,7 +874,7 @@ namespace net.vieapps.Services.MCP
 			=> new CommunicateMessage("mcp")
 			{
 				Type = "resources/updated",
-				Data = new JObject { ["URI"] = $"{ServiceBase.ServiceComponent.ServiceName.ToLower()}://{(objectName ?? @object.GetObjectName(false)).ToLower()}/{@object.ID}" }
+				Data = new JObject { ["URI"] = $"{@object?.ServiceName?.ToLower()}://{(objectName ?? @object?.ObjectName)?.ToLower()}/{@object?.ID}" }
 			}.Send();
 	}
 
@@ -916,7 +915,7 @@ namespace net.vieapps.Services.MCP
 		public virtual Settings Normalize()
 		{
 			this.Resources = this.Resources == null || this.Resources.IsEmpty ? null : this.Resources;
-			this.Tools = this.Resources == null || this.Resources.IsEmpty || this.Tools == null || this.Tools.IsEmpty ? null : this.Tools;
+			this.Tools = this.Resources == null || this.Tools == null || this.Tools.IsEmpty ? null : this.Tools;
 			return this.Resources == null && this.Tools == null ? null : this;
 		}
 	}

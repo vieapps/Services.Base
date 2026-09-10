@@ -33,9 +33,6 @@ namespace net.vieapps.Services
 	{
 		public abstract string ServiceName { get; }
 
-		/// <summary>
-		/// Gets the description of this service
-		/// </summary>
 		public virtual string ServiceDescription { get; }
 
 		public abstract Task<JToken> ProcessRequestAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default);
@@ -1959,7 +1956,7 @@ namespace net.vieapps.Services
 		public virtual Task<JToken> GetMcpSettingsAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
 		{
 			var mcpSettings = new Settings();
-			RepositoryMediator.EntityDefinitions.ForEach(kvp =>
+			RepositoryMediator.GetEntityDefinitions().ForEach(kvp =>
 			{
 				var name = kvp.Value.GetObjectName(false);
 				var resources = kvp.Key.GenerateResourceJsonSchema();
