@@ -10,7 +10,6 @@ using System.Dynamic;
 using System.Reflection;
 using System.Reactive.Linq;
 using System.Collections.Generic;
-using System.Collections.Concurrent;
 using WampSharp.Core.Listener;
 using WampSharp.V2.Realm;
 using WampSharp.V2.Core.Contracts;
@@ -371,8 +370,6 @@ namespace net.vieapps.Services
 
 		public ILogger Logger { get; private set; }
 
-		ConcurrentQueue<((DateTime Time, string CorrelationID, string DeveloperID, string AppID, string NodeID, string ServiceName, string ObjectName) Info, List<string> Logs, string Stack)> Logs { get; } = new ConcurrentQueue<((DateTime Time, string CorrelationID, string DeveloperID, string AppID, string NodeID, string ServiceName, string ObjectName) Info, List<string> Logs, string Stack)>();
-
 		string _isDebugResultsEnabled = null, _isDebugStacksEnabled = null, _isDebugAuthorizationsEnabled = null, _isDebugLowAuthorizationsEnabled = null;
 
 		/// <summary>
@@ -413,47 +410,40 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
-		public virtual async Task WriteLogsAsync(string correlationID, string developerID, string appID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-		{
-			// prepare
-			correlationID = correlationID ?? UtilityService.NewUUID;
+		protected virtual bool WriteServiceLog(string correlationID, string developerID, string appID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+			=> Extensions.WriteServiceLog(correlationID ?? UtilityService.NewUUID, developerID, appID, logger ?? this.Logger, logs, exception, serviceName, objectName, mode);
 
-			// local logs
-			if (exception == null)
-				logs?.ForEach(message => logger.Log(mode, $"{message} [{correlationID}]"));
-			else
-			{
-				logs?.ForEach(message => logger.Log(LogLevel.Error, $"{message} [{correlationID}]"));
-				logger.Log(LogLevel.Error, $"{exception.Message} [{correlationID}]", exception);
-			}
+		/// <summary>
+		/// Writes the logs (to centerlized logging system and local logs)
+		/// </summary>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
+		/// <param name="developerID">The identity of the developer</param>
+		/// <param name="appID">The identity of the app</param>
+		/// <param name="logger">The local logger</param>
+		/// <param name="logs">The logs</param>
+		/// <param name="exception">The exception</param>
+		/// <param name="serviceName">The name of service</param>
+		/// <param name="objectName">The name of object</param>
+		/// <param name="mode">The logging mode</param>
+		/// <returns></returns>
+		protected virtual Task<bool> WriteServiceLogAsync(string correlationID, string developerID, string appID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+			=> Task.FromResult(this.WriteServiceLog(correlationID, developerID, appID, logger, logs, exception, serviceName, objectName, mode));
 
-			// centerlized logs
-			logs = logs ?? new List<string>();
-			if (exception != null && exception is WampException wampException)
-			{
-				var details = wampException.GetDetails();
-				logs.Add($"> Message: {details.Message}");
-				logs.Add($"> Type: {details.Type}");
-			}
-			else if (exception != null)
-			{
-				if (exception is AggregateException agg)
-					foreach (var inner in agg.Flatten().InnerExceptions)
-					{
-						logs.Add($"> Message: {inner.Message}");
-						logs.Add($"> Type: {inner.GetTypeName(true)}");
-					}
-				else
-				{
-					logs.Add($"> Message: {exception.Message}");
-					logs.Add($"> Type: {exception.GetTypeName(true)}");
-				}
-			}
-
-			// update queue & write to centerlized logs
-			this.Logs.Enqueue(((DateTime.Now, correlationID, developerID, appID, this.NodeID ?? Extensions.GetNodeID(), serviceName ?? this.ServiceName ?? "APIGateway", objectName ?? ""), logs, exception?.GetStack(false)));
-			await this.Logs.WriteLogsAsync(this.Logger, this.CancellationToken).ConfigureAwait(false);
-		}
+		/// <summary>
+		/// Writes the logs (to centerlized logging system and local logs)
+		/// </summary>
+		/// <param name="correlationID">The identity for tracking the correlation</param>
+		/// <param name="developerID">The identity of the developer</param>
+		/// <param name="appID">The identity of the app</param>
+		/// <param name="logger">The local logger</param>
+		/// <param name="logs">The logs</param>
+		/// <param name="exception">The exception</param>
+		/// <param name="serviceName">The name of service</param>
+		/// <param name="objectName">The name of object</param>
+		/// <param name="mode">The logging mode</param>
+		/// <returns></returns>
+		internal protected virtual Task WriteLogsAsync(string correlationID, string developerID, string appID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+			=> this.WriteServiceLogAsync(correlationID, developerID, appID, logger, logs, exception, serviceName, objectName, mode);
 
 		/// <summary>
 		/// Writes the logs into centerlized logging system
@@ -576,14 +566,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected virtual void WriteLogs(string correlationID, string developerID, string appID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> this.WriteLogsAsync(correlationID, developerID, appID, logger, logs, exception, serviceName, objectName, mode).Execute(ex =>
-			{
-				if (ex is TaskCanceledException || ex is OperationCanceledException || ex is ObjectDisposedException)
-				{
-				}
-				else
-					this.Logger?.LogError($"Error occurred while writting logs => {ex.Message}", ex);
-			});
+			=> this.WriteServiceLog(correlationID, developerID, appID, logger, logs, exception, serviceName, objectName, mode);
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -596,14 +579,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected virtual void WriteLogs(string correlationID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> this.WriteLogsAsync(correlationID, null, null, logger, logs, exception, serviceName, objectName, mode).Execute(ex =>
-			{
-				if (ex is TaskCanceledException || ex is OperationCanceledException || ex is ObjectDisposedException)
-				{
-				}
-				else
-					this.Logger?.LogError($"Error occurred while writting logs => {ex.Message}", ex);
-			});
+			=> this.WriteServiceLog(correlationID, null, null, logger, logs, exception, serviceName, objectName, mode);
 
 		/// <summary>
 		/// Writes the logs into centerlized logging system
@@ -618,14 +594,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected virtual void WriteLogs(string correlationID, string developerID, string appID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> this.WriteLogsAsync(correlationID, developerID, appID, logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode).Execute(ex =>
-			{
-				if (ex is TaskCanceledException || ex is OperationCanceledException || ex is ObjectDisposedException)
-				{
-				}
-				else
-					this.Logger?.LogError($"Error occurred while writting logs => {ex.Message}", ex);
-			});
+			=> this.WriteServiceLog(correlationID, developerID, appID, logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode);
 
 		/// <summary>
 		/// Writes the logs into centerlized logging system
@@ -638,14 +607,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected virtual void WriteLogs(string correlationID, ILogger logger, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> this.WriteLogsAsync(correlationID, null, null, logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode).Execute(ex =>
-			{
-				if (ex is TaskCanceledException || ex is OperationCanceledException || ex is ObjectDisposedException)
-				{
-				}
-				else
-					this.Logger?.LogError($"Error occurred while writting logs => {ex.Message}", ex);
-			});
+			=> this.WriteServiceLog(correlationID, null, null, logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode);
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -659,14 +621,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected virtual void WriteLogs(string correlationID, string developerID, string appID, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> this.WriteLogsAsync(correlationID, developerID, appID, this.Logger, logs, exception, serviceName, objectName, mode).Execute(ex =>
-			{
-				if (ex is TaskCanceledException || ex is OperationCanceledException || ex is ObjectDisposedException)
-				{
-				}
-				else
-					this.Logger?.LogError($"Error occurred while writting logs => {ex.Message}", ex);
-			});
+			=> this.WriteServiceLog(correlationID, developerID, appID, this.Logger, logs, exception, serviceName, objectName, mode);
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -678,14 +633,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected virtual void WriteLogs(string correlationID, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> this.WriteLogsAsync(correlationID, null, null, this.Logger, logs, exception, serviceName, objectName, mode).Execute(ex =>
-			{
-				if (ex is TaskCanceledException || ex is OperationCanceledException || ex is ObjectDisposedException)
-				{
-				}
-				else
-					this.Logger?.LogError($"Error occurred while writting logs => {ex.Message}", ex);
-			});
+			=> this.WriteServiceLog(correlationID, null, null, this.Logger, logs, exception, serviceName, objectName, mode);
 
 		/// <summary>
 		/// Writes the logs into centerlized logging system
@@ -699,14 +647,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected virtual void WriteLogs(string correlationID, string developerID, string appID, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> this.WriteLogsAsync(correlationID, developerID, appID, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode).Execute(ex =>
-			{
-				if (ex is TaskCanceledException || ex is OperationCanceledException || ex is ObjectDisposedException)
-				{
-				}
-				else
-					this.Logger?.LogError($"Error occurred while writting logs => {ex.Message}", ex);
-			});
+			=> this.WriteServiceLog(correlationID, developerID, appID, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode);
 
 		/// <summary>
 		/// Writes the logs into centerlized logging system
@@ -718,14 +659,7 @@ namespace net.vieapps.Services
 		/// <param name="objectName">The name of object</param>
 		/// <param name="mode">The logging mode</param>
 		protected virtual void WriteLogs(string correlationID, string log, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
-			=> this.WriteLogsAsync(correlationID, null, null, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode).Execute(ex =>
-			{
-				if (ex is TaskCanceledException || ex is OperationCanceledException || ex is ObjectDisposedException)
-				{
-				}
-				else
-					this.Logger?.LogError($"Error occurred while writting logs => {ex.Message}", ex);
-			});
+			=> this.WriteServiceLog(correlationID, null, null, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, serviceName, objectName, mode);
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -736,14 +670,7 @@ namespace net.vieapps.Services
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
 		protected virtual void WriteLogs(RequestInfo requestInfo, List<string> logs, Exception exception = null, LogLevel mode = LogLevel.Information)
-			=> this.WriteLogsAsync(requestInfo.CorrelationID, requestInfo.Session?.DeveloperID, requestInfo.Session?.AppID, this.Logger, logs, exception, requestInfo.ServiceName, requestInfo.ObjectName, mode).Execute(ex =>
-			{
-				if (ex is TaskCanceledException || ex is OperationCanceledException || ex is ObjectDisposedException)
-				{
-				}
-				else
-					this.Logger?.LogError($"Error occurred while writting logs => {ex.Message}", ex);
-			});
+			=> requestInfo.WriteServiceLogs(this.Logger, logs, exception, mode);
 
 		/// <summary>
 		/// Writes the logs (to centerlized logging system and local logs)
@@ -754,14 +681,7 @@ namespace net.vieapps.Services
 		/// <param name="mode">The logging mode</param>
 		/// <returns></returns>
 		protected virtual void WriteLogs(RequestInfo requestInfo, string log, Exception exception = null, LogLevel mode = LogLevel.Information)
-			=> this.WriteLogsAsync(requestInfo.CorrelationID, requestInfo.Session?.DeveloperID, requestInfo.Session?.AppID, this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, requestInfo.ServiceName, requestInfo.ObjectName, mode).Execute(ex =>
-			{
-				if (ex is TaskCanceledException || ex is OperationCanceledException || ex is ObjectDisposedException)
-				{
-				}
-				else
-					this.Logger?.LogError($"Error occurred while writting logs => {ex.Message}", ex);
-			});
+			=> requestInfo.WriteServiceLogs(this.Logger, string.IsNullOrWhiteSpace(log) ? null : new List<string> { log }, exception, mode);
 		#endregion
 
 		#region Services & Sessions
