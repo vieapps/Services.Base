@@ -466,6 +466,109 @@ namespace net.vieapps.Services
 		}
 		#endregion
 
+		#region Audit Logs
+		static Channel<AuditInfo> AuditLogs { get; } = Channel.CreateBounded<AuditInfo>(new BoundedChannelOptions(Extensions.LogsQueueSize)
+		{
+			SingleReader = true,
+			SingleWriter = false,
+			FullMode = BoundedChannelFullMode.Wait
+		});
+
+		/// <summary>
+		/// Starts tracking a business-relevant auditable action.
+		/// </summary>
+		public static AuditInfo StartAudit(string correlationID, string traceID, string developerID, string appID, string actorType, string actorID, string nodeID, string serviceName, string objectName, string objectID, string systemID, string operation)
+			=> new AuditInfo
+			{
+				ID = UtilityService.NewUUID,
+				CorrelationID = correlationID,
+				TraceID = traceID,
+				DeveloperID = developerID,
+				AppID = appID,
+				ActorType = actorType,
+				ActorID = actorID,
+				NodeID = nodeID,
+				ServiceName = serviceName?.ToLower(),
+				ObjectName = objectName?.ToLower(),
+				ObjectID = objectID,
+				SystemID = systemID,
+				Operation = operation,
+				Status = "unset",
+				Changes = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase),
+				Details = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+			};
+
+		/// <summary>
+		/// Starts an audit record from the request context.
+		/// </summary>
+		public static AuditInfo StartAudit(this RequestInfo requestInfo, string operation, string objectID = null, string systemID = null, string traceID = null, string actorType = "user", string actorID = null)
+			=> Extensions.StartAudit(requestInfo.CorrelationID, traceID, requestInfo.Session?.DeveloperID, requestInfo.Session?.AppID, actorType, actorID ?? ("user".IsEquals(actorType) ? requestInfo.Session?.User?.ID : null), ServiceBase.ServiceComponent?.NodeID ?? Extensions.GetNodeID(), requestInfo.ServiceName, requestInfo.ObjectName, objectID, systemID ?? requestInfo.GetParameter("x-system-id"), operation);
+
+		/// <summary>
+		/// Completes the audit information without automatically persisting it.
+		/// </summary>
+		public static AuditInfo Complete(this AuditInfo auditInfo, string status, Dictionary<string, object> changes = null, Dictionary<string, object> details = null)
+		{
+			if (auditInfo.Time != null)
+				throw new InvalidOperationException("The audit has already been completed.");
+
+			if (status != "ok" && status != "error" && status != "denied" && status != "canceled")
+				throw new ArgumentException("Invalid audit status.", nameof(status));
+
+			auditInfo.Time = DateTime.Now;
+			auditInfo.Status = status;
+
+			if (changes != null)
+				auditInfo.Changes = new Dictionary<string, object>(changes, StringComparer.OrdinalIgnoreCase);
+
+			if (details != null)
+				auditInfo.Details = new Dictionary<string, object>(details, StringComparer.OrdinalIgnoreCase);
+
+			return auditInfo;
+		}
+
+		/// <summary>
+		/// Completes and enqueues an auditable action.
+		/// </summary>
+		public static bool CompleteAndWrite(this AuditInfo auditInfo, string status = "ok", Dictionary<string, object> changes = null, Dictionary<string, object> details = null)
+			=> auditInfo.Complete(status, changes, details).WriteAuditLog();
+
+		/// <summary>
+		/// Completes and enqueues an auditable action.
+		/// </summary>
+		public static bool CompleteAndWrite(this AuditInfo auditInfo, Dictionary<string, object> changes, Dictionary<string, object> details)
+			=> auditInfo.CompleteAndWrite("ok", changes, details);
+
+		/// <summary>
+		/// Completes and enqueues an auditable action.
+		/// </summary>
+		public static bool CompleteAndWrite(this AuditInfo auditInfo, Dictionary<string, object> details)
+			=> auditInfo.CompleteAndWrite(null, details);
+
+		/// <summary>
+		/// Enqueues a completed audit record for file persistence.
+		/// </summary>
+		public static bool WriteAuditLog(this AuditInfo auditInfo)
+			=> auditInfo != null && auditInfo.Time != null && !string.IsNullOrWhiteSpace(auditInfo.ID) && !string.IsNullOrWhiteSpace(auditInfo.ServiceName) && !string.IsNullOrWhiteSpace(auditInfo.ObjectName) && !string.IsNullOrWhiteSpace(auditInfo.Operation) && !string.IsNullOrWhiteSpace(auditInfo.ActorType) && !string.IsNullOrWhiteSpace(auditInfo.ActorID) && !string.IsNullOrWhiteSpace(auditInfo.Status) && auditInfo.Status != "unset" && Extensions.AuditLogs.Writer.TryWrite(auditInfo);
+
+		static Task AuditLogsWritter { get; } = Task.Run(Extensions.WriteAuditLogsAsync);
+
+		static async Task WriteAuditLogsAsync()
+		{
+			while (await Extensions.AuditLogs.Reader.WaitToReadAsync().ConfigureAwait(false))
+			{
+				while (Extensions.AuditLogs.Reader.TryRead(out var auditInfo))
+				{
+					try
+					{
+						await auditInfo.SaveToFileAsync(Path.Combine(Extensions.LogsPath, $"zlogs.audits.{auditInfo.Time:yyyyMMddHHmmssffffff}.{auditInfo.ID}.json")).ConfigureAwait(false);
+					}
+					catch { }
+				}
+			}
+		}
+		#endregion
+
 		/// <summary>
 		/// Shutdowns the logs
 		/// </summary>
@@ -475,7 +578,8 @@ namespace net.vieapps.Services
 			Extensions.ServiceLogs.Writer.TryComplete();
 			Extensions.TraceLogs.Writer.TryComplete();
 			Extensions.UsageLogs.Writer.TryComplete();
-			return Task.WhenAll(Extensions.ServiceLogsWritter, Extensions.TraceLogsWritter, Extensions.UsageLogsWritter);
+			Extensions.AuditLogs.Writer.TryComplete();
+			return Task.WhenAll(Extensions.ServiceLogsWritter, Extensions.TraceLogsWritter, Extensions.UsageLogsWritter, Extensions.AuditLogsWritter);
 		}
 	}
 }
