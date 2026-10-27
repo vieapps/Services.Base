@@ -14,12 +14,12 @@ namespace net.vieapps.Services
 {
 	public static partial class Extensions
 	{
-		internal static string LogsPath { get; } = UtilityService.GetAppSetting("Path:Logs", "logs");
+		static string LogsPath { get; } = UtilityService.GetAppSetting("Path:Logs", "logs");
 
-		internal static int LogsQueueSize { get; } = Int32.TryParse(UtilityService.GetAppSetting("Logs:QueueSize", "10240"), out var queueSize) && queueSize > 0 ? queueSize : 10240;
+		static int LogsQueueSize { get; } = Int32.TryParse(UtilityService.GetAppSetting("Logs:Size", "10240"), out var queueSize) && queueSize > 0 ? queueSize : 10240;
 
 		#region Service Logs
-		static Channel<((DateTime Time, string CorrelationID, string DeveloperID, string AppID, string NodeID, string ServiceName, string ObjectName) Info, List<string> Logs, string Stack)> ServiceLogs { get; } = Channel.CreateBounded<((DateTime, string, string, string, string, string, string), List<string>, string)>(new BoundedChannelOptions(Extensions.LogsQueueSize)
+		static Channel<LogInfo> ServiceLogs { get; } = Channel.CreateBounded<LogInfo>(new BoundedChannelOptions(Extensions.LogsQueueSize)
 		{
 			SingleReader = true,
 			SingleWriter = false,
@@ -27,45 +27,75 @@ namespace net.vieapps.Services
 		});
 
 		/// <summary>
-		/// Writes the service log into centerlized storage
+		/// Writes the service log into storages
+		/// </summary>
+		/// <param name="logInfo"></param>
+		/// <returns></returns>
+		public static bool WriteServiceLog(this LogInfo logInfo)
+			=> Extensions.ServiceLogs.Writer.TryWrite(logInfo);
+
+		/// <summary>
+		/// Writes the service log into storages
 		/// </summary>
 		/// <param name="log"></param>
 		/// <returns></returns>
 		public static bool WriteServiceLog(this ((DateTime Time, string CorrelationID, string DeveloperID, string AppID, string NodeID, string ServiceName, string ObjectName) Info, List<string> Logs, string Stack) log)
-			=> Extensions.ServiceLogs.Writer.TryWrite(log);
+			=> new LogInfo
+			{
+				ID = UtilityService.NewUUID,
+				Time = log.Info.Time,
+				CorrelationID = log.Info.CorrelationID,
+				DeveloperID = log.Info.DeveloperID,
+				AppID = log.Info.AppID,
+				NodeID = log.Info.NodeID,
+				ServiceName = log.Info.ServiceName?.ToLower(),
+				ObjectName = log.Info.ObjectName?.ToLower(),
+				Logs = (log.Logs ?? new List<string>()).Join("\r\n"),
+				Stack = log.Stack
+			}.WriteServiceLog();
 
 		/// <summary>
-		/// Writes the service log into centerlized storage
+		/// Writes the service log into storages
 		/// </summary>
+		/// <param name="logger"></param>
+		/// <param name="nodeID"></param>
 		/// <param name="correlationID"></param>
 		/// <param name="developerID"></param>
 		/// <param name="appID"></param>
-		/// <param name="logger"></param>
 		/// <param name="logs"></param>
 		/// <param name="exception"></param>
 		/// <param name="serviceName"></param>
 		/// <param name="objectName"></param>
+		/// <param name="additional"></param>
 		/// <param name="mode"></param>
 		/// <returns></returns>
-		public static bool WriteServiceLog(string correlationID, string developerID, string appID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+		public static bool WriteServiceLog(ILogger logger, string nodeID, string correlationID, string developerID, string appID, List<string> logs, Exception exception, string serviceName, string objectName, string additional, LogLevel mode)
 		{
 			correlationID = correlationID ?? UtilityService.NewUUID;
-			if (exception == null)
-				logs?.ForEach(message => logger?.Log(mode, $"{message} [{correlationID}]"));
-			else
-			{
-				logs?.ForEach(message => logger?.Log(LogLevel.Error, $"{message} [{correlationID}]"));
-				logger?.Log(LogLevel.Error, $"{exception.Message} [{correlationID}]", exception);
-			}
 			logs = logs ?? new List<string>();
+			var stack = exception?.GetStack(false);
+
+			if (exception == null)
+				logs.ForEach(message => logger?.Log(mode, $"{message} [{correlationID}]"));
+			else
+				logs.ForEach(message => logger?.Log(LogLevel.Error, $"{message} [{correlationID}]"));
+			
 			if (exception != null && exception is WampSharp.V2.Core.Contracts.WampException wampException)
 			{
-				var details = wampException.GetDetails();
-				logs.Add($"> Message: {details.Message}");
-				logs.Add($"> Type: {details.Type}");
+				var wampDetails = wampException.GetDetails();
+				if (wampDetails.Code > 0)
+				{
+					logger?.Log(LogLevel.Error, message: $"{wampDetails.Type}: {wampDetails.Message}\r\n{wampDetails.Stack} [{correlationID}]", exception: exception);
+					stack = $"{wampDetails.Type}: {wampDetails.Message}\r\n{wampDetails.Stack}";
+				}
+				else
+					logger?.Log(LogLevel.Error, $"{exception.Message} [{correlationID}]", exception);
+				logs.Add($"> Message: {wampDetails.Message}");
+				logs.Add($"> Type: {wampDetails.Type}");
 			}
 			else if (exception != null)
 			{
+				logger?.Log(LogLevel.Error, $"{exception.Message} [{correlationID}]", exception);
 				if (exception is AggregateException agg)
 					foreach (var inner in agg.Flatten().InnerExceptions)
 					{
@@ -78,11 +108,34 @@ namespace net.vieapps.Services
 					logs.Add($"> Type: {exception.GetTypeName(true)}");
 				}
 			}
-			return ((DateTime.Now, correlationID, developerID, appID, ServiceBase.ServiceComponent.NodeID ?? Extensions.GetNodeID(), serviceName ?? "APIGateway", objectName ?? ""), logs, exception?.GetStack(false)).WriteServiceLog();
+
+			if (!string.IsNullOrWhiteSpace(additional))
+			{
+				logs.Add(additional);
+				logger?.Log(exception != null ? LogLevel.Error : mode, $"{additional} [{correlationID}]");
+			}
+
+			return ((DateTime.Now, correlationID, developerID, appID, nodeID ?? ServiceBase.ServiceComponent?.NodeID ?? Extensions.GetNodeID(), serviceName ?? "APIGateway", objectName ?? ""), logs, stack).WriteServiceLog();
 		}
 
 		/// <summary>
-		/// Writes the service log into centerlized storage
+		/// Writes the service log into storages
+		/// </summary>
+		/// <param name="correlationID"></param>
+		/// <param name="developerID"></param>
+		/// <param name="appID"></param>
+		/// <param name="logger"></param>
+		/// <param name="logs"></param>
+		/// <param name="exception"></param>
+		/// <param name="serviceName"></param>
+		/// <param name="objectName"></param>
+		/// <param name="mode"></param>
+		/// <returns></returns>
+		public static bool WriteServiceLog(string correlationID, string developerID, string appID, ILogger logger, List<string> logs, Exception exception = null, string serviceName = null, string objectName = null, LogLevel mode = LogLevel.Information)
+			=> Extensions.WriteServiceLog(logger, null, correlationID, developerID, appID, logs, exception, serviceName, objectName, null, mode);
+
+		/// <summary>
+		/// Writes the service log into storages
 		/// </summary>
 		/// <param name="requestInfo"></param>
 		/// <param name="logger"></param>
@@ -94,7 +147,7 @@ namespace net.vieapps.Services
 			=> Extensions.WriteServiceLog(requestInfo.CorrelationID, requestInfo.Session?.DeveloperID, requestInfo.Session?.AppID, logger, logs, exception, requestInfo.ServiceName, requestInfo.ObjectName, mode);
 
 		/// <summary>
-		/// Writes the service log into centerlized storage
+		/// Writes the service log into storages
 		/// </summary>
 		/// <param name="requestInfo"></param>
 		/// <param name="logger"></param>
@@ -111,21 +164,10 @@ namespace net.vieapps.Services
 		{
 			while (await Extensions.ServiceLogs.Reader.WaitToReadAsync().ConfigureAwait(false))
 			{
-				while (Extensions.ServiceLogs.Reader.TryRead(out var log))
+				while (Extensions.ServiceLogs.Reader.TryRead(out var logInfo))
 					try
 					{
-						await new JObject
-						{
-							{ "Time", log.Info.Time },
-							{ "CorrelationID", log.Info.CorrelationID },
-							{ "DeveloperID", log.Info.DeveloperID },
-							{ "AppID", log.Info.AppID },
-							{ "NodeID", log.Info.NodeID },
-							{ "ServiceName", log.Info.ServiceName },
-							{ "ObjectName", log.Info.ObjectName },
-							{ "Logs", log.Logs?.Join("\r\n") ?? "" },
-							{ "Stack", log.Stack }
-						}.SaveAsTextAsync(Path.Combine(Extensions.LogsPath, $"zlogs.services.{log.Info.Time:yyyyMMddHHmmssffffff}.{UtilityService.NewUUID}.json")).ConfigureAwait(false);
+						await logInfo.SaveToFileAsync(Path.Combine(Extensions.LogsPath, $"zlogs.services.{logInfo.Time:yyyyMMddHHmmssffffff}.{logInfo.ID}.json")).ConfigureAwait(false);
 					}
 					catch { }
 			}
@@ -133,7 +175,7 @@ namespace net.vieapps.Services
 		#endregion
 
 		#region Trace Logs
-		static Channel<(string SpanID, string ParentID, string CorrelationID, string NodeID, string ServiceName, string Operation, DateTime StartTime, DateTime? EndTime, double? DurationMs, string Kind, string Status, string StatusDescription, Dictionary<string, object> Attributes)> TraceLogs { get; } = Channel.CreateBounded<(string, string, string, string, string, string, DateTime, DateTime?, double?, string, string, string, Dictionary<string, object>)>(new BoundedChannelOptions(Extensions.LogsQueueSize)
+		static Channel<TraceInfo> TraceLogs { get; } = Channel.CreateBounded<TraceInfo>(new BoundedChannelOptions(Extensions.LogsQueueSize)
 		{
 			SingleReader = true,
 			SingleWriter = false,
@@ -141,7 +183,7 @@ namespace net.vieapps.Services
 		});
 
 		/// <summary>
-		/// Starts new trace
+		/// Starts new trace tracking
 		/// </summary>
 		/// <param name="parentID"></param>
 		/// <param name="correlationID"></param>
@@ -151,105 +193,143 @@ namespace net.vieapps.Services
 		/// <param name="kind"></param>
 		/// <param name="attributes"></param>
 		/// <returns></returns>
-		public static (string SpanID, string ParentID, string CorrelationID, string NodeID, string ServiceName, string Operation, DateTime StartTime, DateTime? EndTime, double? DurationMs, string Kind, string Status, string StatusDescription, Dictionary<string, object> Attributes) StartTrace(string parentID, string correlationID, string nodeID, string serviceName, string operation, string kind = "internal", Dictionary<string, object> attributes = null)
-			=> (UtilityService.NewUUID, parentID, correlationID, nodeID, serviceName, operation, DateTime.Now, null, null, kind, "unset", null, attributes ?? new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase));
+		public static TraceInfo StartTrace(string parentID, string correlationID, string nodeID, string serviceName, string operation, string kind = "internal", Dictionary<string, object> attributes = null)
+			=> new TraceInfo
+			{
+				ID = UtilityService.NewUUID,
+				ParentID = parentID,
+				CorrelationID = correlationID,
+				NodeID = nodeID,
+				ServiceName = serviceName?.ToLower(),
+				Operation = operation,
+				StartTime = DateTime.Now,
+				Kind = kind,
+				Status = "unset",
+				Attributes = attributes ?? new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+			};
 
 		/// <summary>
-		/// Completes a trace and write into centerlized storage
+		/// Completes trace tracking and write into storages
 		/// </summary>
-		/// <param name="trace"></param>
+		/// <param name="traceInfo"></param>
 		/// <param name="status"></param>
 		/// <param name="statusDescription"></param>
 		/// <param name="attributes"></param>
 		/// <returns></returns>
-		public static (string SpanID, string ParentID, string CorrelationID, string NodeID, string ServiceName, string Operation, DateTime StartTime, DateTime? EndTime, double? DurationMs, string Kind, string Status, string StatusDescription, Dictionary<string, object> Attributes) CompleteTrace(this (string SpanID, string ParentID, string CorrelationID, string NodeID, string ServiceName, string Operation, DateTime StartTime, DateTime? EndTime, double? DurationMs, string Kind, string Status, string StatusDescription, Dictionary<string, object> Attributes) trace, string status, string statusDescription = null, Dictionary<string, object> attributes = null)
+		public static TraceInfo Complete(this TraceInfo traceInfo, string status, string statusDescription = null, Dictionary<string, object> attributes = null)
 		{
-			trace.EndTime = DateTime.Now;
-			trace.DurationMs = (trace.EndTime.Value - trace.StartTime).TotalMilliseconds;
-			trace.Status = status;
+			traceInfo.EndTime = DateTime.Now;
+			traceInfo.DurationMs = (traceInfo.EndTime.Value - traceInfo.StartTime).TotalMilliseconds;
+			traceInfo.Status = status;
 			if (!string.IsNullOrWhiteSpace(statusDescription))
-				trace.StatusDescription = statusDescription;
-			attributes?.ForEach(kvp => trace.Attributes[kvp.Key] = kvp.Value);
-			Extensions.TraceLogs.Writer.TryWrite(trace);
-			return trace;
+				traceInfo.StatusDescription = statusDescription;
+			attributes?.ForEach(kvp => traceInfo.Attributes[kvp.Key] = kvp.Value);
+			Extensions.TraceLogs.Writer.TryWrite(traceInfo);
+			return traceInfo;
 		}
 
 		/// <summary>
-		/// Completes a trace and write into centerlized storage
+		/// Completes trace tracking and write into storages
 		/// </summary>
-		/// <param name="trace"></param>
+		/// <param name="traceInfo"></param>
 		/// <param name="attributes"></param>
 		/// <returns></returns>
-		public static (string SpanID, string ParentID, string CorrelationID, string NodeID, string ServiceName, string Operation, DateTime StartTime, DateTime? EndTime, double? DurationMs, string Kind, string Status, string StatusDescription, Dictionary<string, object> Attributes) CompleteTrace(this (string SpanID, string ParentID, string CorrelationID, string NodeID, string ServiceName, string Operation, DateTime StartTime, DateTime? EndTime, double? DurationMs, string Kind, string Status, string StatusDescription, Dictionary<string, object> Attributes) trace, Dictionary<string, object> attributes = null)
-			=> trace.CompleteTrace("ok", null, attributes);
+		public static TraceInfo Complete(this TraceInfo traceInfo, Dictionary<string, object> attributes = null)
+			=> traceInfo.Complete("ok", null, attributes);
 
 		/// <summary>
-		/// Sets the identifier of parent tracing span
+		/// Sets the identifier of parent trace tracking
 		/// </summary>
 		/// <param name="requestInfo"></param>
 		/// <param name="spanID"></param>
 		/// <returns></returns>
-		public static RequestInfo SetParentSpanID(this RequestInfo requestInfo, string spanID)
+		public static RequestInfo SetParentTraceID(this RequestInfo requestInfo, string spanID)
 		{
-			requestInfo.Extra["x-parent-span-id"] = spanID;
+			requestInfo.Extra["x-parent-trace-id"] = spanID;
 			return requestInfo;
 		}
 
 		/// <summary>
-		/// Gets the identifier of parent tracing span
+		/// Gets the identifier of parent trace tracking
 		/// </summary>
 		/// <param name="requestInfo"></param>
 		/// <returns></returns>
-		public static string GetParentSpanID(this RequestInfo requestInfo)
-			=> requestInfo.Extra.TryGetValue("x-parent-span-id", out var spanID) ? spanID : null;
+		public static string GetParentTraceID(this RequestInfo requestInfo)
+			=> requestInfo.Extra.TryGetValue("x-parent-trace-id", out var spanID) ? spanID : null;
 
 		/// <summary>
-		/// Starts new trace (and set parent span ID automatically)
+		/// Gets the operation of trace tracking
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <returns></returns>
+		public static string GetTraceAction(this RequestInfo requestInfo)
+		{
+			switch ((requestInfo.Verb ?? "").ToUpper())
+			{
+				case "GET":
+					var objectIdentity = requestInfo.GetObjectIdentity();
+					return objectIdentity != null && (objectIdentity.IsValidUUID() || objectIdentity.IsEquals("refresh") || objectIdentity.IsEquals("cache")) ? "READ" : "SEARCH";
+
+				case "POST":
+					return "CREATE";
+
+				case "PUT":
+					return "UPDATE";
+
+				default:
+					return (requestInfo.Verb ?? "Do").ToUpper();
+			}
+		}
+
+		/// <summary>
+		/// Starts new trace tracking
 		/// </summary>
 		/// <param name="requestInfo"></param>
 		/// <param name="operation"></param>
 		/// <param name="kind"></param>
 		/// <param name="attributes"></param>
 		/// <returns></returns>
-		public static (string SpanID, string ParentID, string CorrelationID, string NodeID, string ServiceName, string Operation, DateTime StartTime, DateTime? EndTime, double? DurationMs, string Kind, string Status, string StatusDescription, Dictionary<string, object> Attributes) StartTrace(this RequestInfo requestInfo, string operation, string kind, Dictionary<string, object> attributes = null, bool autoSetParentSpanID = true)
+		public static TraceInfo StartTrace(this RequestInfo requestInfo, string operation, string kind, Dictionary<string, object> attributes, bool autoSetParentTraceSpanID)
 		{
-			var trace = Extensions.StartTrace(requestInfo.GetParentSpanID(), requestInfo.CorrelationID, ServiceBase.ServiceComponent.NodeID, requestInfo.ServiceName, operation, kind, attributes);
-			if (autoSetParentSpanID)
-				requestInfo.SetParentSpanID(trace.SpanID);
-			return trace;
+			var traceInfo = Extensions.StartTrace(requestInfo.GetParentTraceID(), requestInfo.CorrelationID, ServiceBase.ServiceComponent?.NodeID ?? Extensions.GetNodeID(), requestInfo.ServiceName, operation, kind, attributes);
+			if (autoSetParentTraceSpanID)
+				requestInfo.SetParentTraceID(traceInfo.ID);
+			return traceInfo;
 		}
 
 		/// <summary>
-		/// Starts new trace (and set parent span ID automatically)
-		/// </summary>
-		/// <param name="requestInfo"></param>
-		/// <param name="kind"></param>
-		/// <returns></returns>
-		public static (string SpanID, string ParentID, string CorrelationID, string NodeID, string ServiceName, string Operation, DateTime StartTime, DateTime? EndTime, double? DurationMs, string Kind, string Status, string StatusDescription, Dictionary<string, object> Attributes) StartTrace(this RequestInfo requestInfo, string kind, bool autoSetParentSpanID)
-			=> requestInfo.StartTrace($"{requestInfo.Verb} {requestInfo.ObjectName}", kind, null, autoSetParentSpanID);
-
-		/// <summary>
-		/// Starts new trace (and set parent span ID automatically)
+		/// Starts new trace tracking
 		/// </summary>
 		/// <param name="requestInfo"></param>
 		/// <param name="operation"></param>
 		/// <param name="kind"></param>
 		/// <returns></returns>
-		public static (string SpanID, string ParentID, string CorrelationID, string NodeID, string ServiceName, string Operation, DateTime StartTime, DateTime? EndTime, double? DurationMs, string Kind, string Status, string StatusDescription, Dictionary<string, object> Attributes) StartTrace(this RequestInfo requestInfo, string operation, string kind = "internal", bool autoSetParentSpanID = false)
-			=> requestInfo.StartTrace(operation, kind, null, autoSetParentSpanID);
+		public static TraceInfo StartTrace(this RequestInfo requestInfo, string operation, string kind = "internal", bool autoSetParentTraceSpanID = false)
+			=> requestInfo.StartTrace(operation, kind, null, autoSetParentTraceSpanID);
 
 		/// <summary>
-		/// Starts new trace (and set parent span ID automatically)
+		/// Starts new trace tracking
 		/// </summary>
 		/// <param name="requestInfo"></param>
+		/// <param name="traceInfo"></param>
 		/// <param name="operation"></param>
 		/// <param name="kind"></param>
+		/// <param name="autoSetParentTraceSpanID"></param>
 		/// <returns></returns>
-		public static (string SpanID, string ParentID, string CorrelationID, string NodeID, string ServiceName, string Operation, DateTime StartTime, DateTime? EndTime, double? DurationMs, string Kind, string Status, string StatusDescription, Dictionary<string, object> Attributes) StartTrace(this RequestInfo requestInfo, (string SpanID, string ParentID, string CorrelationID, string NodeID, string ServiceName, string Operation, DateTime StartTime, DateTime? EndTime, double? DurationMs, string Kind, string Status, string StatusDescription, Dictionary<string, object> Attributes) trace, string operation, string kind = "internal", bool autoSetParentSpanID = false)
+		public static TraceInfo StartTrace(this RequestInfo requestInfo, TraceInfo traceInfo, string operation, string kind = "internal", bool autoSetParentTraceSpanID = false)
 		{
-			trace.CompleteTrace();
-			return requestInfo.StartTrace(operation, kind, autoSetParentSpanID);
+			traceInfo.Complete();
+			return requestInfo.StartTrace(operation, kind, autoSetParentTraceSpanID);
 		}
+
+		/// <summary>
+		/// Starts new trace tracking
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <param name="autoSetParentTraceSpanID"></param>
+		/// <returns></returns>
+		public static TraceInfo StartTrace(this RequestInfo requestInfo, bool autoSetParentTraceSpanID = true)
+			=> requestInfo.StartTrace($"{requestInfo.GetTraceAction()} {requestInfo.ObjectName?.ToArray(".").Last().GetCapitalizedFirstLetter()}", "downstream", null, autoSetParentTraceSpanID);
 
 		static Task TraceLogsWritter { get; } = Task.Run(Extensions.WriteTraceLogsAsync);
 
@@ -257,25 +337,129 @@ namespace net.vieapps.Services
 		{
 			while (await Extensions.TraceLogs.Reader.WaitToReadAsync().ConfigureAwait(false))
 			{
-				while (Extensions.TraceLogs.Reader.TryRead(out var log))
+				while (Extensions.TraceLogs.Reader.TryRead(out var traceInfo))
 					try
 					{
-						await new JObject
-						{
-							{ "ID", log.SpanID },
-							{ "ParentID", log.ParentID },
-							{ "CorrelationID", log.CorrelationID },
-							{ "NodeID", log.NodeID },
-							{ "ServiceName", log.ServiceName },
-							{ "Operation", log.Operation },
-							{ "StartTime", log.StartTime },
-							{ "EndTime", log.EndTime },
-							{ "DurationMs", log.DurationMs },
-							{ "Kind", log.Kind },
-							{ "Status", log.Status },
-							{ "StatusDescription", log.StatusDescription },
-							{ "Attributes", log.Attributes?.ToJson() }
-						}.SaveAsTextAsync(Path.Combine(Extensions.LogsPath, $"zlogs.traces.{DateTime.Now:yyyyMMddHHmmssffffff}.{log.SpanID}.json")).ConfigureAwait(false);
+						await traceInfo.SaveToFileAsync(Path.Combine(Extensions.LogsPath, $"zlogs.traces.{DateTime.Now:yyyyMMddHHmmssffffff}.{traceInfo.ID}.json")).ConfigureAwait(false);
+					}
+					catch { }
+			}
+		}
+		#endregion
+
+		#region Usage Logs
+		static Channel<UsageInfo> UsageLogs { get; } = Channel.CreateBounded<UsageInfo>(new BoundedChannelOptions(Extensions.LogsQueueSize)
+		{
+			SingleReader = true,
+			SingleWriter = false,
+			FullMode = BoundedChannelFullMode.Wait
+		});
+
+		/// <summary>
+		/// Starts new resource usage tracking
+		/// </summary>
+		/// <param name="developerID"></param>
+		/// <param name="appID"></param>
+		/// <param name="userID"></param>
+		/// <param name="nodeID"></param>
+		/// <param name="correlationID"></param>
+		/// <param name="serviceName"></param>
+		/// <param name="objectName"></param>
+		/// <param name="operation"></param>
+		/// <param name="type"></param>
+		/// <param name="provider"></param>
+		/// <param name="model"></param>
+		/// <param name="systemID"></param>
+		/// <param name="traceID"></param>
+		/// <returns></returns>
+		public static UsageInfo StartUsage(string developerID, string appID, string userID, string nodeID, string correlationID, string serviceName, string objectName, string operation, string type, string provider = null, string model = null, string systemID = null, string traceID = null)
+			=> new UsageInfo
+			{
+				ID = UtilityService.NewUUID,
+				CorrelationID = correlationID,
+				TraceID = traceID,
+				DeveloperID = developerID,
+				AppID = appID,
+				UserID = userID,
+				NodeID = nodeID,
+				ServiceName = serviceName?.ToLower(),
+				ObjectName = objectName?.ToLower(),
+				SystemID = systemID,
+				Operation = operation,
+				StartTime = DateTime.Now,
+				Type = type,
+				Provider = provider,
+				Model = model,
+				Status = "unset",
+				Details = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+			};
+
+		/// <summary>
+		/// Completes resource usage tracking and writes into storages
+		/// </summary>
+		/// <param name="usageInfo"></param>
+		/// <param name="status"></param>
+		/// <param name="details"></param>
+		/// <returns></returns>
+		public static UsageInfo Complete(this UsageInfo usageInfo, string status, Dictionary<string, object> details = null)
+		{
+			usageInfo.EndTime = DateTime.Now;
+			usageInfo.DurationMs = (usageInfo.EndTime.Value - usageInfo.StartTime).TotalMilliseconds;
+			usageInfo.Status = status;
+			details?.ForEach(kvp => usageInfo.Details[kvp.Key] = kvp.Value);
+			Extensions.UsageLogs.Writer.TryWrite(usageInfo);
+			return usageInfo;
+		}
+
+		/// <summary>
+		/// Completes resource usage tracking and writes into storages
+		/// </summary>
+		/// <param name="usageInfo"></param>
+		/// <param name="details"></param>
+		/// <returns></returns>
+		public static UsageInfo Complete(this UsageInfo usageInfo, Dictionary<string, object> details = null)
+			=> usageInfo.Complete("ok", details);
+
+		/// <summary>
+		/// Starts new resource usage tracking
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <param name="operation"></param>
+		/// <param name="type"></param>
+		/// <param name="provider"></param>
+		/// <param name="model"></param>
+		/// <param name="traceID"></param>
+		/// <returns></returns>
+		public static UsageInfo StartUsage(this RequestInfo requestInfo, string operation, string type, string provider = null, string model = null, string traceID = null)
+			=> Extensions.StartUsage(requestInfo.Session?.DeveloperID, requestInfo.Session?.AppID, requestInfo.Session?.User?.ID, ServiceBase.ServiceComponent?.NodeID ?? Extensions.GetNodeID(), requestInfo.CorrelationID, requestInfo.ServiceName, requestInfo.ObjectName, operation, type, provider, model, requestInfo.GetParameter("x-system-id"), traceID);
+
+		/// <summary>
+		/// Starts new resource usage tracking
+		/// </summary>
+		/// <param name="requestInfo"></param>
+		/// <param name="usageInfo"></param>
+		/// <param name="operation"></param>
+		/// <param name="type"></param>
+		/// <param name="provider"></param>
+		/// <param name="model"></param>
+		/// <param name="traceID"></param>
+		/// <returns></returns>
+		public static UsageInfo StartUsage(this RequestInfo requestInfo, UsageInfo usageInfo, string operation, string type, string provider = null, string model = null, string traceID = null)
+		{
+			usageInfo.Complete();
+			return requestInfo.StartUsage(operation, type, provider, model, traceID);
+		}
+
+		static Task UsageLogsWritter { get; } = Task.Run(Extensions.WriteUsageLogsAsync);
+
+		static async Task WriteUsageLogsAsync()
+		{
+			while (await Extensions.UsageLogs.Reader.WaitToReadAsync().ConfigureAwait(false))
+			{
+				while (Extensions.UsageLogs.Reader.TryRead(out var usageInfo))
+					try
+					{
+						await usageInfo.SaveToFileAsync(Path.Combine(Extensions.LogsPath, $"zlogs.usages.{DateTime.Now:yyyyMMddHHmmssffffff}.{usageInfo.ID}.json")).ConfigureAwait(false);
 					}
 					catch { }
 			}
@@ -290,7 +474,8 @@ namespace net.vieapps.Services
 		{
 			Extensions.ServiceLogs.Writer.TryComplete();
 			Extensions.TraceLogs.Writer.TryComplete();
-			return Task.WhenAll(Extensions.ServiceLogsWritter, Extensions.TraceLogsWritter);
+			Extensions.UsageLogs.Writer.TryComplete();
+			return Task.WhenAll(Extensions.ServiceLogsWritter, Extensions.TraceLogsWritter, Extensions.UsageLogsWritter);
 		}
 	}
 }
