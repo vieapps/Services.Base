@@ -37,26 +37,6 @@ namespace net.vieapps.Services
 		/// <summary>
 		/// Writes the service log into storages
 		/// </summary>
-		/// <param name="log"></param>
-		/// <returns></returns>
-		public static bool WriteServiceLog(this ((DateTime Time, string CorrelationID, string DeveloperID, string AppID, string NodeID, string ServiceName, string ObjectName) Info, List<string> Logs, string Stack) log)
-			=> new LogInfo
-			{
-				ID = UtilityService.NewUUID,
-				Time = log.Info.Time,
-				CorrelationID = log.Info.CorrelationID,
-				DeveloperID = log.Info.DeveloperID,
-				AppID = log.Info.AppID,
-				NodeID = log.Info.NodeID,
-				ServiceName = log.Info.ServiceName?.ToLower(),
-				ObjectName = log.Info.ObjectName?.ToLower(),
-				Logs = (log.Logs ?? new List<string>()).Join("\r\n"),
-				Stack = log.Stack
-			}.WriteServiceLog();
-
-		/// <summary>
-		/// Writes the service log into storages
-		/// </summary>
 		/// <param name="logger"></param>
 		/// <param name="nodeID"></param>
 		/// <param name="correlationID"></param>
@@ -115,7 +95,19 @@ namespace net.vieapps.Services
 				logger?.Log(exception != null ? LogLevel.Error : mode, $"{additional} [{correlationID}]");
 			}
 
-			return ((DateTime.Now, correlationID, developerID, appID, nodeID ?? ServiceBase.ServiceComponent?.NodeID ?? Extensions.GetNodeID(), serviceName ?? "APIGateway", objectName ?? ""), logs, stack).WriteServiceLog();
+			return new LogInfo
+			{
+				ID = UtilityService.NewUUID,
+				Time = DateTime.Now,
+				CorrelationID = correlationID,
+				DeveloperID = developerID,
+				AppID = appID,
+				NodeID = nodeID ?? ServiceBase.ServiceComponent?.NodeID ?? Extensions.GetNodeID(),
+				ServiceName = (serviceName ?? "APIGateway").ToLower(),
+				ObjectName = (objectName ?? "").ToLower(),
+				Logs = logs.Join("\r\n"),
+				Stack = stack
+			}.WriteServiceLog();
 		}
 
 		/// <summary>
