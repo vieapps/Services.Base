@@ -16,7 +16,7 @@ namespace net.vieapps.Services
 	{
 		static string LogsPath { get; } = UtilityService.GetAppSetting("Path:Logs", "logs");
 
-		static int LogsQueueSize { get; } = Int32.TryParse(UtilityService.GetAppSetting("Logs:Size", "10240"), out var queueSize) && queueSize > 0 ? queueSize : 10240;
+		static int LogsQueueSize { get; } = Int32.TryParse(UtilityService.GetAppSetting("Logs:Size"), out var queueSize) && queueSize > 0 ? queueSize : 10240;
 
 		#region Service Logs
 		static Channel<LogInfo> ServiceLogs { get; } = Channel.CreateBounded<LogInfo>(new BoundedChannelOptions(Extensions.LogsQueueSize)
@@ -256,11 +256,12 @@ namespace net.vieapps.Services
 		/// <returns></returns>
 		public static string GetTraceAction(this RequestInfo requestInfo)
 		{
-			switch ((requestInfo.Verb ?? "").ToUpper())
+			var verb = (requestInfo.Verb ?? "Do").ToUpper();
+			switch (verb)
 			{
 				case "GET":
 					var objectIdentity = requestInfo.GetObjectIdentity();
-					return objectIdentity != null && (objectIdentity.IsValidUUID() || objectIdentity.IsEquals("refresh") || objectIdentity.IsEquals("cache")) ? "READ" : "SEARCH";
+					return "search".IsEquals(objectIdentity) ? "SEARCH" : objectIdentity != null && (objectIdentity.IsValidUUID() || objectIdentity.IsEquals("refresh") || objectIdentity.IsEquals("cache")) ? "READ" : verb;
 
 				case "POST":
 					return "CREATE";
@@ -269,7 +270,7 @@ namespace net.vieapps.Services
 					return "UPDATE";
 
 				default:
-					return (requestInfo.Verb ?? "Do").ToUpper();
+					return verb;
 			}
 		}
 
@@ -318,10 +319,14 @@ namespace net.vieapps.Services
 		/// Starts new trace tracking
 		/// </summary>
 		/// <param name="requestInfo"></param>
+		/// <param name="getOperation"></param>
 		/// <param name="autoSetParentTraceSpanID"></param>
 		/// <returns></returns>
-		public static TraceInfo StartTrace(this RequestInfo requestInfo, bool autoSetParentTraceSpanID = true)
-			=> requestInfo.StartTrace($"{requestInfo.GetTraceAction()} {requestInfo.ObjectName?.ToArray(".").Last().GetCapitalizedFirstLetter()}", "downstream", null, autoSetParentTraceSpanID);
+		public static TraceInfo StartTrace(this RequestInfo requestInfo, Func<RequestInfo, string> getOperation = null, bool autoSetParentTraceSpanID = true)
+		{
+			var operation = getOperation != null ? getOperation(requestInfo) : null;
+			return requestInfo.StartTrace(operation ?? $"{requestInfo.GetTraceAction()} {requestInfo.ObjectName?.ToArray(".").Last().GetCapitalizedFirstLetter()}", "downstream", null, autoSetParentTraceSpanID);
+		}
 
 		static Task TraceLogsWritter { get; } = Task.Run(Extensions.WriteTraceLogsAsync);
 

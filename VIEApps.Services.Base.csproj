@@ -48,6 +48,7 @@
 	<ItemGroup>
 		<PackageReference Include="JavaScriptEngineSwitcher.V8" Version="3.35.2" />
 		<PackageReference Include="JSPool" Version="4.0.0" />
+		<PackageReference Include="System.Reactive" Version="7.0.0" />
 		<PackageReference Include="VIEApps.Components.Repository" Version="10.10.2610.1" />
 		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.10.2610.1" />
 		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.10.2610.2" />
