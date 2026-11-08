@@ -1803,13 +1803,13 @@ namespace net.vieapps.Services
 				: requestInfo.DeleteFilesAsync(systemID, entityInfo, objectID, this.ValidationKey, cancellationToken, this.GetTracker(requestInfo), this.JsonFormat);
 		#endregion
 
-		#region Form Controls & JSON schemas
+		#region Form Controls & JSON schemas (MCP)
 		/// <summary>
 		/// Generates the controls of this type for working with input forms
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
 		/// <returns></returns>
-		protected virtual JToken GenerateFormControls<T>() where T : class
+		public virtual JToken GenerateFormControls<T>() where T : class
 			=> RepositoryMediator.GenerateFormControls<T>();
 
 		/// <summary>
@@ -1819,7 +1819,7 @@ namespace net.vieapps.Services
 		/// <param name="localization"></param>
 		/// <param name="onCompleted"></param>
 		/// <returns></returns>
-		protected virtual JObject GenerateInputJsonSchema<T>(ExpandoObject localization = null, Action<JObject> onCompleted = null) where T : class
+		public virtual JObject GenerateInputJsonSchema<T>(ExpandoObject localization = null, Action<JObject> onCompleted = null) where T : class
 			=> typeof(T).GenerateInputJsonSchema(localization, onCompleted);
 
 		/// <summary>
@@ -1829,7 +1829,7 @@ namespace net.vieapps.Services
 		/// <param name="localization"></param>
 		/// <param name="onCompleted"></param>
 		/// <returns></returns>
-		protected virtual JObject GenerateOutputJsonSchema<T>(ExpandoObject localization = null, Action<JObject> onCompleted = null) where T : class
+		public virtual JObject GenerateOutputJsonSchema<T>(ExpandoObject localization = null, Action<JObject> onCompleted = null) where T : class
 			=> typeof(T).GenerateOutputJsonSchema(localization, onCompleted);
 
 		/// <summary>
@@ -1839,7 +1839,7 @@ namespace net.vieapps.Services
 		/// <param name="localization"></param>
 		/// <param name="onCompleted"></param>
 		/// <returns></returns>
-		protected virtual JObject GenerateSearchingInputJsonSchema<T>(ExpandoObject localization = null, Action<JObject> onCompleted = null) where T : class
+		public virtual JObject GenerateSearchingInputJsonSchema<T>(ExpandoObject localization = null, Action<JObject> onCompleted = null) where T : class
 			=> typeof(T).GenerateSearchingInputJsonSchema(localization, onCompleted);
 
 		/// <summary>
@@ -1849,7 +1849,7 @@ namespace net.vieapps.Services
 		/// <param name="localization"></param>
 		/// <param name="onCompleted"></param>
 		/// <returns></returns>
-		protected virtual JObject GenerateSearchingOutputJsonSchema<T>(ExpandoObject localization = null, Action<JObject> onCompleted = null) where T : class
+		public virtual JObject GenerateSearchingOutputJsonSchema<T>(ExpandoObject localization = null, Action<JObject> onCompleted = null) where T : class
 			=> typeof(T).GenerateSearchingOutputJsonSchema(localization, onCompleted);
 
 		/// <summary>
@@ -1859,7 +1859,7 @@ namespace net.vieapps.Services
 		/// <param name="localization"></param>
 		/// <param name="onCompleted"></param>
 		/// <returns></returns>
-		protected virtual JObject GenerateToolsJsonSchema<T>(ExpandoObject localization = null, Action<JObject> onCompleted = null) where T : class
+		public virtual JObject GenerateToolsJsonSchema<T>(ExpandoObject localization = null, Action<JObject> onCompleted = null) where T : class
 			=> typeof(T).GenerateToolsJsonSchema(localization, onCompleted);
 
 		/// <summary>
@@ -1870,7 +1870,7 @@ namespace net.vieapps.Services
 		/// <param name="onCompleted"></param>
 		/// <returns></returns>
 		/// <exception cref="InformationInvalidException"></exception>
-		protected virtual JObject GenerateResourceJsonSchema<T>(ExpandoObject localization = null, Action<JObject> onCompleted = null) where T : class
+		public virtual JObject GenerateResourceJsonSchema<T>(ExpandoObject localization = null, Action<JObject> onCompleted = null) where T : class
 			=> typeof(T).GenerateResourceJsonSchema(localization, onCompleted);
 
 		public virtual Task<JToken> GetMcpSettingsAsync(RequestInfo requestInfo, CancellationToken cancellationToken = default)
