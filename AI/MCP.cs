@@ -392,23 +392,23 @@ namespace net.vieapps.Services.MCP
 
 			var operators = new JObject
 			{
-				[nameof(CompareOperator.Equals)] = valueSchema.DeepClone(),
-				[nameof(CompareOperator.NotEquals)] = valueSchema.DeepClone()
+				[nameof(CompareOperator.Equals)] = valueSchema.Clone(),
+				[nameof(CompareOperator.NotEquals)] = valueSchema.Clone()
 			};
 
 			if (attribute.IsIntegralType() || attribute.IsFloatingPointType() || attribute.IsDateTimeType())
 			{
-				operators[nameof(CompareOperator.LessThan)] = valueSchema.DeepClone();
-				operators[nameof(CompareOperator.LessThanOrEquals)] = valueSchema.DeepClone();
-				operators[nameof(CompareOperator.Greater)] = valueSchema.DeepClone();
-				operators[nameof(CompareOperator.GreaterOrEquals)] = valueSchema.DeepClone();
+				operators[nameof(CompareOperator.LessThan)] = valueSchema.Clone();
+				operators[nameof(CompareOperator.LessThanOrEquals)] = valueSchema.Clone();
+				operators[nameof(CompareOperator.Greater)] = valueSchema.Clone();
+				operators[nameof(CompareOperator.GreaterOrEquals)] = valueSchema.Clone();
 			}
 
 			if (attribute.Type == typeof(string))
 			{
-				operators[nameof(CompareOperator.Contains)] = valueSchema.DeepClone();
-				operators[nameof(CompareOperator.StartsWith)] = valueSchema.DeepClone();
-				operators[nameof(CompareOperator.EndsWith)] = valueSchema.DeepClone();
+				operators[nameof(CompareOperator.Contains)] = valueSchema.Clone();
+				operators[nameof(CompareOperator.StartsWith)] = valueSchema.Clone();
+				operators[nameof(CompareOperator.EndsWith)] = valueSchema.Clone();
 
 				operators[nameof(CompareOperator.IsEmpty)] = new JObject
 				{
@@ -739,17 +739,17 @@ namespace net.vieapps.Services.MCP
 				schemas["create"] = new JObject
 				{
 					["input"] = inputSchema,
-					["output"] = outputSchema.DeepClone()
+					["output"] = outputSchema.Clone()
 				};
 
 			if (!excludedTools.IsContains("Update") && inputSchema != null && outputSchema != null)
 			{
-				var updateInputSchema = inputSchema.DeepClone() as JObject;
+				var updateInputSchema = inputSchema.Clone();
 				if (updateInputSchema != null)
 				{
 					var properties = updateInputSchema.Get<JObject>("properties") ?? new JObject();
 					if (properties["ID"] == null)
-						properties.AddFirst(new JProperty("ID", idSchema["properties"]?["ID"]?.DeepClone()));
+						properties.AddFirst(new JProperty("ID", idSchema["properties"]?["ID"]?.Clone()));
 
 					updateInputSchema["properties"] = properties;
 
@@ -763,22 +763,22 @@ namespace net.vieapps.Services.MCP
 				schemas["update"] = new JObject
 				{
 					["input"] = updateInputSchema,
-					["output"] = outputSchema.DeepClone()
+					["output"] = outputSchema.Clone()
 				};
 			}
 
 			if (!excludedTools.IsContains("Delete"))
 				schemas["delete"] = new JObject
 				{
-					["input"] = idSchema.DeepClone(),
-					["output"] = outputSchema?.DeepClone()
+					["input"] = idSchema.Clone(),
+					["output"] = outputSchema?.Clone()
 				};
 
 			if (!excludedTools.IsContains("Read") && outputSchema != null)
 				schemas["read"] = new JObject
 				{
-					["input"] = idSchema.DeepClone(),
-					["output"] = outputSchema.DeepClone()
+					["input"] = idSchema.Clone(),
+					["output"] = outputSchema.Clone()
 				};
 
 			if (!excludedTools.IsContains("Search") && searchingInputSchema != null && searchingOutputSchema != null)

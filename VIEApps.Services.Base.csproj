@@ -40,6 +40,7 @@
 		<None Remove=".DS_Store" />
 		<None Remove=".gitattributes" />
 		<None Remove=".gitignore" />
+		<None Remove="AI\AGENTS.md" />
 		<None Visible="false" Include="README.md" Pack="true" PackagePath="\" />
 		<None Visible="false" Include="LICENSE.md" Pack="true" PackagePath="\" />
 		<None Visible="false" Include="Icon.png" Pack="true" PackagePath="\" />
@@ -48,8 +49,10 @@
 	<ItemGroup>
 		<PackageReference Include="JavaScriptEngineSwitcher.V8" Version="3.35.2" />
 		<PackageReference Include="JSPool" Version="4.0.0" />
+		<PackageReference Include="Newtonsoft.Json.Schema" Version="4.0.2" />
 		<PackageReference Include="System.Reactive" Version="7.0.0" />
 		<PackageReference Include="VIEApps.Components.Repository" Version="10.10.2610.3" />
+		<PackageReference Include="VIEApps.Components.Utility.AssemblyLoader" Version="10.10.2610.3" />
 		<PackageReference Include="VIEApps.Components.WebSockets" Version="10.10.2610.3" />
 		<PackageReference Include="VIEApps.Services.Abstractions" Version="10.10.2610.3" />
 	</ItemGroup>
